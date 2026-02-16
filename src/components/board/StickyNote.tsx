@@ -10,6 +10,7 @@ interface StickyNoteProps {
   onStartEdit: (id: string, node: Konva.Text) => void
   shapeRef: (id: string, node: Konva.Node | null) => void
   onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
+  onContextMenu: (id: string, clientX: number, clientY: number) => void
 }
 
 export function StickyNote({
@@ -20,6 +21,7 @@ export function StickyNote({
   onStartEdit,
   shapeRef,
   onTransformEnd,
+  onContextMenu,
 }: StickyNoteProps) {
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     onDragEnd(object.id, e.target.x(), e.target.y())
@@ -69,6 +71,10 @@ export function StickyNote({
       onDblClick={handleDblClick}
       onDblTap={handleDblClick}
       onTransformEnd={handleTransformEnd}
+      onContextMenu={(e) => {
+        e.evt.preventDefault()
+        onContextMenu(object.id, e.evt.clientX, e.evt.clientY)
+      }}
     >
       <Rect
         width={object.width}

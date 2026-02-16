@@ -14,10 +14,14 @@ const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canv
 
 interface BoardClientProps {
   userId: string
+  boardId: string
+  boardName: string
 }
 
-export function BoardClient({ userId }: BoardClientProps) {
-  const { objects, selectedId, addObject, updateObject, deleteObject, selectObject } = useBoardState(userId)
+export function BoardClient({ userId, boardId, boardName }: BoardClientProps) {
+  const {
+    objects, selectedId, addObject, updateObject, deleteObject, duplicateObject, selectObject, COLOR_PALETTE,
+  } = useBoardState(userId, boardId)
   const { getViewportCenter } = useCanvas()
 
   const handleAddStickyNote = () => {
@@ -47,12 +51,34 @@ export function BoardClient({ userId }: BoardClientProps) {
     updateObject(id, updates)
   }
 
+  const handleDelete = () => {
+    if (selectedId) deleteObject(selectedId)
+  }
+
+  const handleDuplicate = () => {
+    if (selectedId) duplicateObject(selectedId)
+  }
+
+  const handleColorChange = (color: string) => {
+    if (selectedId) updateObject(selectedId, { color })
+  }
+
+  const selectedColor = selectedId ? objects.get(selectedId)?.color : undefined
+
   return (
     <>
       <Toolbar
+        boardId={boardId}
+        boardName={boardName}
         onAddStickyNote={handleAddStickyNote}
         onAddRectangle={handleAddRectangle}
         onAddCircle={handleAddCircle}
+        selectedId={selectedId}
+        selectedColor={selectedColor}
+        colors={COLOR_PALETTE}
+        onColorChange={handleColorChange}
+        onDelete={handleDelete}
+        onDuplicate={handleDuplicate}
       />
       <Canvas
         objects={objects}
@@ -61,6 +87,11 @@ export function BoardClient({ userId }: BoardClientProps) {
         onDragEnd={handleDragEnd}
         onUpdateText={handleUpdateText}
         onTransformEnd={handleTransformEnd}
+        onDelete={handleDelete}
+        onDuplicate={handleDuplicate}
+        onColorChange={handleColorChange}
+        colors={COLOR_PALETTE}
+        selectedColor={selectedColor}
       />
     </>
   )

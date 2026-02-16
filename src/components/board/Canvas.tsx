@@ -9,6 +9,7 @@ import { BoardObject } from '@/types/board'
 import { StickyNote } from './StickyNote'
 import { RectangleShape } from './RectangleShape'
 import { CircleShape } from './CircleShape'
+import { ContextMenu } from './ContextMenu'
 
 interface CanvasProps {
   objects: Map<string, BoardObject>
@@ -17,9 +18,17 @@ interface CanvasProps {
   onDragEnd: (id: string, x: number, y: number) => void
   onUpdateText: (id: string, text: string) => void
   onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
+  onDelete: () => void
+  onDuplicate: () => void
+  onColorChange: (color: string) => void
+  colors: string[]
+  selectedColor?: string
 }
 
-export function Canvas({ objects, selectedId, onSelect, onDragEnd, onUpdateText, onTransformEnd }: CanvasProps) {
+export function Canvas({
+  objects, selectedId, onSelect, onDragEnd, onUpdateText, onTransformEnd,
+  onDelete, onDuplicate, onColorChange, colors, selectedColor,
+}: CanvasProps) {
   const { stagePos, stageScale, handleWheel, handleDragEnd: handleStageDragEnd } = useCanvas()
   const stageRef = useRef<Konva.Stage>(null)
   const trRef = useRef<Konva.Transformer>(null)
@@ -32,6 +41,9 @@ export function Canvas({ objects, selectedId, onSelect, onDragEnd, onUpdateText,
   const [editText, setEditText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; objectId: string } | null>(null)
+
   // Ref callback for shape registration
   const handleShapeRef = useCallback((id: string, node: Konva.Node | null) => {
     if (node) {
@@ -40,6 +52,27 @@ export function Canvas({ objects, selectedId, onSelect, onDragEnd, onUpdateText,
       shapeRefs.current.delete(id)
     }
   }, [])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't fire during text editing
+      if (editingId) return
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+        e.preventDefault()
+        onDelete()
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'd' && selectedId) {
+        e.preventDefault()
+        onDuplicate()
+      } else if (e.key === 'Escape') {
+        onSelect(null)
+        setContextMenu(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [editingId, selectedId, onDelete, onDuplicate, onSelect])
 
   // Attach/detach Transformer to selected shape
   useEffect(() => {
@@ -128,6 +161,15 @@ export function Canvas({ objects, selectedId, onSelect, onDragEnd, onUpdateText,
     }
   }, [onSelect])
 
+  const handleContextMenu = useCallback((id: string, clientX: number, clientY: number) => {
+    onSelect(id)
+    setContextMenu({ x: clientX, y: clientY, objectId: id })
+  }, [onSelect])
+
+  const handleStageContextMenu = useCallback((e: Konva.KonvaEventObject<PointerEvent>) => {
+    e.evt.preventDefault()
+  }, [])
+
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
 
   useEffect(() => {
@@ -156,6 +198,7 @@ export function Canvas({ objects, selectedId, onSelect, onDragEnd, onUpdateText,
         onDragEnd={handleStageDragEnd}
         onClick={handleStageClick}
         onTap={handleStageClick}
+        onContextMenu={handleStageContextMenu}
       >
         <Layer>
           {objectArray.map(obj => {
@@ -171,6 +214,7 @@ export function Canvas({ objects, selectedId, onSelect, onDragEnd, onUpdateText,
                     onStartEdit={handleStartEdit}
                     shapeRef={handleShapeRef}
                     onTransformEnd={onTransformEnd}
+                    onContextMenu={handleContextMenu}
                   />
                 )
               case 'rectangle':
@@ -183,6 +227,7 @@ export function Canvas({ objects, selectedId, onSelect, onDragEnd, onUpdateText,
                     onSelect={onSelect}
                     shapeRef={handleShapeRef}
                     onTransformEnd={onTransformEnd}
+                    onContextMenu={handleContextMenu}
                   />
                 )
               case 'circle':
@@ -195,6 +240,7 @@ export function Canvas({ objects, selectedId, onSelect, onDragEnd, onUpdateText,
                     onSelect={onSelect}
                     shapeRef={handleShapeRef}
                     onTransformEnd={onTransformEnd}
+                    onContextMenu={handleContextMenu}
                   />
                 )
               default:
@@ -225,6 +271,19 @@ export function Canvas({ objects, selectedId, onSelect, onDragEnd, onUpdateText,
             if (e.key === 'Escape') handleFinishEdit()
           }}
           style={textareaStyle}
+        />
+      )}
+
+      {/* Right-click context menu */}
+      {contextMenu && (
+        <ContextMenu
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          onDelete={onDelete}
+          onDuplicate={onDuplicate}
+          onColorChange={onColorChange}
+          onClose={() => setContextMenu(null)}
+          colors={colors}
+          currentColor={selectedColor}
         />
       )}
     </div>

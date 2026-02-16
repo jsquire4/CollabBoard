@@ -30,6 +30,7 @@ export async function middleware(request: NextRequest) {
   // Redirect unauthenticated users to login (except for login and auth routes)
   if (
     !user &&
+    request.nextUrl.pathname !== '/' &&
     !request.nextUrl.pathname.startsWith('/login') &&
     !request.nextUrl.pathname.startsWith('/auth')
   ) {

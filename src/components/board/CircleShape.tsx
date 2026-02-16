@@ -10,6 +10,7 @@ interface CircleShapeProps {
   onSelect: (id: string) => void
   shapeRef: (id: string, node: Konva.Node | null) => void
   onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
+  onContextMenu: (id: string, clientX: number, clientY: number) => void
 }
 
 export function CircleShape({
@@ -19,6 +20,7 @@ export function CircleShape({
   onSelect,
   shapeRef,
   onTransformEnd,
+  onContextMenu,
 }: CircleShapeProps) {
   const radius = Math.min(object.width, object.height) / 2
   const centerX = object.x + object.width / 2
@@ -63,6 +65,10 @@ export function CircleShape({
       onTap={handleClick}
       onDragEnd={handleDragEnd}
       onTransformEnd={handleTransformEnd}
+      onContextMenu={(e) => {
+        e.evt.preventDefault()
+        onContextMenu(object.id, e.evt.clientX, e.evt.clientY)
+      }}
       stroke={isSelected ? '#0EA5E9' : undefined}
       strokeWidth={isSelected ? 2 : undefined}
     />

@@ -21,8 +21,9 @@ interface BoardChange {
 
 const COLOR_PALETTE = ['#FFEB3B', '#FF9800', '#E91E63', '#9C27B0', '#2196F3', '#4CAF50']
 
-const SELECTION_BROADCAST_DEBOUNCE_MS = 100
-const BROADCAST_BATCH_MS = 50
+const SELECTION_BROADCAST_DEBOUNCE_MS = 50
+const BROADCAST_IDLE_MS = 5    // flush quickly if no burst follows
+const BROADCAST_MAX_MS = 50    // ceiling for burst batching
 
 /**
  * Coalesces a queue of broadcast changes from a single user within a batch window.
@@ -74,6 +75,8 @@ export function coalesceBroadcastQueue(pending: BoardChange[]): BoardChange[] {
 
 export function useBoardState(userId: string, boardId: string, userRole: BoardRole = 'viewer', channel?: RealtimeChannel | null, onlineUsers?: OnlineUser[]) {
   const [objects, setObjects] = useState<Map<string, BoardObject>>(new Map())
+  const objectsRef = useRef<Map<string, BoardObject>>(objects)
+  useEffect(() => { objectsRef.current = objects }, [objects])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
   const [remoteSelections, setRemoteSelections] = useState<Map<string, Set<string>>>(new Map())
@@ -150,7 +153,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       clocks: FieldClocks
     }[] = []
 
-    const currentObjects = objects
+    const currentObjects = objectsRef.current
     for (const [id, localClocks] of fieldClocksRef.current) {
       const dbClocks = dbClocksMap.get(id) ?? {}
       const localObj = currentObjects.get(id)
@@ -189,9 +192,11 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       }
     }
 
-    // Reload full state to get converged result
+    // Reload full state to get converged result.
+    // loadObjects filters `deleted_at IS NULL`, which is correct because the
+    // Edge Function's merge clears deleted_at for resurrected objects (add-wins).
     await loadObjects()
-  }, [boardId, objects, loadObjects])
+  }, [boardId, loadObjects])
 
   // Broadcast helper — sends changes to other clients
   const broadcastChanges = useCallback((changes: BoardChange[]) => {
@@ -203,12 +208,16 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     })
   }, [channel, userId])
 
-  // Broadcast batching: coalesce outbound changes within a 50ms window
+  // Broadcast batching: coalesce outbound changes with flush-on-idle strategy.
+  // A short idle timer (5ms) flushes quickly for single changes; a max timer (50ms)
+  // caps latency during bursts.
   const pendingBroadcastRef = useRef<BoardChange[]>([])
   const broadcastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const broadcastIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const flushBroadcast = useCallback(() => {
-    broadcastTimerRef.current = null
+    if (broadcastTimerRef.current) { clearTimeout(broadcastTimerRef.current); broadcastTimerRef.current = null }
+    if (broadcastIdleTimerRef.current) { clearTimeout(broadcastIdleTimerRef.current); broadcastIdleTimerRef.current = null }
     if (pendingBroadcastRef.current.length === 0) return
     const coalesced = coalesceBroadcastQueue(pendingBroadcastRef.current)
     pendingBroadcastRef.current = []
@@ -220,9 +229,19 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
   const queueBroadcast = useCallback((changes: BoardChange[]) => {
     const stamped = changes.map(c => ({ ...c, timestamp: c.timestamp ?? Date.now() }))
     pendingBroadcastRef.current.push(...stamped)
-    if (!broadcastTimerRef.current) {
-      broadcastTimerRef.current = setTimeout(flushBroadcast, BROADCAST_BATCH_MS)
+
+    // Clear any existing idle timer
+    if (broadcastIdleTimerRef.current) {
+      clearTimeout(broadcastIdleTimerRef.current)
     }
+
+    // Set the max timer once per batch window
+    if (!broadcastTimerRef.current) {
+      broadcastTimerRef.current = setTimeout(flushBroadcast, BROADCAST_MAX_MS)
+    }
+
+    // Set a short idle timer — flushes early if no more changes arrive
+    broadcastIdleTimerRef.current = setTimeout(flushBroadcast, BROADCAST_IDLE_MS)
   }, [flushBroadcast])
 
   // CRDT helper: tick clock, stamp changed fields, record clocks locally.
@@ -246,24 +265,97 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     return clocks
   }, [])
 
-  // Cleanup broadcast timer on unmount
+  // Cleanup broadcast and receive timers on unmount
   useEffect(() => {
     return () => {
       if (broadcastTimerRef.current) {
         clearTimeout(broadcastTimerRef.current)
         broadcastTimerRef.current = null
       }
+      if (broadcastIdleTimerRef.current) {
+        clearTimeout(broadcastIdleTimerRef.current)
+        broadcastIdleTimerRef.current = null
+      }
+      if (incomingTimerRef.current) {
+        clearTimeout(incomingTimerRef.current)
+        incomingTimerRef.current = null
+      }
     }
   }, [])
 
-  // Listen for incoming object sync broadcasts
+  // Listen for incoming object sync broadcasts.
+  // Receive-side batching: collect incoming changes over a short window (10ms)
+  // and apply them in a single setObjects call to reduce render churn.
+  const incomingBatchRef = useRef<BoardChange[]>([])
+  const incomingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const RECEIVE_BATCH_MS = 10
+
+  const applyIncomingBatch = useCallback(() => {
+    incomingTimerRef.current = null
+    const batch = incomingBatchRef.current
+    if (batch.length === 0) return
+    incomingBatchRef.current = []
+
+    setObjects(prev => {
+      const next = new Map(prev)
+      for (const change of batch) {
+        switch (change.action) {
+          case 'create':
+            next.set(change.object.id, change.object as BoardObject)
+            if (CRDT_ENABLED && change.clocks) {
+              const existing = fieldClocksRef.current.get(change.object.id)
+              fieldClocksRef.current.set(
+                change.object.id,
+                existing ? mergeClocks(existing, change.clocks) : change.clocks
+              )
+            }
+            break
+          case 'update': {
+            const existing = next.get(change.object.id)
+            if (!existing) break
+
+            if (CRDT_ENABLED && change.clocks) {
+              const localClocks = fieldClocksRef.current.get(change.object.id) ?? {}
+              const { merged, clocks: newClocks, changed } = mergeFields(
+                existing as unknown as Record<string, unknown>,
+                localClocks,
+                change.object as unknown as Record<string, unknown>,
+                change.clocks,
+              )
+              if (changed) {
+                next.set(change.object.id, merged as unknown as BoardObject)
+                fieldClocksRef.current.set(change.object.id, newClocks)
+              }
+            } else {
+              next.set(change.object.id, { ...existing, ...change.object })
+            }
+            break
+          }
+          case 'delete': {
+            if (CRDT_ENABLED && change.clocks?._deleted) {
+              const objectClocks = fieldClocksRef.current.get(change.object.id) ?? {}
+              if (shouldDeleteWin(change.clocks._deleted, objectClocks)) {
+                next.delete(change.object.id)
+              }
+            } else {
+              next.delete(change.object.id)
+              fieldClocksRef.current.delete(change.object.id)
+            }
+            break
+          }
+        }
+      }
+      return next
+    })
+  }, [])
+
   useEffect(() => {
     if (!channel) return
 
     const handler = ({ payload }: { payload: { changes: BoardChange[]; sender_id: string } }) => {
       if (payload.sender_id === userId) return
 
-      // Advance local HLC from any remote clocks
+      // Advance local HLC from any remote clocks (synchronous, safe outside batch)
       if (CRDT_ENABLED) {
         for (const change of payload.changes) {
           if (change.clocks) {
@@ -274,71 +366,18 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
         }
       }
 
-      setObjects(prev => {
-        const next = new Map(prev)
-        for (const change of payload.changes) {
-          switch (change.action) {
-            case 'create':
-              next.set(change.object.id, change.object as BoardObject)
-              // Store clocks for new objects
-              if (CRDT_ENABLED && change.clocks) {
-                const existing = fieldClocksRef.current.get(change.object.id)
-                fieldClocksRef.current.set(
-                  change.object.id,
-                  existing ? mergeClocks(existing, change.clocks) : change.clocks
-                )
-              }
-              break
-            case 'update': {
-              const existing = next.get(change.object.id)
-              if (!existing) break
-
-              if (CRDT_ENABLED && change.clocks) {
-                // Per-field merge: only apply fields where remote clock wins
-                const localClocks = fieldClocksRef.current.get(change.object.id) ?? {}
-                const { merged, clocks: newClocks, changed } = mergeFields(
-                  existing as unknown as Record<string, unknown>,
-                  localClocks,
-                  change.object as unknown as Record<string, unknown>,
-                  change.clocks,
-                )
-                if (changed) {
-                  next.set(change.object.id, merged as unknown as BoardObject)
-                  fieldClocksRef.current.set(change.object.id, newClocks)
-                }
-              } else {
-                // Blind merge (legacy / CRDT disabled)
-                next.set(change.object.id, { ...existing, ...change.object })
-              }
-              break
-            }
-            case 'delete': {
-              if (CRDT_ENABLED && change.clocks?._deleted) {
-                // Add-wins: only delete if delete clock >= all field clocks
-                const objectClocks = fieldClocksRef.current.get(change.object.id) ?? {}
-                if (shouldDeleteWin(change.clocks._deleted, objectClocks)) {
-                  next.delete(change.object.id)
-                  // Keep clocks for potential resurrection — don't delete from fieldClocksRef
-                }
-                // else: a local field update is newer → object survives (add-wins)
-              } else {
-                // Legacy / CRDT disabled: hard delete from local state
-                next.delete(change.object.id)
-                fieldClocksRef.current.delete(change.object.id)
-              }
-              break
-            }
-          }
-        }
-        return next
-      })
+      // Collect into batch; flush after short coalescing window
+      incomingBatchRef.current.push(...payload.changes)
+      if (!incomingTimerRef.current) {
+        incomingTimerRef.current = setTimeout(applyIncomingBatch, RECEIVE_BATCH_MS)
+      }
     }
 
     channel.on('broadcast', { event: 'board:sync' }, handler)
 
     // No cleanup needed — Supabase channel listeners are removed when the
     // channel itself is removed (in useRealtimeChannel's cleanup).
-  }, [channel, userId])
+  }, [channel, userId, applyIncomingBatch])
 
   // Helper: get max z_index
   const getMaxZIndex = useCallback(() => {
@@ -474,6 +513,9 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
   const updateObject = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
 
+    // Capture previous state for rollback
+    const previousObj = objectsRef.current.get(id)
+
     setObjects(prev => {
       const existing = prev.get(id)
       if (!existing) return prev
@@ -499,6 +541,10 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       .then(({ error }) => {
         if (error) {
           console.error('Failed to update object:', error.message)
+          // Rollback optimistic update
+          if (previousObj) {
+            setObjects(prev => { const next = new Map(prev); next.set(id, previousObj); return next })
+          }
         } else {
           queueBroadcast([{ action: 'update', object: { id, ...updates }, clocks }])
         }
@@ -512,7 +558,8 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     const descendants = getDescendants(id)
     const idsToDelete = [id, ...descendants.map(d => d.id)]
 
-    // Stamp a delete clock (used for add-wins comparison on remote)
+    // Stamp a delete clock (used for add-wins comparison on remote).
+    // A single HLC tick covers the parent + all descendants — one user action at one causal point.
     const deleteClock = CRDT_ENABLED ? (() => {
       hlcRef.current = tickHLC(hlcRef.current)
       return hlcRef.current
@@ -535,21 +582,17 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     })
 
     if (CRDT_ENABLED) {
-      // Soft-delete: set deleted_at on all objects (tombstone)
+      // Soft-delete: set deleted_at on all objects in parallel (tombstone)
       const now = new Date().toISOString()
-      let failed = false
-      for (const did of idsToDelete) {
-        const { error } = await supabase
-          .from('board_objects')
-          .update({ deleted_at: now })
-          .eq('id', did)
-        if (error) {
-          console.error('Failed to soft-delete object:', error.message)
-          failed = true
-          break
-        }
-      }
-      if (!failed) {
+      const results = await Promise.all(
+        idsToDelete.map(did =>
+          supabase.from('board_objects').update({ deleted_at: now }).eq('id', did)
+        )
+      )
+      const failed = results.some(r => r.error)
+      if (failed) {
+        results.filter(r => r.error).forEach(r => console.error('Failed to soft-delete object:', r.error!.message))
+      } else {
         queueBroadcast(idsToDelete.map(did => ({
           action: 'delete' as const,
           object: { id: did } as BoardObject,
@@ -557,21 +600,22 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
         })))
       }
     } else {
-      // Hard-delete: remove from DB (legacy mode)
-      const orderedIds = [...descendants.map(d => d.id).reverse(), id]
-      let failed = false
-      for (const did of orderedIds) {
-        const { error } = await supabase
-          .from('board_objects')
-          .delete()
-          .eq('id', did)
-        if (error) {
-          console.error('Failed to delete object:', error.message)
-          failed = true
-          break
+      // Hard-delete: children first (parallel), then parent (FK constraint)
+      const childIds = descendants.map(d => d.id)
+      if (childIds.length > 0) {
+        const childResults = await Promise.all(
+          childIds.map(did => supabase.from('board_objects').delete().eq('id', did))
+        )
+        const childFailed = childResults.some(r => r.error)
+        if (childFailed) {
+          childResults.filter(r => r.error).forEach(r => console.error('Failed to delete object:', r.error!.message))
+          return // Don't delete parent if children failed
         }
       }
-      if (!failed) {
+      const { error } = await supabase.from('board_objects').delete().eq('id', id)
+      if (error) {
+        console.error('Failed to delete object:', error.message)
+      } else {
         queueBroadcast(idsToDelete.map(did => ({ action: 'delete' as const, object: { id: did } as BoardObject })))
       }
     }
@@ -819,15 +863,18 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     const now = new Date().toISOString()
     const changes: BoardChange[] = []
     const dbUpdates: { id: string; z_index: number }[] = []
+    for (const o of set) {
+      const newZ = o.z_index + delta
+      const clocks = stampChange(o.id, ['z_index'])
+      changes.push({ action: 'update', object: { id: o.id, z_index: newZ }, clocks })
+      dbUpdates.push({ id: o.id, z_index: newZ })
+    }
     setObjects(prev => {
       const next = new Map(prev)
       for (const o of set) {
         const newZ = o.z_index + delta
         const existing = next.get(o.id)
         if (existing) next.set(o.id, { ...existing, z_index: newZ, updated_at: now })
-        const clocks = stampChange(o.id, ['z_index'])
-        changes.push({ action: 'update', object: { id: o.id, z_index: newZ }, clocks })
-        dbUpdates.push({ id: o.id, z_index: newZ })
       }
       return next
     })
@@ -846,15 +893,18 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     const now = new Date().toISOString()
     const changes: BoardChange[] = []
     const dbUpdates: { id: string; z_index: number }[] = []
+    for (const o of set) {
+      const newZ = o.z_index - delta
+      const clocks = stampChange(o.id, ['z_index'])
+      changes.push({ action: 'update', object: { id: o.id, z_index: newZ }, clocks })
+      dbUpdates.push({ id: o.id, z_index: newZ })
+    }
     setObjects(prev => {
       const next = new Map(prev)
       for (const o of set) {
         const newZ = o.z_index - delta
         const existing = next.get(o.id)
         if (existing) next.set(o.id, { ...existing, z_index: newZ, updated_at: now })
-        const clocks = stampChange(o.id, ['z_index'])
-        changes.push({ action: 'update', object: { id: o.id, z_index: newZ }, clocks })
-        dbUpdates.push({ id: o.id, z_index: newZ })
       }
       return next
     })
@@ -883,23 +933,29 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     const now = new Date().toISOString()
     const changes: BoardChange[] = []
     const dbUpdates: { id: string; z_index: number }[] = []
+    for (const o of set) {
+      const newZ = o.z_index + fwdDelta
+      const clocks = stampChange(o.id, ['z_index'])
+      changes.push({ action: 'update', object: { id: o.id, z_index: newZ }, clocks })
+      dbUpdates.push({ id: o.id, z_index: newZ })
+    }
+    for (const o of nextSet) {
+      const newZ = o.z_index - bwdDelta
+      const clocks = stampChange(o.id, ['z_index'])
+      changes.push({ action: 'update', object: { id: o.id, z_index: newZ }, clocks })
+      dbUpdates.push({ id: o.id, z_index: newZ })
+    }
     setObjects(prev => {
       const next = new Map(prev)
       for (const o of set) {
         const newZ = o.z_index + fwdDelta
         const existing = next.get(o.id)
         if (existing) next.set(o.id, { ...existing, z_index: newZ, updated_at: now })
-        const clocks = stampChange(o.id, ['z_index'])
-        changes.push({ action: 'update', object: { id: o.id, z_index: newZ }, clocks })
-        dbUpdates.push({ id: o.id, z_index: newZ })
       }
       for (const o of nextSet) {
         const newZ = o.z_index - bwdDelta
         const existing = next.get(o.id)
         if (existing) next.set(o.id, { ...existing, z_index: newZ, updated_at: now })
-        const clocks = stampChange(o.id, ['z_index'])
-        changes.push({ action: 'update', object: { id: o.id, z_index: newZ }, clocks })
-        dbUpdates.push({ id: o.id, z_index: newZ })
       }
       return next
     })
@@ -928,23 +984,29 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     const now = new Date().toISOString()
     const changes: BoardChange[] = []
     const dbUpdates: { id: string; z_index: number }[] = []
+    for (const o of set) {
+      const newZ = o.z_index - bwdDelta
+      const clocks = stampChange(o.id, ['z_index'])
+      changes.push({ action: 'update', object: { id: o.id, z_index: newZ }, clocks })
+      dbUpdates.push({ id: o.id, z_index: newZ })
+    }
+    for (const o of nextSet) {
+      const newZ = o.z_index + fwdDelta
+      const clocks = stampChange(o.id, ['z_index'])
+      changes.push({ action: 'update', object: { id: o.id, z_index: newZ }, clocks })
+      dbUpdates.push({ id: o.id, z_index: newZ })
+    }
     setObjects(prev => {
       const next = new Map(prev)
       for (const o of set) {
         const newZ = o.z_index - bwdDelta
         const existing = next.get(o.id)
         if (existing) next.set(o.id, { ...existing, z_index: newZ, updated_at: now })
-        const clocks = stampChange(o.id, ['z_index'])
-        changes.push({ action: 'update', object: { id: o.id, z_index: newZ }, clocks })
-        dbUpdates.push({ id: o.id, z_index: newZ })
       }
       for (const o of nextSet) {
         const newZ = o.z_index + fwdDelta
         const existing = next.get(o.id)
         if (existing) next.set(o.id, { ...existing, z_index: newZ, updated_at: now })
-        const clocks = stampChange(o.id, ['z_index'])
-        changes.push({ action: 'update', object: { id: o.id, z_index: newZ }, clocks })
-        dbUpdates.push({ id: o.id, z_index: newZ })
       }
       return next
     })
@@ -1044,21 +1106,39 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       for (const child of children) {
         updateObject(child.id, { parent_id: obj.parent_id })
       }
-      // Delete the group object itself
+      // Remove the group object from local state
       setObjects(prev => {
         const next = new Map(prev)
         next.delete(id)
         return next
       })
-      fieldClocksRef.current.delete(id)
-      queueBroadcast([{ action: 'delete', object: { id } as BoardObject }])
-      supabase
-        .from('board_objects')
-        .delete()
-        .eq('id', id)
-        .then(({ error }) => {
-          if (error) console.error('Failed to delete group:', error.message)
-        })
+
+      if (CRDT_ENABLED) {
+        // Soft-delete: stamp a delete clock for add-wins comparison on remote.
+        // A single HLC tick covers the whole ungroup — one user action at one causal point.
+        hlcRef.current = tickHLC(hlcRef.current)
+        const deleteClock = hlcRef.current
+        // Do NOT clear fieldClocksRef — allows add-wins resurrection
+        queueBroadcast([{ action: 'delete', object: { id } as BoardObject, clocks: { _deleted: deleteClock } }])
+        supabase
+          .from('board_objects')
+          .update({ deleted_at: new Date().toISOString() })
+          .eq('id', id)
+          .then(({ error }) => {
+            if (error) console.error('Failed to soft-delete group:', error.message)
+          })
+      } else {
+        // Legacy: hard-delete from DB
+        fieldClocksRef.current.delete(id)
+        queueBroadcast([{ action: 'delete', object: { id } as BoardObject }])
+        supabase
+          .from('board_objects')
+          .delete()
+          .eq('id', id)
+          .then(({ error }) => {
+            if (error) console.error('Failed to delete group:', error.message)
+          })
+      }
     }
     setSelectedIds(new Set())
   }, [canEdit, selectedIds, objects, getChildren, updateObject, queueBroadcast])
@@ -1071,16 +1151,17 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
 
     const now = new Date().toISOString()
     const changes: BoardChange[] = []
+    for (const d of descendants) {
+      const clocks = stampChange(d.id, ['x', 'y'])
+      changes.push({ action: 'update', object: { id: d.id, x: d.x + dx, y: d.y + dy }, clocks })
+    }
 
     setObjects(prev => {
       const next = new Map(prev)
       for (const d of descendants) {
         const existing = next.get(d.id)
         if (existing) {
-          const updated = { ...existing, x: existing.x + dx, y: existing.y + dy, updated_at: now }
-          next.set(d.id, updated)
-          const clocks = stampChange(d.id, ['x', 'y'])
-          changes.push({ action: 'update', object: { id: d.id, x: updated.x, y: updated.y }, clocks })
+          next.set(d.id, { ...existing, x: existing.x + dx, y: existing.y + dy, updated_at: now })
         }
       }
       return next
@@ -1089,21 +1170,17 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     queueBroadcast(changes)
 
     if (!skipDb) {
-      // Persist each update to Supabase
-      for (const d of descendants) {
-        const dbUpdate: Record<string, unknown> = { x: d.x + dx, y: d.y + dy, updated_at: now }
+      // Persist all descendant position updates in a single batched upsert
+      const rows = descendants.map(d => {
+        const row: Record<string, unknown> = { id: d.id, x: d.x + dx, y: d.y + dy, updated_at: now }
         if (CRDT_ENABLED) {
-          dbUpdate.field_clocks = fieldClocksRef.current.get(d.id) ?? {}
-          dbUpdate.deleted_at = null
+          row.field_clocks = fieldClocksRef.current.get(d.id) ?? {}
+          row.deleted_at = null
         }
-        supabase
-          .from('board_objects')
-          .update(dbUpdate)
-          .eq('id', d.id)
-          .then(({ error }) => {
-            if (error) console.error('Failed to update child position:', error.message)
-          })
-      }
+        return row
+      })
+      supabase.from('board_objects').upsert(rows, { onConflict: 'id' })
+        .then(({ error }) => { if (error) console.error('Failed to batch update child positions:', error.message) })
     }
   }, [canEdit, getDescendants, queueBroadcast, stampChange])
 

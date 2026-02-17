@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { BoardRole } from '@/types/sharing'
@@ -52,7 +52,8 @@ export function Toolbar({
   onlineUsers,
 }: ToolbarProps) {
   const router = useRouter()
-  const supabase = createClient()
+  const supabaseRef = useRef(createClient())
+  const supabase = supabaseRef.current
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(boardName)
 

@@ -7,11 +7,6 @@ const MIN_SCALE = 0.1
 const MAX_SCALE = 5.0
 const ZOOM_SPEED = 1.1
 
-interface CanvasState {
-  stagePos: { x: number; y: number }
-  stageScale: number
-}
-
 export function useCanvas() {
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
   const [stageScale, setStageScale] = useState(1)

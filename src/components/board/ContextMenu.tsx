@@ -20,6 +20,44 @@ interface ContextMenuProps {
   canUngroup?: boolean
 }
 
+const itemStyle: React.CSSProperties = {
+  padding: '8px 12px',
+  cursor: 'pointer',
+  fontSize: '14px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  borderRadius: '4px',
+}
+
+function MenuItem({
+  onClick,
+  label,
+  shortcut,
+  color,
+  hoverBg = '#f5f5f5',
+}: {
+  onClick: () => void
+  label: string
+  shortcut?: string
+  color?: string
+  hoverBg?: string
+}) {
+  return (
+    <div
+      style={{ ...itemStyle, color }}
+      onMouseEnter={e => (e.currentTarget.style.background = hoverBg)}
+      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+      onClick={onClick}
+    >
+      {label}
+      {shortcut && (
+        <span style={{ marginLeft: 'auto', color: '#999', fontSize: '12px' }}>{shortcut}</span>
+      )}
+    </div>
+  )
+}
+
 export function ContextMenu({
   position,
   onDelete,
@@ -58,16 +96,6 @@ export function ContextMenu({
   const x = position.x + menuWidth > window.innerWidth ? position.x - menuWidth : position.x
   const y = position.y + menuHeight > window.innerHeight ? position.y - menuHeight : position.y
 
-  const itemStyle: React.CSSProperties = {
-    padding: '8px 12px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    borderRadius: '4px',
-  }
-
   const sectionLabel: React.CSSProperties = {
     fontSize: '12px',
     color: '#888',
@@ -91,70 +119,18 @@ export function ContextMenu({
         minWidth: '180px',
       }}
     >
-      <div
-        style={itemStyle}
-        onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
-        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-        onClick={() => { onDuplicate(); onClose() }}
-      >
-        Duplicate
-        <span style={{ marginLeft: 'auto', color: '#999', fontSize: '12px' }}>Ctrl+D</span>
-      </div>
-      <div
-        style={{ ...itemStyle, color: '#d32f2f' }}
-        onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
-        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-        onClick={() => { onDelete(); onClose() }}
-      >
-        Delete
-        <span style={{ marginLeft: 'auto', color: '#999', fontSize: '12px' }}>Del</span>
-      </div>
+      <MenuItem onClick={() => { onDuplicate(); onClose() }} label="Duplicate" shortcut="Ctrl+D" />
+      <MenuItem onClick={() => { onDelete(); onClose() }} label="Delete" shortcut="Del" color="#d32f2f" hoverBg="#fef2f2" />
 
       {/* Layer section */}
       {(onBringToFront || onSendToBack) && (
         <>
           {divider}
           <div style={sectionLabel}>Layer</div>
-          {onBringToFront && (
-            <div
-              style={itemStyle}
-              onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              onClick={() => { onBringToFront(); onClose() }}
-            >
-              Bring to Front
-            </div>
-          )}
-          {onBringForward && (
-            <div
-              style={itemStyle}
-              onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              onClick={() => { onBringForward(); onClose() }}
-            >
-              Bring Forward
-            </div>
-          )}
-          {onSendBackward && (
-            <div
-              style={itemStyle}
-              onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              onClick={() => { onSendBackward(); onClose() }}
-            >
-              Send Backward
-            </div>
-          )}
-          {onSendToBack && (
-            <div
-              style={itemStyle}
-              onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              onClick={() => { onSendToBack(); onClose() }}
-            >
-              Send to Back
-            </div>
-          )}
+          {onBringToFront && <MenuItem onClick={() => { onBringToFront(); onClose() }} label="Bring to Front" />}
+          {onBringForward && <MenuItem onClick={() => { onBringForward(); onClose() }} label="Bring Forward" />}
+          {onSendBackward && <MenuItem onClick={() => { onSendBackward(); onClose() }} label="Send Backward" />}
+          {onSendToBack && <MenuItem onClick={() => { onSendToBack(); onClose() }} label="Send to Back" />}
         </>
       )}
 
@@ -163,26 +139,10 @@ export function ContextMenu({
         <>
           {divider}
           {canGroup && onGroup && (
-            <div
-              style={itemStyle}
-              onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              onClick={() => { onGroup(); onClose() }}
-            >
-              Group
-              <span style={{ marginLeft: 'auto', color: '#999', fontSize: '12px' }}>Ctrl+G</span>
-            </div>
+            <MenuItem onClick={() => { onGroup(); onClose() }} label="Group" shortcut="Ctrl+G" />
           )}
           {canUngroup && onUngroup && (
-            <div
-              style={itemStyle}
-              onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              onClick={() => { onUngroup(); onClose() }}
-            >
-              Ungroup
-              <span style={{ marginLeft: 'auto', color: '#999', fontSize: '12px' }}>Ctrl+Shift+G</span>
-            </div>
+            <MenuItem onClick={() => { onUngroup(); onClose() }} label="Ungroup" shortcut="Ctrl+Shift+G" />
           )}
         </>
       )}

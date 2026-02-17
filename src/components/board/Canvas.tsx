@@ -222,9 +222,6 @@ export function Canvas({
   const marqueeStart = useRef<{ x: number; y: number } | null>(null)
   const isMarqueeActive = useRef(false)
 
-  // Track previous positions for group drag delta
-  const dragStartPos = useRef<Map<string, { x: number; y: number }>>(new Map())
-
   // Ref callback for shape registration
   const handleShapeRef = useCallback((id: string, node: Konva.Node | null) => {
     if (node) {

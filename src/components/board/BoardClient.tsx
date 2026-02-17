@@ -11,6 +11,7 @@ import { BoardObject } from '@/types/board'
 import { BoardRole } from '@/types/sharing'
 import { Toolbar } from './Toolbar'
 import { ShareDialog } from './ShareDialog'
+import { CanvasErrorBoundary } from './CanvasErrorBoundary'
 
 // Konva is client-only — must disable SSR
 const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canvas })), {
@@ -166,42 +167,44 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
         onShareClick={() => setShareOpen(true)}
         onlineUsers={onlineUsers}
       />
-      <Canvas
-        objects={objects}
-        sortedObjects={sortedObjects}
-        selectedIds={selectedIds}
-        activeGroupId={activeGroupId}
-        onSelect={selectObject}
-        onSelectObjects={selectObjects}
-        onClearSelection={clearSelection}
-        onEnterGroup={enterGroup}
-        onExitGroup={exitGroup}
-        onDragEnd={handleDragEnd}
-        onUpdateText={handleUpdateText}
-        onTransformEnd={handleTransformEnd}
-        onDelete={handleDelete}
-        onDuplicate={handleDuplicate}
-        onColorChange={handleColorChange}
-        onBringToFront={bringToFront}
-        onBringForward={bringForward}
-        onSendBackward={sendBackward}
-        onSendToBack={sendToBack}
-        onGroup={groupSelected}
-        onUngroup={ungroupSelected}
-        canGroup={canGroup}
-        canUngroup={canUngroup}
-        onCheckFrameContainment={checkFrameContainment}
-        onMoveGroupChildren={moveGroupChildren}
-        getChildren={getChildren}
-        getDescendants={getDescendants}
-        colors={COLOR_PALETTE}
-        selectedColor={selectedColor}
-        userRole={userRole}
-        onlineUsers={onlineUsers}
-        onCursorMove={sendCursor}
-        onCursorUpdate={onCursorUpdate}
-        remoteSelections={remoteSelections}
-      />
+      <CanvasErrorBoundary>
+        <Canvas
+          objects={objects}
+          sortedObjects={sortedObjects}
+          selectedIds={selectedIds}
+          activeGroupId={activeGroupId}
+          onSelect={selectObject}
+          onSelectObjects={selectObjects}
+          onClearSelection={clearSelection}
+          onEnterGroup={enterGroup}
+          onExitGroup={exitGroup}
+          onDragEnd={handleDragEnd}
+          onUpdateText={handleUpdateText}
+          onTransformEnd={handleTransformEnd}
+          onDelete={handleDelete}
+          onDuplicate={handleDuplicate}
+          onColorChange={handleColorChange}
+          onBringToFront={bringToFront}
+          onBringForward={bringForward}
+          onSendBackward={sendBackward}
+          onSendToBack={sendToBack}
+          onGroup={groupSelected}
+          onUngroup={ungroupSelected}
+          canGroup={canGroup}
+          canUngroup={canUngroup}
+          onCheckFrameContainment={checkFrameContainment}
+          onMoveGroupChildren={moveGroupChildren}
+          getChildren={getChildren}
+          getDescendants={getDescendants}
+          colors={COLOR_PALETTE}
+          selectedColor={selectedColor}
+          userRole={userRole}
+          onlineUsers={onlineUsers}
+          onCursorMove={sendCursor}
+          onCursorUpdate={onCursorUpdate}
+          remoteSelections={remoteSelections}
+        />
+      </CanvasErrorBoundary>
       {shareOpen && (
         <ShareDialog
           boardId={boardId}

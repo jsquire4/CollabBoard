@@ -2,20 +2,6 @@ import { createClient } from './server'
 import { Board } from '@/types/board'
 import { BoardRole, BoardWithRole } from '@/types/sharing'
 
-export async function fetchBoards(): Promise<Board[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('boards')
-    .select('*')
-    .order('updated_at', { ascending: false })
-
-  if (error) {
-    console.error('Failed to fetch boards:', error.message)
-    return []
-  }
-  return data ?? []
-}
-
 export async function fetchBoardsGrouped(): Promise<{
   myBoards: BoardWithRole[]
   sharedWithMe: BoardWithRole[]
@@ -65,11 +51,11 @@ export async function fetchBoardsGrouped(): Promise<{
 async function acceptPendingInvites(userId: string, email: string) {
   const supabase = await createClient()
 
-  // Find pending invites for this email
+  // Find pending invites for this email (case-insensitive)
   const { data: invites } = await supabase
     .from('board_invites')
     .select('*')
-    .eq('email', email)
+    .ilike('email', email)
 
   if (!invites || invites.length === 0) return
 
@@ -107,27 +93,3 @@ export async function fetchBoardRole(boardId: string): Promise<BoardRole | null>
   return (data?.role as BoardRole) ?? null
 }
 
-export async function createBoard(name: string): Promise<Board> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated')
-
-  const { data, error } = await supabase
-    .from('boards')
-    .insert({ name, created_by: user.id })
-    .select()
-    .single()
-
-  if (error) throw error
-  return data
-}
-
-export async function deleteBoard(id: string): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('boards')
-    .delete()
-    .eq('id', id)
-
-  if (error) throw error
-}

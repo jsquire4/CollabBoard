@@ -147,21 +147,33 @@ export function Canvas({
 
   // Lerp animation loop for smooth cursor interpolation.
   // Defined before the onCursorUpdate effect so it can be referenced there.
-  const LERP_FACTOR = 0.25 // 25% per frame — reaches ~95% in ~11 frames (~180ms at 60fps)
-  const animateCursorsRef = useRef<(() => void) | null>(null)
+  //
+  // Frame-rate normalized: uses exponential decay so cursors reach ~95% of
+  // target in LERP_TARGET_MS regardless of display refresh rate (30–144fps).
+  const LERP_TARGET_MS = 180
+  const LERP_DECAY = -Math.log(0.05) / LERP_TARGET_MS // ≈ 0.01665
+  const lastFrameTimeRef = useRef<number>(0)
+  const animateCursorsRef = useRef<((timestamp: number) => void) | null>(null)
 
   // Use a ref-stable animate function so rAF always calls the latest version
   if (!animateCursorsRef.current) {
-    animateCursorsRef.current = () => {
+    animateCursorsRef.current = (timestamp: number) => {
       if (cursorTargetsRef.current.size === 0) {
         cursorAnimatingRef.current = false
+        lastFrameTimeRef.current = 0
         return
       }
       const layer = cursorLayerRef.current
       if (!layer) {
         cursorAnimatingRef.current = false
+        lastFrameTimeRef.current = 0
         return
       }
+
+      // Compute frame-rate-normalized interpolation factor
+      const dt = lastFrameTimeRef.current ? timestamp - lastFrameTimeRef.current : 16.67
+      lastFrameTimeRef.current = timestamp
+      const factor = 1 - Math.exp(-LERP_DECAY * dt)
 
       let needsDraw = false
       for (const [uid, target] of cursorTargetsRef.current) {
@@ -172,8 +184,8 @@ export function Canvas({
         const dy = target.y - pos.y
         if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
           group.position({
-            x: pos.x + dx * LERP_FACTOR,
-            y: pos.y + dy * LERP_FACTOR,
+            x: pos.x + dx * factor,
+            y: pos.y + dy * factor,
           })
           needsDraw = true
         } else if (pos.x !== target.x || pos.y !== target.y) {

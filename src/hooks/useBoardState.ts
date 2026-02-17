@@ -1,46 +1,103 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
+import { RealtimeChannel } from '@supabase/supabase-js'
 import { BoardObject, BoardObjectType } from '@/types/board'
 import { BoardRole } from '@/types/sharing'
 import { createClient } from '@/lib/supabase/client'
+import { OnlineUser } from '@/hooks/usePresence'
+
+interface BoardChange {
+  action: 'create' | 'update' | 'delete'
+  object: Partial<BoardObject> & { id: string }
+}
 
 const COLOR_PALETTE = ['#FFEB3B', '#FF9800', '#E91E63', '#9C27B0', '#2196F3', '#4CAF50']
 
-export function useBoardState(userId: string, boardId: string, userRole: BoardRole = 'viewer') {
+const SELECTION_BROADCAST_DEBOUNCE_MS = 100
+
+export function useBoardState(userId: string, boardId: string, userRole: BoardRole = 'viewer', channel?: RealtimeChannel | null, onlineUsers?: OnlineUser[]) {
   const [objects, setObjects] = useState<Map<string, BoardObject>>(new Map())
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [remoteSelections, setRemoteSelections] = useState<Map<string, Set<string>>>(new Map())
   const supabase = createClient()
 
   const canEdit = userRole !== 'viewer'
 
-  // Load existing objects from Supabase on mount
-  useEffect(() => {
-    async function loadObjects() {
-      const { data, error } = await supabase
-        .from('board_objects')
-        .select('*')
-        .eq('board_id', boardId)
+  // Extracted so it can be called on mount and on reconnect
+  const loadObjects = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('board_objects')
+      .select('*')
+      .eq('board_id', boardId)
 
-      if (error) {
-        console.error('Failed to load board objects:', error.message)
-        setLoaded(true)
-        return
-      }
-
-      const map = new Map<string, BoardObject>()
-      for (const obj of data ?? []) {
-        map.set(obj.id, obj as BoardObject)
-      }
-      setObjects(map)
+    if (error) {
+      console.error('Failed to load board objects:', error.message)
       setLoaded(true)
+      return
     }
 
+    const map = new Map<string, BoardObject>()
+    for (const obj of data ?? []) {
+      map.set(obj.id, obj as BoardObject)
+    }
+    setObjects(map)
+    setLoaded(true)
+  }, [boardId, supabase])
+
+  // Load on mount
+  useEffect(() => {
     loadObjects()
-  }, [boardId])
+  }, [loadObjects])
+
+  // Broadcast helper — sends changes to other clients
+  const broadcastChanges = useCallback((changes: BoardChange[]) => {
+    if (!channel) return
+    channel.send({
+      type: 'broadcast',
+      event: 'board:sync',
+      payload: { changes, sender_id: userId },
+    })
+  }, [channel, userId])
+
+  // Listen for incoming object sync broadcasts
+  useEffect(() => {
+    if (!channel) return
+
+    const handler = ({ payload }: { payload: { changes: BoardChange[]; sender_id: string } }) => {
+      if (payload.sender_id === userId) return
+
+      setObjects(prev => {
+        const next = new Map(prev)
+        for (const change of payload.changes) {
+          switch (change.action) {
+            case 'create':
+              next.set(change.object.id, change.object as BoardObject)
+              break
+            case 'update': {
+              const existing = next.get(change.object.id)
+              if (existing) {
+                next.set(change.object.id, { ...existing, ...change.object })
+              }
+              break
+            }
+            case 'delete':
+              next.delete(change.object.id)
+              break
+          }
+        }
+        return next
+      })
+    }
+
+    channel.on('broadcast', { event: 'board:sync' }, handler)
+
+    // No cleanup needed — Supabase channel listeners are removed when the
+    // channel itself is removed (in useRealtimeChannel's cleanup).
+  }, [channel, userId])
 
   // Helper: get max z_index
   const getMaxZIndex = useCallback(() => {
@@ -153,6 +210,8 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       return next
     })
 
+    broadcastChanges([{ action: 'create', object: obj }])
+
     // Persist to Supabase
     const { id: _id, created_at, updated_at, ...insertData } = obj
     supabase
@@ -163,7 +222,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       })
 
     return obj
-  }, [userId, boardId, supabase, canEdit, getMaxZIndex])
+  }, [userId, boardId, supabase, canEdit, getMaxZIndex, broadcastChanges])
 
   const updateObject = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
@@ -176,6 +235,8 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       return next
     })
 
+    broadcastChanges([{ action: 'update', object: { id, ...updates } }])
+
     // Persist to Supabase
     supabase
       .from('board_objects')
@@ -184,7 +245,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       .then(({ error }) => {
         if (error) console.error('Failed to update object:', error.message)
       })
-  }, [supabase, canEdit])
+  }, [supabase, canEdit, broadcastChanges])
 
   const deleteObject = useCallback((id: string) => {
     if (!canEdit) return
@@ -208,6 +269,8 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       return next
     })
 
+    broadcastChanges(idsToDelete.map(did => ({ action: 'delete', object: { id: did } as BoardObject })))
+
     // Persist — delete descendants first (children before parent due to FK)
     for (const did of [...descendants.map(d => d.id).reverse(), id]) {
       supabase
@@ -218,7 +281,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
           if (error) console.error('Failed to delete object:', error.message)
         })
     }
-  }, [supabase, canEdit, getDescendants])
+  }, [supabase, canEdit, getDescendants, broadcastChanges])
 
   const deleteSelected = useCallback(() => {
     if (!canEdit) return
@@ -282,6 +345,8 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
         return next
       })
 
+      broadcastChanges(newObjects.map(obj => ({ action: 'create' as const, object: obj })))
+
       // Persist: insert parent first (await), then children
       const parentObj = newObjects[0]
       const childObjs = newObjects.slice(1)
@@ -322,7 +387,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     })
     if (newObj) setSelectedIds(new Set([newObj.id]))
     return newObj
-  }, [objects, addObject, canEdit, getDescendants, getMaxZIndex, userId, supabase])
+  }, [objects, addObject, canEdit, getDescendants, getMaxZIndex, userId, supabase, broadcastChanges])
 
   const duplicateSelected = useCallback(() => {
     if (!canEdit) return
@@ -544,6 +609,14 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     })
     setSelectedIds(new Set([groupId]))
 
+    broadcastChanges([
+      { action: 'create', object: groupObj },
+      ...selectedObjs.map(obj => ({
+        action: 'update' as const,
+        object: { id: obj.id, parent_id: groupId } as Partial<BoardObject> & { id: string },
+      })),
+    ])
+
     // Persist: insert group first, then update children
     const { id: _id, created_at, updated_at, ...insertData } = groupObj
     const { error: insertError } = await supabase
@@ -565,7 +638,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     }
 
     return groupObj
-  }, [canEdit, selectedIds, objects, boardId, userId, supabase])
+  }, [canEdit, selectedIds, objects, boardId, userId, supabase, broadcastChanges])
 
   // Ungroup: dissolve a group, freeing its children
   const ungroupSelected = useCallback(() => {
@@ -583,6 +656,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
         next.delete(id)
         return next
       })
+      broadcastChanges([{ action: 'delete', object: { id } as BoardObject }])
       supabase
         .from('board_objects')
         .delete()
@@ -592,7 +666,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
         })
     }
     setSelectedIds(new Set())
-  }, [canEdit, selectedIds, objects, getChildren, updateObject, supabase])
+  }, [canEdit, selectedIds, objects, getChildren, updateObject, supabase, broadcastChanges])
 
   // Move group/frame: move all children by delta
   const moveGroupChildren = useCallback((parentId: string, dx: number, dy: number) => {
@@ -638,6 +712,62 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     }
   }, [objects, updateObject])
 
+  // Broadcast local selection changes to remote users (debounced)
+  const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!channel) return
+
+    if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current)
+    selectionTimerRef.current = setTimeout(() => {
+      channel.send({
+        type: 'broadcast',
+        event: 'selection',
+        payload: { user_id: userId, selected_ids: Array.from(selectedIds) },
+      })
+    }, SELECTION_BROADCAST_DEBOUNCE_MS)
+
+    return () => {
+      if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current)
+    }
+  }, [selectedIds, channel, userId])
+
+  // Listen for incoming remote selection broadcasts
+  useEffect(() => {
+    if (!channel) return
+
+    const handler = ({ payload }: { payload: { user_id: string; selected_ids: string[] } }) => {
+      if (payload.user_id === userId) return
+      setRemoteSelections(prev => {
+        const next = new Map(prev)
+        if (payload.selected_ids.length === 0) {
+          next.delete(payload.user_id)
+        } else {
+          next.set(payload.user_id, new Set(payload.selected_ids))
+        }
+        return next
+      })
+    }
+
+    channel.on('broadcast', { event: 'selection' }, handler)
+  }, [channel, userId])
+
+  // Clean up remote selections when a user leaves (no longer in onlineUsers)
+  useEffect(() => {
+    if (!onlineUsers) return
+    const onlineIds = new Set(onlineUsers.map(u => u.user_id))
+    setRemoteSelections(prev => {
+      let changed = false
+      const next = new Map(prev)
+      for (const uid of next.keys()) {
+        if (!onlineIds.has(uid)) {
+          next.delete(uid)
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [onlineUsers])
+
   // Computed: sorted objects by z_index
   const sortedObjects = useMemo(() => {
     return Array.from(objects.values()).sort((a, b) => a.z_index - b.z_index)
@@ -672,6 +802,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     getDescendants,
     getTopLevelAncestor,
     getParentContainer,
+    remoteSelections,
     COLOR_PALETTE,
   }
 }

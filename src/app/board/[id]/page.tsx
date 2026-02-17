@@ -24,5 +24,10 @@ export default async function BoardPage({ params }: BoardPageProps) {
 
   if (!userRole) notFound()
 
-  return <BoardClient userId={user?.id || ''} boardId={board.id} boardName={board.name} userRole={userRole} />
+  const displayName = user?.user_metadata?.full_name
+    || user?.user_metadata?.name
+    || user?.email?.split('@')[0]
+    || 'Anonymous'
+
+  return <BoardClient userId={user?.id || ''} boardId={board.id} boardName={board.name} userRole={userRole} displayName={displayName} />
 }

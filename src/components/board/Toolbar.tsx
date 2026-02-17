@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { BoardRole } from '@/types/sharing'
+import { OnlineUser } from '@/hooks/usePresence'
 
 interface ToolbarProps {
   boardId: string
@@ -25,6 +26,7 @@ interface ToolbarProps {
   canGroup: boolean
   canUngroup: boolean
   onShareClick: () => void
+  onlineUsers?: OnlineUser[]
 }
 
 export function Toolbar({
@@ -47,6 +49,7 @@ export function Toolbar({
   canGroup,
   canUngroup,
   onShareClick,
+  onlineUsers,
 }: ToolbarProps) {
   const router = useRouter()
   const supabase = createClient()
@@ -200,6 +203,24 @@ export function Toolbar({
         >
           Ungroup
         </button>
+      )}
+
+      {onlineUsers && onlineUsers.length > 0 && (
+        <>
+          <div className="w-px h-6 bg-gray-300" />
+          <div className="flex items-center gap-1">
+            {onlineUsers.map(user => (
+              <div
+                key={user.user_id}
+                className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                style={{ backgroundColor: user.color }}
+                title={`${user.display_name} (${user.role})`}
+              >
+                {user.display_name.charAt(0).toUpperCase()}
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {canManage && (

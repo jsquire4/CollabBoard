@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { useBoardState } from '@/hooks/useBoardState'
 import { useCanvas } from '@/hooks/useCanvas'
+import { useRealtimeChannel } from '@/hooks/useRealtimeChannel'
+import { usePresence } from '@/hooks/usePresence'
+import { useCursors } from '@/hooks/useCursors'
 import { BoardObject } from '@/types/board'
 import { BoardRole } from '@/types/sharing'
 import { Toolbar } from './Toolbar'
@@ -20,9 +23,14 @@ interface BoardClientProps {
   boardId: string
   boardName: string
   userRole: BoardRole
+  displayName: string
 }
 
-export function BoardClient({ userId, boardId, boardName, userRole }: BoardClientProps) {
+export function BoardClient({ userId, boardId, boardName, userRole, displayName }: BoardClientProps) {
+  const channel = useRealtimeChannel(boardId)
+  const { onlineUsers, trackPresence } = usePresence(channel, userId, userRole, displayName)
+  const { remoteCursors, sendCursor } = useCursors(channel, userId)
+
   const {
     objects, selectedIds, activeGroupId, sortedObjects,
     addObject, updateObject, deleteSelected, duplicateSelected,
@@ -32,10 +40,24 @@ export function BoardClient({ userId, boardId, boardName, userRole }: BoardClien
     groupSelected, ungroupSelected,
     moveGroupChildren, checkFrameContainment,
     getChildren, getDescendants,
+    remoteSelections,
     COLOR_PALETTE,
-  } = useBoardState(userId, boardId, userRole)
+  } = useBoardState(userId, boardId, userRole, channel, onlineUsers)
   const { getViewportCenter } = useCanvas()
   const [shareOpen, setShareOpen] = useState(false)
+
+  // Subscribe LAST — after all hooks have registered their .on() listeners.
+  // React runs useEffect hooks in definition order, so this must come after
+  // usePresence, useCursors, and useBoardState have set up their handlers.
+  useEffect(() => {
+    if (!channel) return
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log(`Realtime channel subscribed for board ${boardId}`)
+        trackPresence()
+      }
+    })
+  }, [channel, boardId, trackPresence])
 
   const canEdit = userRole !== 'viewer'
 
@@ -142,6 +164,7 @@ export function BoardClient({ userId, boardId, boardName, userRole }: BoardClien
         canGroup={canGroup}
         canUngroup={canUngroup}
         onShareClick={() => setShareOpen(true)}
+        onlineUsers={onlineUsers}
       />
       <Canvas
         objects={objects}
@@ -174,6 +197,10 @@ export function BoardClient({ userId, boardId, boardName, userRole }: BoardClien
         colors={COLOR_PALETTE}
         selectedColor={selectedColor}
         userRole={userRole}
+        remoteCursors={remoteCursors}
+        onlineUsers={onlineUsers}
+        onCursorMove={sendCursor}
+        remoteSelections={remoteSelections}
       />
       {shareOpen && (
         <ShareDialog

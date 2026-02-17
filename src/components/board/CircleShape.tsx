@@ -11,6 +11,8 @@ interface CircleShapeProps {
   shapeRef: (id: string, node: Konva.Node | null) => void
   onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
   onContextMenu: (id: string, clientX: number, clientY: number) => void
+  onDoubleClick?: (id: string) => void
+  editable?: boolean
 }
 
 export function CircleShape({
@@ -21,6 +23,8 @@ export function CircleShape({
   shapeRef,
   onTransformEnd,
   onContextMenu,
+  onDoubleClick,
+  editable = true,
 }: CircleShapeProps) {
   const radius = Math.min(object.width, object.height) / 2
   const centerX = object.x + object.width / 2
@@ -60,7 +64,7 @@ export function CircleShape({
       y={centerY}
       radius={radius}
       fill={object.color}
-      draggable={true}
+      draggable={editable}
       onClick={handleClick}
       onTap={handleClick}
       onDragEnd={handleDragEnd}
@@ -71,6 +75,8 @@ export function CircleShape({
       }}
       stroke={isSelected ? '#0EA5E9' : undefined}
       strokeWidth={isSelected ? 2 : undefined}
+      onDblClick={() => onDoubleClick?.(object.id)}
+      onDblTap={() => onDoubleClick?.(object.id)}
     />
   )
 }

@@ -12,6 +12,7 @@ export type BoardObjectType =
   | 'circle'
   | 'line'
   | 'frame'
+  | 'group'
   | 'connector'
   | 'text'
 
@@ -27,6 +28,8 @@ export interface BoardObject {
   text: string
   color: string
   font_size: number
+  z_index: number
+  parent_id: string | null
   from_id: string | null
   to_id: string | null
   connector_style: string

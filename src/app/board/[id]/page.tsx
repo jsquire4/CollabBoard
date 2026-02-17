@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { fetchBoardRole } from '@/lib/supabase/boardsApi'
 import { BoardClient } from '@/components/board/BoardClient'
 
 interface BoardPageProps {
@@ -19,6 +20,9 @@ export default async function BoardPage({ params }: BoardPageProps) {
   if (!board) notFound()
 
   const { data: { user } } = await supabase.auth.getUser()
+  const userRole = await fetchBoardRole(id)
 
-  return <BoardClient userId={user?.id || ''} boardId={board.id} boardName={board.name} />
+  if (!userRole) notFound()
+
+  return <BoardClient userId={user?.id || ''} boardId={board.id} boardName={board.name} userRole={userRole} />
 }

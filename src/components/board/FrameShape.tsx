@@ -2,7 +2,7 @@ import { Group, Rect, Text } from 'react-konva'
 import { BoardObject } from '@/types/board'
 import Konva from 'konva'
 
-interface StickyNoteProps {
+interface FrameShapeProps {
   object: BoardObject
   onDragEnd: (id: string, x: number, y: number) => void
   isSelected: boolean
@@ -14,7 +14,7 @@ interface StickyNoteProps {
   editable?: boolean
 }
 
-export function StickyNote({
+export function FrameShape({
   object,
   onDragEnd,
   isSelected,
@@ -24,7 +24,7 @@ export function StickyNote({
   onTransformEnd,
   onContextMenu,
   editable = true,
-}: StickyNoteProps) {
+}: FrameShapeProps) {
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     onDragEnd(object.id, e.target.x(), e.target.y())
   }
@@ -34,7 +34,6 @@ export function StickyNote({
   }
 
   const handleDblClick = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
-    // Find the Text node inside this Group
     const stage = e.target.getStage()
     if (!stage) return
     const group = e.target.findAncestor('Group') || e.target
@@ -59,7 +58,7 @@ export function StickyNote({
     })
   }
 
-  const padding = 10
+  const titleHeight = 28
 
   return (
     <Group
@@ -78,27 +77,34 @@ export function StickyNote({
         onContextMenu(object.id, e.evt.clientX, e.evt.clientY)
       }}
     >
+      {/* Background fill */}
       <Rect
         width={object.width}
         height={object.height}
-        fill={object.color}
+        fill={object.color || 'rgba(200,200,200,0.3)'}
         cornerRadius={4}
-        shadowColor="rgba(0,0,0,0.15)"
-        shadowBlur={8}
-        shadowOffsetY={2}
-        stroke={isSelected ? '#0EA5E9' : undefined}
-        strokeWidth={isSelected ? 2 : 0}
+        stroke={isSelected ? '#0EA5E9' : '#ccc'}
+        strokeWidth={isSelected ? 2 : 1}
+        dash={isSelected ? undefined : [6, 3]}
       />
+      {/* Title bar background */}
+      <Rect
+        width={object.width}
+        height={titleHeight}
+        fill="rgba(150,150,150,0.15)"
+        cornerRadius={[4, 4, 0, 0]}
+      />
+      {/* Title text */}
       <Text
-        x={padding}
-        y={padding}
-        width={object.width - padding * 2}
-        height={object.height - padding * 2}
-        text={object.text || ''}
-        fontSize={object.font_size}
+        x={8}
+        y={6}
+        width={object.width - 16}
+        height={titleHeight - 6}
+        text={object.text || 'Frame'}
+        fontSize={13}
         fontFamily="sans-serif"
-        fill="#333"
-        wrap="word"
+        fontStyle="bold"
+        fill="#666"
         ellipsis={true}
       />
     </Group>

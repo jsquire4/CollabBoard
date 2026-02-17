@@ -3,38 +3,59 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { BoardRole } from '@/types/sharing'
 
 interface ToolbarProps {
   boardId: string
   boardName: string
+  userRole: BoardRole
   onAddStickyNote: () => void
   onAddRectangle: () => void
   onAddCircle: () => void
-  selectedId: string | null
+  onAddFrame: () => void
+  hasSelection: boolean
+  multiSelected: boolean
   selectedColor?: string
   colors: string[]
   onColorChange: (color: string) => void
   onDelete: () => void
   onDuplicate: () => void
+  onGroup: () => void
+  onUngroup: () => void
+  canGroup: boolean
+  canUngroup: boolean
+  onShareClick: () => void
 }
 
 export function Toolbar({
   boardId,
   boardName,
+  userRole,
   onAddStickyNote,
   onAddRectangle,
   onAddCircle,
-  selectedId,
+  onAddFrame,
+  hasSelection,
+  multiSelected,
   selectedColor,
   colors,
   onColorChange,
   onDelete,
   onDuplicate,
+  onGroup,
+  onUngroup,
+  canGroup,
+  canUngroup,
+  onShareClick,
 }: ToolbarProps) {
   const router = useRouter()
   const supabase = createClient()
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(boardName)
+
+  const canEdit = userRole !== 'viewer'
+  const isOwner = userRole === 'owner'
+  const canManage = userRole === 'owner' || userRole === 'manager'
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -61,7 +82,7 @@ export function Toolbar({
       >
         ←
       </button>
-      {editing ? (
+      {editing && isOwner ? (
         <input
           autoFocus
           value={name}
@@ -75,34 +96,55 @@ export function Toolbar({
         />
       ) : (
         <button
-          onClick={() => setEditing(true)}
+          onClick={() => isOwner && setEditing(true)}
           className="px-2 py-1 text-sm font-semibold text-gray-800 rounded hover:bg-gray-100 transition-colors truncate max-w-48"
-          title="Click to rename"
+          title={isOwner ? 'Click to rename' : boardName}
+          style={{ cursor: isOwner ? 'pointer' : 'default' }}
         >
           {name}
         </button>
       )}
-      <div className="w-px h-6 bg-gray-300" />
-      <button
-        onClick={onAddStickyNote}
-        className="px-4 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
-      >
-        Sticky Note
-      </button>
-      <button
-        onClick={onAddRectangle}
-        className="px-4 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
-      >
-        Rectangle
-      </button>
-      <button
-        onClick={onAddCircle}
-        className="px-4 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
-      >
-        Circle
-      </button>
 
-      {selectedId && (
+      {!canEdit && (
+        <>
+          <div className="w-px h-6 bg-gray-300" />
+          <span className="px-2 py-1 text-xs font-medium text-gray-500 bg-gray-100 rounded">
+            View only
+          </span>
+        </>
+      )}
+
+      {canEdit && (
+        <>
+          <div className="w-px h-6 bg-gray-300" />
+          <button
+            onClick={onAddStickyNote}
+            className="px-4 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            Sticky Note
+          </button>
+          <button
+            onClick={onAddRectangle}
+            className="px-4 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            Rectangle
+          </button>
+          <button
+            onClick={onAddCircle}
+            className="px-4 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            Circle
+          </button>
+          <button
+            onClick={onAddFrame}
+            className="px-4 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            Frame
+          </button>
+        </>
+      )}
+
+      {canEdit && hasSelection && (
         <>
           <div className="w-px h-6 bg-gray-300" />
           <div className="flex items-center gap-1">
@@ -133,6 +175,41 @@ export function Toolbar({
             title="Delete (Del)"
           >
             Delete
+          </button>
+        </>
+      )}
+
+      {canEdit && canGroup && (
+        <>
+          <div className="w-px h-6 bg-gray-300" />
+          <button
+            onClick={onGroup}
+            className="px-3 py-2 text-sm font-medium text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+            title="Group (Ctrl+G)"
+          >
+            Group
+          </button>
+        </>
+      )}
+
+      {canEdit && canUngroup && (
+        <button
+          onClick={onUngroup}
+          className="px-3 py-2 text-sm font-medium text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+          title="Ungroup (Ctrl+Shift+G)"
+        >
+          Ungroup
+        </button>
+      )}
+
+      {canManage && (
+        <>
+          <div className="w-px h-6 bg-gray-300" />
+          <button
+            onClick={onShareClick}
+            className="px-3 py-2 text-sm font-medium text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+          >
+            Share
           </button>
         </>
       )}

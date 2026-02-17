@@ -1,10 +1,13 @@
 'use client'
 
+import { useState, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import { useBoardState } from '@/hooks/useBoardState'
 import { useCanvas } from '@/hooks/useCanvas'
 import { BoardObject } from '@/types/board'
+import { BoardRole } from '@/types/sharing'
 import { Toolbar } from './Toolbar'
+import { ShareDialog } from './ShareDialog'
 
 // Konva is client-only — must disable SSR
 const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canvas })), {
@@ -16,83 +19,169 @@ interface BoardClientProps {
   userId: string
   boardId: string
   boardName: string
+  userRole: BoardRole
 }
 
-export function BoardClient({ userId, boardId, boardName }: BoardClientProps) {
+export function BoardClient({ userId, boardId, boardName, userRole }: BoardClientProps) {
   const {
-    objects, selectedId, addObject, updateObject, deleteObject, duplicateObject, selectObject, COLOR_PALETTE,
-  } = useBoardState(userId, boardId)
+    objects, selectedIds, activeGroupId, sortedObjects,
+    addObject, updateObject, deleteSelected, duplicateSelected,
+    selectObject, selectObjects, clearSelection,
+    enterGroup, exitGroup,
+    bringToFront, sendToBack, bringForward, sendBackward,
+    groupSelected, ungroupSelected,
+    moveGroupChildren, checkFrameContainment,
+    getChildren, getDescendants,
+    COLOR_PALETTE,
+  } = useBoardState(userId, boardId, userRole)
   const { getViewportCenter } = useCanvas()
+  const [shareOpen, setShareOpen] = useState(false)
+
+  const canEdit = userRole !== 'viewer'
 
   const handleAddStickyNote = () => {
+    if (!canEdit) return
     const center = getViewportCenter()
     addObject('sticky_note', center.x - 75, center.y - 75)
   }
 
   const handleAddRectangle = () => {
+    if (!canEdit) return
     const center = getViewportCenter()
     addObject('rectangle', center.x - 100, center.y - 70)
   }
 
   const handleAddCircle = () => {
+    if (!canEdit) return
     const center = getViewportCenter()
     addObject('circle', center.x - 60, center.y - 60)
   }
 
+  const handleAddFrame = () => {
+    if (!canEdit) return
+    const center = getViewportCenter()
+    addObject('frame', center.x - 200, center.y - 150)
+  }
+
   const handleDragEnd = (id: string, x: number, y: number) => {
+    if (!canEdit) return
     updateObject(id, { x, y })
   }
 
   const handleUpdateText = (id: string, text: string) => {
+    if (!canEdit) return
     updateObject(id, { text })
   }
 
   const handleTransformEnd = (id: string, updates: Partial<BoardObject>) => {
+    if (!canEdit) return
     updateObject(id, updates)
   }
 
   const handleDelete = () => {
-    if (selectedId) deleteObject(selectedId)
+    if (!canEdit) return
+    deleteSelected()
   }
 
   const handleDuplicate = () => {
-    if (selectedId) duplicateObject(selectedId)
+    if (!canEdit) return
+    duplicateSelected()
   }
 
   const handleColorChange = (color: string) => {
-    if (selectedId) updateObject(selectedId, { color })
+    if (!canEdit) return
+    for (const id of selectedIds) {
+      const obj = objects.get(id)
+      if (obj?.type === 'group') {
+        // Apply color to all children of the group
+        for (const child of getDescendants(id)) {
+          if (child.type !== 'group') updateObject(child.id, { color })
+        }
+      } else {
+        updateObject(id, { color })
+      }
+    }
   }
 
-  const selectedColor = selectedId ? objects.get(selectedId)?.color : undefined
+  // Determine if group/ungroup are available
+  const canGroup = selectedIds.size > 1
+  const canUngroup = useMemo(() => {
+    for (const id of selectedIds) {
+      const obj = objects.get(id)
+      if (obj?.type === 'group') return true
+    }
+    return false
+  }, [selectedIds, objects])
+
+  // Get selected color (first selected object's color)
+  const selectedColor = useMemo(() => {
+    const firstId = selectedIds.values().next().value
+    if (!firstId) return undefined
+    return objects.get(firstId)?.color
+  }, [selectedIds, objects])
 
   return (
     <>
       <Toolbar
         boardId={boardId}
         boardName={boardName}
+        userRole={userRole}
         onAddStickyNote={handleAddStickyNote}
         onAddRectangle={handleAddRectangle}
         onAddCircle={handleAddCircle}
-        selectedId={selectedId}
+        onAddFrame={handleAddFrame}
+        hasSelection={selectedIds.size > 0}
+        multiSelected={selectedIds.size > 1}
         selectedColor={selectedColor}
         colors={COLOR_PALETTE}
         onColorChange={handleColorChange}
         onDelete={handleDelete}
         onDuplicate={handleDuplicate}
+        onGroup={groupSelected}
+        onUngroup={ungroupSelected}
+        canGroup={canGroup}
+        canUngroup={canUngroup}
+        onShareClick={() => setShareOpen(true)}
       />
       <Canvas
         objects={objects}
-        selectedId={selectedId}
+        sortedObjects={sortedObjects}
+        selectedIds={selectedIds}
+        activeGroupId={activeGroupId}
         onSelect={selectObject}
+        onSelectObjects={selectObjects}
+        onClearSelection={clearSelection}
+        onEnterGroup={enterGroup}
+        onExitGroup={exitGroup}
         onDragEnd={handleDragEnd}
         onUpdateText={handleUpdateText}
         onTransformEnd={handleTransformEnd}
         onDelete={handleDelete}
         onDuplicate={handleDuplicate}
         onColorChange={handleColorChange}
+        onBringToFront={bringToFront}
+        onBringForward={bringForward}
+        onSendBackward={sendBackward}
+        onSendToBack={sendToBack}
+        onGroup={groupSelected}
+        onUngroup={ungroupSelected}
+        canGroup={canGroup}
+        canUngroup={canUngroup}
+        onCheckFrameContainment={checkFrameContainment}
+        onMoveGroupChildren={moveGroupChildren}
+        getChildren={getChildren}
+        getDescendants={getDescendants}
         colors={COLOR_PALETTE}
         selectedColor={selectedColor}
+        userRole={userRole}
       />
+      {shareOpen && (
+        <ShareDialog
+          boardId={boardId}
+          userRole={userRole}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
     </>
   )
 }

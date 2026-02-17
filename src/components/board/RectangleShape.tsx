@@ -10,6 +10,8 @@ interface RectangleShapeProps {
   shapeRef: (id: string, node: Konva.Node | null) => void
   onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
   onContextMenu: (id: string, clientX: number, clientY: number) => void
+  onDoubleClick?: (id: string) => void
+  editable?: boolean
 }
 
 export function RectangleShape({
@@ -20,6 +22,8 @@ export function RectangleShape({
   shapeRef,
   onTransformEnd,
   onContextMenu,
+  onDoubleClick,
+  editable = true,
 }: RectangleShapeProps) {
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     onDragEnd(object.id, e.target.x(), e.target.y())
@@ -52,7 +56,7 @@ export function RectangleShape({
       width={object.width}
       height={object.height}
       fill={object.color}
-      draggable={true}
+      draggable={editable}
       onClick={handleClick}
       onTap={handleClick}
       onDragEnd={handleDragEnd}
@@ -64,6 +68,8 @@ export function RectangleShape({
       cornerRadius={4}
       stroke={isSelected ? '#0EA5E9' : undefined}
       strokeWidth={isSelected ? 2 : 0}
+      onDblClick={() => onDoubleClick?.(object.id)}
+      onDblTap={() => onDoubleClick?.(object.id)}
     />
   )
 }

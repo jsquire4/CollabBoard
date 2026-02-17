@@ -10,6 +10,14 @@ interface ContextMenuProps {
   onClose: () => void
   colors: string[]
   currentColor?: string
+  onBringToFront?: () => void
+  onBringForward?: () => void
+  onSendBackward?: () => void
+  onSendToBack?: () => void
+  onGroup?: () => void
+  onUngroup?: () => void
+  canGroup?: boolean
+  canUngroup?: boolean
 }
 
 export function ContextMenu({
@@ -20,6 +28,14 @@ export function ContextMenu({
   onClose,
   colors,
   currentColor,
+  onBringToFront,
+  onBringForward,
+  onSendBackward,
+  onSendToBack,
+  onGroup,
+  onUngroup,
+  canGroup,
+  canUngroup,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -38,7 +54,7 @@ export function ContextMenu({
 
   // Adjust position to keep menu on screen
   const menuWidth = 200
-  const menuHeight = 140
+  const menuHeight = 340
   const x = position.x + menuWidth > window.innerWidth ? position.x - menuWidth : position.x
   const y = position.y + menuHeight > window.innerHeight ? position.y - menuHeight : position.y
 
@@ -51,6 +67,14 @@ export function ContextMenu({
     gap: '8px',
     borderRadius: '4px',
   }
+
+  const sectionLabel: React.CSSProperties = {
+    fontSize: '12px',
+    color: '#888',
+    padding: '4px 12px 2px',
+  }
+
+  const divider = <div style={{ height: '1px', background: '#e5e5e5', margin: '4px 0' }} />
 
   return (
     <div
@@ -85,7 +109,85 @@ export function ContextMenu({
         Delete
         <span style={{ marginLeft: 'auto', color: '#999', fontSize: '12px' }}>Del</span>
       </div>
-      <div style={{ height: '1px', background: '#e5e5e5', margin: '4px 0' }} />
+
+      {/* Layer section */}
+      {(onBringToFront || onSendToBack) && (
+        <>
+          {divider}
+          <div style={sectionLabel}>Layer</div>
+          {onBringToFront && (
+            <div
+              style={itemStyle}
+              onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              onClick={() => { onBringToFront(); onClose() }}
+            >
+              Bring to Front
+            </div>
+          )}
+          {onBringForward && (
+            <div
+              style={itemStyle}
+              onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              onClick={() => { onBringForward(); onClose() }}
+            >
+              Bring Forward
+            </div>
+          )}
+          {onSendBackward && (
+            <div
+              style={itemStyle}
+              onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              onClick={() => { onSendBackward(); onClose() }}
+            >
+              Send Backward
+            </div>
+          )}
+          {onSendToBack && (
+            <div
+              style={itemStyle}
+              onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              onClick={() => { onSendToBack(); onClose() }}
+            >
+              Send to Back
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Group/Ungroup section */}
+      {(canGroup || canUngroup) && (
+        <>
+          {divider}
+          {canGroup && onGroup && (
+            <div
+              style={itemStyle}
+              onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              onClick={() => { onGroup(); onClose() }}
+            >
+              Group
+              <span style={{ marginLeft: 'auto', color: '#999', fontSize: '12px' }}>Ctrl+G</span>
+            </div>
+          )}
+          {canUngroup && onUngroup && (
+            <div
+              style={itemStyle}
+              onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              onClick={() => { onUngroup(); onClose() }}
+            >
+              Ungroup
+              <span style={{ marginLeft: 'auto', color: '#999', fontSize: '12px' }}>Ctrl+Shift+G</span>
+            </div>
+          )}
+        </>
+      )}
+
+      {divider}
       <div style={{ padding: '8px 12px' }}>
         <div style={{ fontSize: '12px', color: '#888', marginBottom: '6px' }}>Color</div>
         <div style={{ display: 'flex', gap: '4px' }}>

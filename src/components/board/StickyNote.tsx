@@ -12,6 +12,7 @@ interface StickyNoteProps {
   onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
   onContextMenu: (id: string, clientX: number, clientY: number) => void
   editable?: boolean
+  isEditing?: boolean
 }
 
 export function StickyNote({
@@ -24,6 +25,7 @@ export function StickyNote({
   onTransformEnd,
   onContextMenu,
   editable = true,
+  isEditing = false,
 }: StickyNoteProps) {
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     onDragEnd(object.id, e.target.x(), e.target.y())
@@ -89,18 +91,20 @@ export function StickyNote({
         stroke={isSelected ? '#0EA5E9' : undefined}
         strokeWidth={isSelected ? 2 : 0}
       />
-      <Text
-        x={padding}
-        y={padding}
-        width={object.width - padding * 2}
-        height={object.height - padding * 2}
-        text={object.text || ''}
-        fontSize={object.font_size}
-        fontFamily="sans-serif"
-        fill="#333"
-        wrap="word"
-        ellipsis={true}
-      />
+      {!isEditing && (
+        <Text
+          x={padding}
+          y={padding}
+          width={object.width - padding * 2}
+          height={object.height - padding * 2}
+          text={object.text || ''}
+          fontSize={object.font_size}
+          fontFamily="sans-serif"
+          fill="#333"
+          wrap="word"
+          ellipsis={true}
+        />
+      )}
     </Group>
   )
 }

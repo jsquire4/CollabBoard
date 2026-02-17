@@ -29,7 +29,7 @@ interface BoardClientProps {
 export function BoardClient({ userId, boardId, boardName, userRole, displayName }: BoardClientProps) {
   const channel = useRealtimeChannel(boardId)
   const { onlineUsers, trackPresence } = usePresence(channel, userId, userRole, displayName)
-  const { remoteCursors, sendCursor } = useCursors(channel, userId)
+  const { sendCursor, onCursorUpdate } = useCursors(channel, userId)
 
   const {
     objects, selectedIds, activeGroupId, sortedObjects,
@@ -197,9 +197,9 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
         colors={COLOR_PALETTE}
         selectedColor={selectedColor}
         userRole={userRole}
-        remoteCursors={remoteCursors}
         onlineUsers={onlineUsers}
         onCursorMove={sendCursor}
+        onCursorUpdate={onCursorUpdate}
         remoteSelections={remoteSelections}
       />
       {shareOpen && (

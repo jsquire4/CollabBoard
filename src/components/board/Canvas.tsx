@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useCallback, useEffect, useMemo } from 'react'
+import React, { useRef, useState, useCallback, useEffect, useMemo, memo } from 'react'
 import { Stage, Layer, Transformer, Rect as KonvaRect, Text as KonvaText, Group as KonvaGroup } from 'react-konva'
 import Konva from 'konva'
 import { useCanvas } from '@/hooks/useCanvas'
@@ -12,9 +12,67 @@ import { RectangleShape } from './RectangleShape'
 import { CircleShape } from './CircleShape'
 import { FrameShape } from './FrameShape'
 import { ContextMenu } from './ContextMenu'
-import { RemoteCursor } from './RemoteCursor'
 import { RemoteCursorData } from '@/hooks/useCursors'
 import { OnlineUser, getColorForUser } from '@/hooks/usePresence'
+
+// Memoized remote selection highlights — only re-renders when selections/objects change,
+// not when the parent Canvas re-renders from drags, transforms, etc.
+const RemoteSelectionHighlights = memo(function RemoteSelectionHighlights({
+  remoteSelections,
+  onlineUsers,
+  objects,
+}: {
+  remoteSelections: Map<string, Set<string>>
+  onlineUsers?: OnlineUser[]
+  objects: Map<string, BoardObject>
+}) {
+  return (
+    <>
+      {Array.from(remoteSelections.entries()).map(([uid, objIds]) => {
+        const user = onlineUsers?.find(u => u.user_id === uid)
+        const color = user?.color ?? getColorForUser(uid)
+        const name = user?.display_name ?? 'User'
+        return Array.from(objIds).map(objId => {
+          const obj = objects.get(objId)
+          if (!obj || obj.type === 'group') return null
+          return (
+            <KonvaGroup key={`remote-sel-${uid}-${objId}`} listening={false}>
+              <KonvaRect
+                x={obj.x - 4}
+                y={obj.y - 4}
+                width={obj.width + 8}
+                height={obj.height + 8}
+                fill="transparent"
+                stroke={color}
+                strokeWidth={2}
+                cornerRadius={4}
+                dash={[6, 3]}
+              />
+              <KonvaRect
+                x={obj.x - 4}
+                y={obj.y - 20}
+                width={Math.min(name.length * 7 + 12, 120)}
+                height={16}
+                fill={color}
+                cornerRadius={3}
+              />
+              <KonvaText
+                x={obj.x - 4 + 6}
+                y={obj.y - 20 + 2}
+                text={name}
+                fontSize={10}
+                fill="white"
+                width={Math.min(name.length * 7 + 12, 120) - 12}
+                ellipsis={true}
+                wrap="none"
+              />
+            </KonvaGroup>
+          )
+        })
+      })}
+    </>
+  )
+})
 
 interface CanvasProps {
   objects: Map<string, BoardObject>
@@ -47,9 +105,9 @@ interface CanvasProps {
   colors: string[]
   selectedColor?: string
   userRole: BoardRole
-  remoteCursors?: Map<string, RemoteCursorData>
   onlineUsers?: OnlineUser[]
   onCursorMove?: (x: number, y: number) => void
+  onCursorUpdate?: (fn: (cursors: Map<string, RemoteCursorData>) => void) => void
   remoteSelections?: Map<string, Set<string>>
 }
 
@@ -63,14 +121,75 @@ export function Canvas({
   onCheckFrameContainment, onMoveGroupChildren,
   getChildren, getDescendants,
   colors, selectedColor, userRole,
-  remoteCursors, onlineUsers, onCursorMove, remoteSelections,
+  onlineUsers, onCursorMove, onCursorUpdate, remoteSelections,
 }: CanvasProps) {
   const canEdit = userRole !== 'viewer'
   const { stagePos, stageScale, handleWheel, handleDragEnd: handleStageDragEnd } = useCanvas()
   const stageRef = useRef<Konva.Stage>(null)
   const trRef = useRef<Konva.Transformer>(null)
+  const cursorLayerRef = useRef<Konva.Layer>(null)
+  const cursorNodesRef = useRef<Map<string, Konva.Group>>(new Map())
   const shapeRefs = useRef<Map<string, Konva.Node>>(new Map())
+  const onlineUsersRef = useRef(onlineUsers)
+  onlineUsersRef.current = onlineUsers
   const { shiftHeld, ctrlHeld } = useModifierKeys()
+
+  // Imperatively update Konva cursor nodes — no React re-renders
+  useEffect(() => {
+    if (!onCursorUpdate) return
+
+    onCursorUpdate((cursors: Map<string, RemoteCursorData>) => {
+      const layer = cursorLayerRef.current
+      if (!layer) return
+
+      const activeIds = new Set<string>()
+
+      for (const [uid, cursor] of cursors.entries()) {
+        activeIds.add(uid)
+        let group = cursorNodesRef.current.get(uid)
+
+        if (!group) {
+          // Create new cursor node imperatively
+          const users = onlineUsersRef.current
+          const user = users?.find(u => u.user_id === uid)
+          const color = user?.color ?? getColorForUser(uid)
+          const name = user?.display_name ?? 'User'
+
+          group = new Konva.Group({ listening: false })
+          const arrow = new Konva.Line({
+            points: [0, 0, 0, 18, 12, 12],
+            fill: color,
+            closed: true,
+            stroke: color,
+            strokeWidth: 1,
+          })
+          const label = new Konva.Text({
+            x: 14,
+            y: 10,
+            text: name,
+            fontSize: 12,
+            fill: color,
+            fontStyle: 'bold',
+          })
+          group.add(arrow, label)
+          layer.add(group)
+          cursorNodesRef.current.set(uid, group)
+        }
+
+        group.position({ x: cursor.x, y: cursor.y })
+      }
+
+      // Remove stale cursor nodes
+      for (const [uid, group] of cursorNodesRef.current.entries()) {
+        if (!activeIds.has(uid)) {
+          group.destroy()
+          cursorNodesRef.current.delete(uid)
+        }
+      }
+
+      layer.batchDraw()
+    })
+  }, [onCursorUpdate])
 
   // Expand group IDs in selectedIds to their visible children (for Transformer attachment)
   const effectiveNodeIds = useMemo(() => {
@@ -341,29 +460,20 @@ export function Canvas({
   }, [shiftHeld, stagePos, stageScale])
 
   const handleStageMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-    // Broadcast cursor position for remote users
-    if (onCursorMove) {
-      const stage = stageRef.current
-      if (stage) {
-        const pos = stage.getPointerPosition()
-        if (pos) {
-          const canvasX = (pos.x - stagePos.x) / stageScale
-          const canvasY = (pos.y - stagePos.y) / stageScale
-          onCursorMove(canvasX, canvasY)
-        }
-      }
-    }
-
-    if (!isMarqueeActive.current || !marqueeStart.current) return
-
     const stage = stageRef.current
     if (!stage) return
-
     const pos = stage.getPointerPosition()
     if (!pos) return
 
     const canvasX = (pos.x - stagePos.x) / stageScale
     const canvasY = (pos.y - stagePos.y) / stageScale
+
+    // Broadcast cursor position for remote users (skip during marquee)
+    if (onCursorMove && !isMarqueeActive.current) {
+      onCursorMove(canvasX, canvasY)
+    }
+
+    if (!isMarqueeActive.current || !marqueeStart.current) return
 
     const x = Math.min(marqueeStart.current.x, canvasX)
     const y = Math.min(marqueeStart.current.y, canvasY)
@@ -496,6 +606,7 @@ export function Canvas({
             onTransformEnd={onTransformEnd}
             onContextMenu={handleContextMenu}
             editable={canEdit}
+            isEditing={editingId === obj.id}
           />
         )
       case 'rectangle':
@@ -541,6 +652,7 @@ export function Canvas({
             onTransformEnd={onTransformEnd}
             onContextMenu={handleContextMenu}
             editable={canEdit}
+            isEditing={editingId === obj.id}
           />
         )
       case 'group':
@@ -619,48 +731,13 @@ export function Canvas({
           })()}
 
           {/* Remote selection highlights */}
-          {remoteSelections && Array.from(remoteSelections.entries()).map(([uid, objIds]) => {
-            const user = onlineUsers?.find(u => u.user_id === uid)
-            const color = user?.color ?? getColorForUser(uid)
-            const name = user?.display_name ?? 'User'
-            return Array.from(objIds).map(objId => {
-              const obj = objects.get(objId)
-              if (!obj || obj.type === 'group') return null
-              return (
-                <KonvaGroup key={`remote-sel-${uid}-${objId}`} listening={false}>
-                  <KonvaRect
-                    x={obj.x - 4}
-                    y={obj.y - 4}
-                    width={obj.width + 8}
-                    height={obj.height + 8}
-                    fill="transparent"
-                    stroke={color}
-                    strokeWidth={2}
-                    cornerRadius={4}
-                    dash={[6, 3]}
-                  />
-                  <KonvaRect
-                    x={obj.x - 4}
-                    y={obj.y - 20}
-                    width={Math.min(name.length * 7 + 12, 120)}
-                    height={16}
-                    fill={color}
-                    cornerRadius={3}
-                  />
-                  <KonvaText
-                    x={obj.x - 4 + 6}
-                    y={obj.y - 20 + 2}
-                    text={name}
-                    fontSize={10}
-                    fill="white"
-                    width={Math.min(name.length * 7 + 12, 120) - 12}
-                    ellipsis={true}
-                    wrap="none"
-                  />
-                </KonvaGroup>
-              )
-            })
-          })}
+          {remoteSelections && remoteSelections.size > 0 && (
+            <RemoteSelectionHighlights
+              remoteSelections={remoteSelections}
+              onlineUsers={onlineUsers}
+              objects={objects}
+            />
+          )}
 
           {/* Render all objects sorted by z_index */}
           {sortedObjects.map(obj => renderShape(obj))}
@@ -693,23 +770,8 @@ export function Canvas({
             />
           )}
         </Layer>
-        {/* Remote cursors layer — renders above all objects */}
-        <Layer listening={false}>
-          {remoteCursors && Array.from(remoteCursors.entries()).map(([uid, cursor]) => {
-            const user = onlineUsers?.find(u => u.user_id === uid)
-            const name = user?.display_name ?? 'User'
-            const color = user?.color ?? getColorForUser(uid)
-            return (
-              <RemoteCursor
-                key={uid}
-                x={cursor.x}
-                y={cursor.y}
-                name={name}
-                color={color}
-              />
-            )
-          })}
-        </Layer>
+        {/* Remote cursors layer — updated imperatively via rAF, no React re-renders */}
+        <Layer ref={cursorLayerRef} listening={false} />
       </Stage>
 
       {/* Textarea overlay for editing text */}

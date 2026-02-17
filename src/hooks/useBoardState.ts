@@ -668,14 +668,41 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     setSelectedIds(new Set())
   }, [canEdit, selectedIds, objects, getChildren, updateObject, supabase, broadcastChanges])
 
-  // Move group/frame: move all children by delta
+  // Move group/frame: move all children by delta (batched — single state update + single broadcast)
   const moveGroupChildren = useCallback((parentId: string, dx: number, dy: number) => {
     if (!canEdit) return
     const descendants = getDescendants(parentId)
+    if (descendants.length === 0) return
+
+    const now = new Date().toISOString()
+    const changes: BoardChange[] = []
+
+    setObjects(prev => {
+      const next = new Map(prev)
+      for (const d of descendants) {
+        const existing = next.get(d.id)
+        if (existing) {
+          const updated = { ...existing, x: existing.x + dx, y: existing.y + dy, updated_at: now }
+          next.set(d.id, updated)
+          changes.push({ action: 'update', object: { id: d.id, x: updated.x, y: updated.y } })
+        }
+      }
+      return next
+    })
+
+    broadcastChanges(changes)
+
+    // Persist each update to Supabase
     for (const d of descendants) {
-      updateObject(d.id, { x: d.x + dx, y: d.y + dy })
+      supabase
+        .from('board_objects')
+        .update({ x: d.x + dx, y: d.y + dy, updated_at: now })
+        .eq('id', d.id)
+        .then(({ error }) => {
+          if (error) console.error('Failed to update child position:', error.message)
+        })
     }
-  }, [canEdit, getDescendants, updateObject])
+  }, [canEdit, getDescendants, broadcastChanges, supabase])
 
   // Frame containment: check if an object should be inside a frame after drag
   const checkFrameContainment = useCallback((id: string) => {

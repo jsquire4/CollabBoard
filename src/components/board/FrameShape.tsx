@@ -12,6 +12,7 @@ interface FrameShapeProps {
   onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
   onContextMenu: (id: string, clientX: number, clientY: number) => void
   editable?: boolean
+  isEditing?: boolean
 }
 
 export function FrameShape({
@@ -24,6 +25,7 @@ export function FrameShape({
   onTransformEnd,
   onContextMenu,
   editable = true,
+  isEditing = false,
 }: FrameShapeProps) {
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     onDragEnd(object.id, e.target.x(), e.target.y())
@@ -94,19 +96,21 @@ export function FrameShape({
         fill="rgba(150,150,150,0.15)"
         cornerRadius={[4, 4, 0, 0]}
       />
-      {/* Title text */}
-      <Text
-        x={8}
-        y={6}
-        width={object.width - 16}
-        height={titleHeight - 6}
-        text={object.text || 'Frame'}
-        fontSize={13}
-        fontFamily="sans-serif"
-        fontStyle="bold"
-        fill="#666"
-        ellipsis={true}
-      />
+      {/* Title text — hidden during editing to avoid duplication with textarea overlay */}
+      {!isEditing && (
+        <Text
+          x={8}
+          y={6}
+          width={object.width - 16}
+          height={titleHeight - 6}
+          text={object.text || 'Frame'}
+          fontSize={13}
+          fontFamily="sans-serif"
+          fontStyle="bold"
+          fill="#666"
+          ellipsis={true}
+        />
+      )}
     </Group>
   )
 }

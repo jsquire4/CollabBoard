@@ -1,6 +1,19 @@
 import Konva from 'konva'
 import { BoardObject } from '@/types/board'
 
+/** Common props shared by all shape components. */
+export interface ShapeProps {
+  object: BoardObject
+  onDragEnd: (id: string, x: number, y: number) => void
+  isSelected: boolean
+  onSelect: (id: string) => void
+  shapeRef: (id: string, node: Konva.Node | null) => void
+  onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
+  onContextMenu: (id: string, clientX: number, clientY: number) => void
+  onDoubleClick?: (id: string) => void
+  editable?: boolean
+}
+
 /**
  * Creates a standard transform-end handler that resets scale and
  * reports the final dimensions back via the callback.

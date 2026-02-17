@@ -1,18 +1,9 @@
 import { Group, Rect, Text } from 'react-konva'
-import { BoardObject } from '@/types/board'
 import Konva from 'konva'
-import { handleShapeTransformEnd } from './shapeUtils'
+import { ShapeProps, handleShapeTransformEnd } from './shapeUtils'
 
-interface FrameShapeProps {
-  object: BoardObject
-  onDragEnd: (id: string, x: number, y: number) => void
-  isSelected: boolean
-  onSelect: (id: string) => void
+interface FrameShapeProps extends ShapeProps {
   onStartEdit: (id: string, node: Konva.Text) => void
-  shapeRef: (id: string, node: Konva.Node | null) => void
-  onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
-  onContextMenu: (id: string, clientX: number, clientY: number) => void
-  editable?: boolean
   isEditing?: boolean
 }
 
@@ -73,31 +64,31 @@ export function FrameShape({
       <Rect
         width={object.width}
         height={object.height}
-        fill={object.color || 'rgba(200,200,200,0.3)'}
-        cornerRadius={4}
-        stroke={isSelected ? '#0EA5E9' : '#ccc'}
+        fill={object.color || 'rgba(241,245,249,0.8)'}
+        cornerRadius={8}
+        stroke={isSelected ? '#0EA5E9' : 'rgba(148,163,184,0.5)'}
         strokeWidth={isSelected ? 2 : 1}
-        dash={isSelected ? undefined : [6, 3]}
+        dash={isSelected ? undefined : [8, 4]}
       />
       {/* Title bar background */}
       <Rect
         width={object.width}
         height={titleHeight}
-        fill="rgba(150,150,150,0.15)"
-        cornerRadius={[4, 4, 0, 0]}
+        fill="rgba(148,163,184,0.12)"
+        cornerRadius={[8, 8, 0, 0]}
       />
       {/* Title text — hidden during editing to avoid duplication with textarea overlay */}
       {!isEditing && (
         <Text
-          x={8}
+          x={10}
           y={6}
-          width={object.width - 16}
+          width={object.width - 20}
           height={titleHeight - 6}
           text={object.text || 'Frame'}
           fontSize={13}
           fontFamily="sans-serif"
           fontStyle="bold"
-          fill="#666"
+          fill="#475569"
           ellipsis={true}
         />
       )}

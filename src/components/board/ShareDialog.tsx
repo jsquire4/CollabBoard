@@ -207,16 +207,12 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const tabStyle = (t: Tab): React.CSSProperties => ({
-    padding: '8px 16px',
-    cursor: 'pointer',
-    border: 'none',
-    background: tab === t ? '#2196F3' : 'transparent',
-    color: tab === t ? '#fff' : '#666',
-    borderRadius: '6px',
-    fontSize: '14px',
-    fontWeight: 500,
-  })
+  const tabClasses = (t: Tab) =>
+    `rounded-lg px-4 py-2 text-sm font-medium transition ${
+      tab === t
+        ? 'bg-indigo-600 text-white'
+        : 'bg-transparent text-slate-600 hover:bg-slate-100'
+    }`
 
   const getRoleOptions = (currentRole: BoardRole) => {
     const options = [...ROLE_OPTIONS]
@@ -228,72 +224,69 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
 
   return (
     <div
-      style={{
-        position: 'fixed', inset: 0, zIndex: 300,
-        background: 'rgba(0,0,0,0.4)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}
+      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40"
       onClick={onClose}
     >
       <div
-        style={{
-          background: '#fff', borderRadius: '16px', padding: '24px',
-          width: '500px', maxHeight: '80vh', overflow: 'auto',
-          boxShadow: '0 8px 40px rgba(0,0,0,0.2)',
-        }}
+        className="w-full max-w-[500px] max-h-[80vh] overflow-auto rounded-2xl bg-white p-6 shadow-xl"
         onClick={e => e.stopPropagation()}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>Share Board</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#999' }}>×</button>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-slate-900">Share Board</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+          >
+            ×
+          </button>
         </div>
 
-        <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', background: '#f5f5f5', borderRadius: '8px', padding: '4px' }}>
-          <button style={tabStyle('members')} onClick={() => setTab('members')}>Members</button>
-          <button style={tabStyle('invite')} onClick={() => setTab('invite')}>Invite</button>
-          <button style={tabStyle('link')} onClick={() => setTab('link')}>Link</button>
+        <div className="mb-5 flex gap-1 rounded-lg bg-slate-100 p-1">
+          <button type="button" className={tabClasses('members')} onClick={() => setTab('members')}>
+            Members
+          </button>
+          <button type="button" className={tabClasses('invite')} onClick={() => setTab('invite')}>
+            Invite
+          </button>
+          <button type="button" className={tabClasses('link')} onClick={() => setTab('link')}>
+            Link
+          </button>
         </div>
 
         {loading ? (
-          <p style={{ color: '#888', textAlign: 'center', padding: '20px' }}>Loading...</p>
+          <p className="py-5 text-center text-slate-500">Loading...</p>
         ) : (
           <>
             {/* Members Tab */}
             {tab === 'members' && (
               <div>
                 {members.map(member => (
-                  <div key={member.id} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '10px 0', borderBottom: '1px solid #f0f0f0',
-                  }}>
-                    <div style={{ fontSize: '14px', color: '#333' }}>
-                      {member.email}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div
+                    key={member.id}
+                    className="flex items-center justify-between border-b border-slate-100 py-2.5"
+                  >
+                    <div className="text-sm text-slate-800">{member.email}</div>
+                    <div className="flex items-center gap-2">
                       {member.role === 'owner' && !isOwner ? (
-                        <span style={{ fontSize: '13px', color: '#888', fontWeight: 500 }}>Owner</span>
+                        <span className="text-sm font-medium text-slate-500">Owner</span>
                       ) : member.role === 'owner' && isOwner ? (
-                        <span style={{ fontSize: '13px', color: '#888', fontWeight: 500 }}>Owner (you)</span>
+                        <span className="text-sm font-medium text-slate-500">Owner (you)</span>
                       ) : (
                         <>
                           <select
                             value={member.role}
                             onChange={e => handleRoleChange(member.id, member.user_id, e.target.value as BoardRole)}
-                            style={{
-                              padding: '4px 8px', fontSize: '13px', borderRadius: '6px',
-                              border: '1px solid #ddd', outline: 'none',
-                            }}
+                            className="rounded-md border border-slate-300 px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             {getRoleOptions(member.role).map(opt => (
                               <option key={opt.value} value={opt.value}>{opt.label}</option>
                             ))}
                           </select>
                           <button
+                            type="button"
                             onClick={() => handleRemoveMember(member.id)}
-                            style={{
-                              background: 'none', border: 'none', color: '#d32f2f',
-                              cursor: 'pointer', fontSize: '16px', padding: '0 4px',
-                            }}
+                            className="rounded p-1 text-red-600 transition hover:bg-red-50"
                             title="Remove member"
                           >
                             ×
@@ -304,29 +297,22 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                   </div>
                 ))}
 
-                {/* Pending invites section */}
                 {invites.length > 0 && (
                   <>
-                    <div style={{ fontSize: '12px', color: '#888', marginTop: '16px', marginBottom: '8px', fontWeight: 500 }}>
-                      Pending Invites
-                    </div>
+                    <div className="mb-2 mt-4 text-xs font-medium text-slate-500">Pending Invites</div>
                     {invites.map(invite => (
-                      <div key={invite.id} style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '8px 0', borderBottom: '1px solid #f0f0f0',
-                      }}>
-                        <div style={{ fontSize: '14px', color: '#888' }}>
+                      <div
+                        key={invite.id}
+                        className="flex items-center justify-between border-b border-slate-100 py-2"
+                      >
+                        <div className="text-sm text-slate-500">
                           {invite.email}
-                          <span style={{ fontSize: '11px', color: '#aaa', marginLeft: '8px' }}>
-                            ({invite.role})
-                          </span>
+                          <span className="ml-2 text-xs text-slate-400">({invite.role})</span>
                         </div>
                         <button
+                          type="button"
                           onClick={() => handleDeleteInvite(invite.id)}
-                          style={{
-                            background: 'none', border: 'none', color: '#d32f2f',
-                            cursor: 'pointer', fontSize: '16px', padding: '0 4px',
-                          }}
+                          className="rounded p-1 text-red-600 transition hover:bg-red-50"
                           title="Cancel invite"
                         >
                           ×
@@ -341,25 +327,19 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
             {/* Invite Tab */}
             {tab === 'invite' && (
               <div>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                <div className="mb-3 flex gap-2">
                   <input
                     type="email"
                     value={inviteEmail}
                     onChange={e => setInviteEmail(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') handleInvite() }}
                     placeholder="Email address"
-                    style={{
-                      flex: 1, padding: '10px 12px', fontSize: '14px',
-                      border: '1px solid #ddd', borderRadius: '8px', outline: 'none',
-                    }}
+                    className="flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                   <select
                     value={inviteRole}
                     onChange={e => setInviteRole(e.target.value as BoardRole)}
-                    style={{
-                      padding: '10px 12px', fontSize: '14px', borderRadius: '8px',
-                      border: '1px solid #ddd', outline: 'none',
-                    }}
+                    className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                   >
                     {ROLE_OPTIONS.map(opt => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -367,22 +347,15 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                   </select>
                 </div>
                 <button
+                  type="button"
                   onClick={handleInvite}
                   disabled={!inviteEmail.trim()}
-                  style={{
-                    width: '100%', padding: '10px', fontSize: '14px', fontWeight: 500,
-                    background: inviteEmail.trim() ? '#2196F3' : '#ccc',
-                    color: '#fff', border: 'none', borderRadius: '8px',
-                    cursor: inviteEmail.trim() ? 'pointer' : 'not-allowed',
-                  }}
+                  className="w-full rounded-lg bg-indigo-600 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   Send Invite
                 </button>
                 {inviteStatus && (
-                  <p style={{
-                    marginTop: '12px', fontSize: '13px',
-                    color: inviteStatus.startsWith('Error') ? '#d32f2f' : '#4CAF50',
-                  }}>
+                  <p className={`mt-3 text-sm ${inviteStatus.startsWith('Error') ? 'text-red-600' : 'text-green-600'}`}>
                     {inviteStatus}
                   </p>
                 )}
@@ -394,33 +367,24 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
               <div>
                 {shareLink ? (
                   <div>
-                    <div style={{
-                      padding: '12px', background: '#f5f5f5', borderRadius: '8px',
-                      fontSize: '13px', color: '#555', wordBreak: 'break-all', marginBottom: '12px',
-                    }}>
+                    <div className="mb-3 break-all rounded-lg bg-slate-100 px-3 py-2.5 text-sm text-slate-600">
                       {`${typeof window !== 'undefined' ? window.location.origin : ''}/board/join/${shareLink.token}`}
                     </div>
-                    <div style={{ fontSize: '13px', color: '#888', marginBottom: '12px' }}>
+                    <div className="mb-3 text-sm text-slate-500">
                       Anyone with this link joins as <strong>{shareLink.role}</strong>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div className="flex gap-2">
                       <button
+                        type="button"
                         onClick={copyLink}
-                        style={{
-                          flex: 1, padding: '10px', fontSize: '14px', fontWeight: 500,
-                          background: '#2196F3', color: '#fff', border: 'none', borderRadius: '8px',
-                          cursor: 'pointer',
-                        }}
+                        className="flex-1 rounded-lg bg-indigo-600 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500"
                       >
                         {copied ? 'Copied!' : 'Copy Link'}
                       </button>
                       <button
+                        type="button"
                         onClick={handleDeactivateLink}
-                        style={{
-                          padding: '10px 16px', fontSize: '14px', fontWeight: 500,
-                          background: 'none', color: '#d32f2f', border: '1px solid #d32f2f',
-                          borderRadius: '8px', cursor: 'pointer',
-                        }}
+                        className="rounded-lg border border-red-600 px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
                       >
                         Deactivate
                       </button>
@@ -428,28 +392,22 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                   </div>
                 ) : (
                   <div>
-                    <p style={{ fontSize: '14px', color: '#666', marginBottom: '12px' }}>
+                    <p className="mb-3 text-sm text-slate-600">
                       Generate a shareable link. Anyone with the link can join the board.
                     </p>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div className="flex gap-2">
                       <select
                         value={linkRole}
                         onChange={e => setLinkRole(e.target.value as 'editor' | 'viewer')}
-                        style={{
-                          padding: '10px 12px', fontSize: '14px', borderRadius: '8px',
-                          border: '1px solid #ddd', outline: 'none',
-                        }}
+                        className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                       >
                         <option value="editor">Editor</option>
                         <option value="viewer">Viewer</option>
                       </select>
                       <button
+                        type="button"
                         onClick={handleGenerateLink}
-                        style={{
-                          flex: 1, padding: '10px', fontSize: '14px', fontWeight: 500,
-                          background: '#2196F3', color: '#fff', border: 'none', borderRadius: '8px',
-                          cursor: 'pointer',
-                        }}
+                        className="flex-1 rounded-lg bg-indigo-600 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500"
                       >
                         Generate Link
                       </button>
@@ -463,36 +421,24 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
 
         {/* Ownership transfer confirmation */}
         {transferTarget && (
-          <div style={{
-            position: 'fixed', inset: 0, zIndex: 400,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <div style={{
-              background: '#fff', borderRadius: '12px', padding: '24px',
-              width: '360px', boxShadow: '0 8px 40px rgba(0,0,0,0.2)',
-            }}>
-              <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Transfer Ownership?</h3>
-              <p style={{ fontSize: '14px', color: '#666', margin: '0 0 20px' }}>
+          <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/50">
+            <div className="w-[360px] rounded-xl bg-white p-6 shadow-xl">
+              <h3 className="mb-3 text-base font-semibold text-slate-900">Transfer Ownership?</h3>
+              <p className="mb-5 text-sm text-slate-600">
                 This will make the selected user the owner and change your role to manager. This action cannot be undone.
               </p>
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <div className="flex justify-end gap-2">
                 <button
+                  type="button"
                   onClick={() => setTransferTarget(null)}
-                  style={{
-                    padding: '8px 16px', fontSize: '14px', background: 'none',
-                    border: '1px solid #ccc', borderRadius: '8px', cursor: 'pointer',
-                  }}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm transition hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={confirmTransferOwnership}
-                  style={{
-                    padding: '8px 16px', fontSize: '14px', fontWeight: 500,
-                    background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '8px',
-                    cursor: 'pointer',
-                  }}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-500"
                 >
                   Transfer
                 </button>

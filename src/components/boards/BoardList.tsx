@@ -4,17 +4,13 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { BoardWithRole } from '@/types/sharing'
 import { createClient } from '@/lib/supabase/client'
+import { BoardCard } from './BoardCard'
+import { CreateBoardDialog } from './CreateBoardDialog'
+import { EmptyState } from './EmptyState'
 
 interface BoardListProps {
   initialMyBoards: BoardWithRole[]
   initialSharedBoards: BoardWithRole[]
-}
-
-const ROLE_LABELS: Record<string, string> = {
-  owner: 'Owner',
-  manager: 'Manager',
-  editor: 'Editor',
-  viewer: 'Viewer',
 }
 
 export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListProps) {
@@ -148,258 +144,97 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
     }
   }
 
-  const renderBoardCard = (board: BoardWithRole) => {
-    const isOwner = board.role === 'owner'
-
-    return (
-      <div
-        key={board.id}
-        style={{
-          border: '1px solid #e0e0e0',
-          borderRadius: '12px',
-          padding: '20px',
-          cursor: 'pointer',
-          transition: 'box-shadow 0.15s',
-        }}
-        onClick={() => router.push(`/board/${board.id}`)}
-        onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.1)')}
-        onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-          {editingId === board.id ? (
-            <input
-              autoFocus
-              value={editName}
-              onChange={e => setEditName(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') handleRename(board.id)
-                if (e.key === 'Escape') setEditingId(null)
-              }}
-              onBlur={() => handleRename(board.id)}
-              onClick={e => e.stopPropagation()}
-              style={{
-                margin: 0,
-                fontSize: '18px',
-                fontWeight: 600,
-                border: '1px solid #2196F3',
-                borderRadius: '4px',
-                padding: '2px 6px',
-                outline: 'none',
-                width: '100%',
-                marginRight: '8px',
-              }}
-            />
-          ) : (
-            <h3
-              style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}
-              onDoubleClick={e => {
-                if (!isOwner) return
-                e.stopPropagation()
-                setEditingId(board.id)
-                setEditName(board.name)
-              }}
-              title={isOwner ? 'Double-click to rename' : undefined}
-            >
-              {board.name}
-            </h3>
-          )}
-          <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-            {isOwner && (
-              <>
-                <button
-                  onClick={e => {
-                    e.stopPropagation()
-                    handleDuplicateBoard(board.id, board.name)
-                  }}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: '#999',
-                    fontSize: '14px',
-                    padding: '0 4px',
-                  }}
-                  title="Duplicate board"
-                >
-                  Duplicate
-                </button>
-                <button
-                  onClick={e => {
-                    e.stopPropagation()
-                    handleDelete(board.id)
-                  }}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: '#999',
-                    fontSize: '18px',
-                    padding: '0 4px',
-                  }}
-                  title="Delete board"
-                >
-                  ×
-                </button>
-              </>
-            )}
-            {!isOwner && (
-              <button
-                onClick={e => {
-                  e.stopPropagation()
-                  handleLeaveBoard(board.id)
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: '#999',
-                  fontSize: '14px',
-                  padding: '0 4px',
-                }}
-                title="Leave board"
-              >
-                Leave
-              </button>
-            )}
-          </div>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
-          <p style={{ margin: 0, fontSize: '13px', color: '#888' }}>
-            Updated {new Date(board.updated_at).toLocaleDateString()}
-          </p>
-          {!isOwner && (
-            <span style={{
-              fontSize: '11px',
-              color: '#666',
-              background: '#f0f0f0',
-              padding: '2px 8px',
-              borderRadius: '10px',
-            }}>
-              {ROLE_LABELS[board.role]}
-            </span>
-          )}
-        </div>
-      </div>
-    )
-  }
+  const hasNoBoards = myBoards.length === 0 && sharedBoards.length === 0
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '32px', fontWeight: 700, margin: 0 }}>My Boards</h1>
+    <div className="space-y-8">
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+          My Boards
+        </h1>
         <button
+          type="button"
           onClick={handleLogout}
-          style={{
-            padding: '8px 16px',
-            fontSize: '14px',
-            background: 'none',
-            border: '1px solid #ccc',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            color: '#666',
-          }}
+          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
         >
           Logout
         </button>
-      </div>
+      </header>
 
       {showNameInput ? (
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-          <input
-            autoFocus
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') handleCreate()
-              if (e.key === 'Escape') { setShowNameInput(false); setNewName('') }
-            }}
-            placeholder="Board name"
-            style={{
-              padding: '10px 16px',
-              fontSize: '15px',
-              border: '1px solid #ccc',
-              borderRadius: '8px',
-              outline: 'none',
-              width: '240px',
-            }}
-          />
-          <button
-            onClick={handleCreate}
-            disabled={creating}
-            style={{
-              padding: '10px 20px',
-              fontSize: '15px',
-              background: '#2196F3',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: creating ? 'wait' : 'pointer',
-            }}
-          >
-            {creating ? 'Creating…' : 'Create'}
-          </button>
-          <button
-            onClick={() => { setShowNameInput(false); setNewName('') }}
-            style={{
-              padding: '10px 16px',
-              fontSize: '15px',
-              background: 'none',
-              border: '1px solid #ccc',
-              borderRadius: '8px',
-              cursor: 'pointer',
-            }}
-          >
-            Cancel
-          </button>
-        </div>
+        <CreateBoardDialog
+          newName={newName}
+          onNameChange={setNewName}
+          onCreate={handleCreate}
+          onCancel={() => { setShowNameInput(false); setNewName('') }}
+          creating={creating}
+        />
       ) : (
         <button
+          type="button"
           onClick={() => setShowNameInput(true)}
-          style={{
-            padding: '10px 24px',
-            fontSize: '15px',
-            background: '#2196F3',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            marginBottom: '24px',
-          }}
+          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500"
         >
-          + New Board
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          New Board
         </button>
       )}
 
       {error && (
-        <p style={{ color: '#d32f2f', marginBottom: '16px' }}>{error}</p>
+        <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
       )}
 
-      {myBoards.length === 0 && sharedBoards.length === 0 ? (
-        <p style={{ color: '#888' }}>No boards yet. Create one to get started!</p>
+      {hasNoBoards ? (
+        <EmptyState />
       ) : (
         <>
           {myBoards.length > 0 && (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-              gap: '16px',
-              marginBottom: '32px',
-            }}>
-              {myBoards.map(renderBoardCard)}
-            </div>
+            <section>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {myBoards.map((board) => (
+                  <BoardCard
+                    key={board.id}
+                    board={board}
+                    editingId={editingId}
+                    editName={editName}
+                    onEditNameChange={setEditName}
+                    onRename={handleRename}
+                    onEditingCancel={() => setEditingId(null)}
+                    onDoubleClickTitle={(b) => { setEditingId(b.id); setEditName(b.name) }}
+                    onDuplicate={handleDuplicateBoard}
+                    onDelete={handleDelete}
+                    onLeave={handleLeaveBoard}
+                    onNavigate={(id) => router.push(`/board/${id}`)}
+                  />
+                ))}
+              </div>
+            </section>
           )}
 
           {sharedBoards.length > 0 && (
-            <>
-              <h2 style={{ fontSize: '24px', fontWeight: 600, margin: '0 0 16px' }}>Shared with Me</h2>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-                gap: '16px',
-              }}>
-                {sharedBoards.map(renderBoardCard)}
+            <section>
+              <h2 className="mb-4 text-lg font-semibold text-slate-900">Shared with Me</h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {sharedBoards.map((board) => (
+                  <BoardCard
+                    key={board.id}
+                    board={board}
+                    editingId={editingId}
+                    editName={editName}
+                    onEditNameChange={setEditName}
+                    onRename={handleRename}
+                    onEditingCancel={() => setEditingId(null)}
+                    onDoubleClickTitle={(b) => { setEditingId(b.id); setEditName(b.name) }}
+                    onDuplicate={handleDuplicateBoard}
+                    onDelete={handleDelete}
+                    onLeave={handleLeaveBoard}
+                    onNavigate={(id) => router.push(`/board/${id}`)}
+                  />
+                ))}
               </div>
-            </>
+            </section>
           )}
         </>
       )}

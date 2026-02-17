@@ -1,0 +1,40 @@
+---
+description: Frontend design guide for the Google OAuth login page
+globs: src/app/login/page.tsx,src/components/login/**
+alwaysApply: false
+---
+
+# Login Page Design Guide
+
+## Current Files
+
+| File | Role |
+|------|------|
+| `src/app/login/page.tsx` | Client component. Creates Supabase client, calls `signInWithOAuth({ provider: 'google' })`. Renders centered card with heading, subtitle, and `<GoogleSignInButton>`. |
+| `src/components/login/GoogleSignInButton.tsx` | Client component. Styled button with Google "G" SVG icon and "Sign in with Google" text. Uses Tailwind classes. |
+| `public/google-g.svg` | Google "G" logo asset. |
+| `src/app/auth/callback/route.ts` | Server route handler. Exchanges OAuth code, redirects. NOT a visual page. |
+
+## What You Have to Work With
+
+- Tailwind CSS with slate/indigo color scheme.
+- The page is a **client component** (needs `supabase.auth.signInWithOAuth`).
+- Only external auth provider is **Google**.
+
+## Allowed Revisions
+
+- `src/app/login/page.tsx` — layout and styling
+- `src/components/login/GoogleSignInButton.tsx` — button styling
+- `public/google-g.svg` — replace with updated asset
+
+## Allowed New Files
+
+- `src/components/login/` — additional login page components
+
+## Constraints
+
+- Do NOT modify `src/app/auth/callback/route.ts`.
+- Do NOT modify files outside the login page scope.
+- The `signInWithOAuth` call must remain functionally identical.
+- Follow Google's branding guidelines for the sign-in button.
+- Do NOT add new npm dependencies without explicit approval.

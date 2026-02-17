@@ -11,7 +11,13 @@ import { StickyNote } from './StickyNote'
 import { RectangleShape } from './RectangleShape'
 import { CircleShape } from './CircleShape'
 import { FrameShape } from './FrameShape'
+import { LineShape } from './LineShape'
+import { TriangleShape } from './TriangleShape'
+import { HexagonShape } from './HexagonShape'
+import { ArrowShape } from './ArrowShape'
+import { ParallelogramShape } from './ParallelogramShape'
 import { ContextMenu } from './ContextMenu'
+import { ZoomControls } from './ZoomControls'
 import { RemoteCursorData } from '@/hooks/useCursors'
 import { OnlineUser, getColorForUser } from '@/hooks/usePresence'
 
@@ -98,6 +104,7 @@ interface CanvasProps {
   onUngroup: () => void
   canGroup: boolean
   canUngroup: boolean
+  onStrokeChange?: (updates: { stroke_width?: number; stroke_dash?: string }) => void
   onCheckFrameContainment: (id: string) => void
   onMoveGroupChildren: (parentId: string, dx: number, dy: number) => void
   getChildren: (parentId: string) => BoardObject[]
@@ -118,13 +125,14 @@ export function Canvas({
   onDelete, onDuplicate, onColorChange,
   onBringToFront, onBringForward, onSendBackward, onSendToBack,
   onGroup, onUngroup, canGroup, canUngroup,
+  onStrokeChange,
   onCheckFrameContainment, onMoveGroupChildren,
   getChildren, getDescendants,
   colors, selectedColor, userRole,
   onlineUsers, onCursorMove, onCursorUpdate, remoteSelections,
 }: CanvasProps) {
   const canEdit = userRole !== 'viewer'
-  const { stagePos, stageScale, handleWheel, handleDragEnd: handleStageDragEnd } = useCanvas()
+  const { stagePos, stageScale, handleWheel, handleDragEnd: handleStageDragEnd, zoomIn, zoomOut, resetZoom } = useCanvas()
   const stageRef = useRef<Konva.Stage>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const cursorLayerRef = useRef<Konva.Layer>(null)
@@ -652,8 +660,81 @@ export function Canvas({
             isEditing={editingId === obj.id}
           />
         )
+      case 'line':
+        return (
+          <LineShape
+            key={obj.id}
+            object={obj}
+            onDragEnd={handleShapeDragEnd}
+            isSelected={isSelected}
+            onSelect={handleShapeSelect}
+            shapeRef={handleShapeRef}
+            onTransformEnd={onTransformEnd}
+            onContextMenu={handleContextMenu}
+            editable={canEdit}
+          />
+        )
+      case 'triangle':
+        return (
+          <TriangleShape
+            key={obj.id}
+            object={obj}
+            onDragEnd={handleShapeDragEnd}
+            isSelected={isSelected}
+            onSelect={handleShapeSelect}
+            shapeRef={handleShapeRef}
+            onTransformEnd={onTransformEnd}
+            onContextMenu={handleContextMenu}
+            onDoubleClick={handleShapeDoubleClick}
+            editable={canEdit}
+          />
+        )
+      case 'chevron':
+        return (
+          <HexagonShape
+            key={obj.id}
+            object={obj}
+            onDragEnd={handleShapeDragEnd}
+            isSelected={isSelected}
+            onSelect={handleShapeSelect}
+            shapeRef={handleShapeRef}
+            onTransformEnd={onTransformEnd}
+            onContextMenu={handleContextMenu}
+            onDoubleClick={handleShapeDoubleClick}
+            editable={canEdit}
+          />
+        )
+      case 'arrow':
+        return (
+          <ArrowShape
+            key={obj.id}
+            object={obj}
+            onDragEnd={handleShapeDragEnd}
+            isSelected={isSelected}
+            onSelect={handleShapeSelect}
+            shapeRef={handleShapeRef}
+            onTransformEnd={onTransformEnd}
+            onContextMenu={handleContextMenu}
+            onDoubleClick={handleShapeDoubleClick}
+            editable={canEdit}
+          />
+        )
+      case 'parallelogram':
+        return (
+          <ParallelogramShape
+            key={obj.id}
+            object={obj}
+            onDragEnd={handleShapeDragEnd}
+            isSelected={isSelected}
+            onSelect={handleShapeSelect}
+            shapeRef={handleShapeRef}
+            onTransformEnd={onTransformEnd}
+            onContextMenu={handleContextMenu}
+            onDoubleClick={handleShapeDoubleClick}
+            editable={canEdit}
+          />
+        )
       case 'group':
-        // Groups don't render visually — only their children do
         return null
       default:
         return null
@@ -661,7 +742,17 @@ export function Canvas({
   }
 
   return (
-    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative' }}>
+    <div
+      className="relative h-screen w-screen overflow-hidden"
+      style={{
+        backgroundColor: '#cbd5e1',
+        backgroundImage: `
+          linear-gradient(rgba(148, 163, 184, 0.5) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(148, 163, 184, 0.5) 1px, transparent 1px)
+        `,
+        backgroundSize: '40px 40px',
+      }}
+    >
       <Stage
         ref={stageRef}
         width={dimensions.width}
@@ -788,8 +879,21 @@ export function Canvas({
         />
       )}
 
+      {/* Zoom controls */}
+      <div className="absolute bottom-4 right-4">
+        <ZoomControls
+          scale={stageScale}
+          onZoomIn={zoomIn}
+          onZoomOut={zoomOut}
+          onReset={resetZoom}
+        />
+      </div>
+
       {/* Right-click context menu */}
-      {contextMenu && (
+      {contextMenu && (() => {
+        const ctxObj = objects.get(contextMenu.objectId)
+        const isLine = ctxObj?.type === 'line' || ctxObj?.type === 'arrow'
+        return (
         <ContextMenu
           position={{ x: contextMenu.x, y: contextMenu.y }}
           onDelete={onDelete}
@@ -798,6 +902,10 @@ export function Canvas({
           onClose={() => setContextMenu(null)}
           colors={colors}
           currentColor={selectedColor}
+          isLine={isLine}
+          onStrokeChange={onStrokeChange}
+          currentStrokeWidth={ctxObj?.stroke_width}
+          currentStrokeDash={ctxObj?.stroke_dash}
           onBringToFront={handleCtxBringToFront}
           onBringForward={handleCtxBringForward}
           onSendBackward={handleCtxSendBackward}
@@ -807,7 +915,8 @@ export function Canvas({
           canGroup={canGroup}
           canUngroup={canUngroup}
         />
-      )}
+        )
+      })()}
     </div>
   )
 }

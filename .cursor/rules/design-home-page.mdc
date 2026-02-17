@@ -1,0 +1,46 @@
+---
+description: Frontend design guide for the unauthenticated home/landing page
+globs: src/app/page.tsx,src/components/landing/**
+alwaysApply: false
+---
+
+# Home Page (Unauthenticated Landing) Design Guide
+
+## Current Files
+
+| File | Role |
+|------|------|
+| `src/app/page.tsx` | Server component. Checks auth state; renders `<Hero>` and `<Features>` inside a `<main>` with Tailwind classes. |
+| `src/components/landing/Hero.tsx` | Server component. Hero section with radial gradient background, grid pattern, heading, subtitle, and auth-conditional CTA button. |
+| `src/components/landing/Features.tsx` | Server component. Three-column feature grid with heading and subtitle. |
+| `src/components/landing/FeatureCard.tsx` | Server component. Individual feature card with icon, title, and description. |
+| `src/app/layout.tsx` | Root layout. Loads Geist + Geist Mono fonts, imports `globals.css`. |
+| `src/app/globals.css` | Imports Tailwind. Defines CSS vars `--background`/`--foreground`, dark-mode media query, `.font-display` utility. |
+
+## What You Have to Work With
+
+- **Tailwind CSS** is used throughout. Consistent slate/indigo color scheme.
+- **Geist** and **Geist Mono** Google Fonts via CSS variables.
+- `.font-display` class maps to `--font-geist-sans`.
+- Dark-mode CSS vars are defined but the landing page currently uses light only (`bg-slate-50`).
+- The page is a **server component**. Keep it server-side.
+
+## Allowed Revisions
+
+- `src/app/page.tsx` — layout, ordering of sections
+- `src/components/landing/Hero.tsx` — full redesign of hero
+- `src/components/landing/Features.tsx` — feature section layout and content
+- `src/components/landing/FeatureCard.tsx` — card styling
+- `src/app/globals.css` — CSS custom properties, animations, or utilities
+
+## Allowed New Files
+
+- `src/components/landing/` — additional landing sections (e.g. `Footer.tsx`, `Testimonials.tsx`)
+- `public/` — static assets (SVGs, images)
+
+## Constraints
+
+- Do NOT modify files under `src/components/board/`, `src/components/boards/`, `src/hooks/`, `src/lib/`, or `src/types/`.
+- Do NOT add new npm dependencies without explicit approval.
+- Keep the Supabase auth check and conditional CTA logic intact.
+- Prefer Tailwind classes. No inline `style={{}}` objects.

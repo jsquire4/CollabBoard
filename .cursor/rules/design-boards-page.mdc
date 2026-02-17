@@ -1,0 +1,46 @@
+---
+description: Frontend design guide for the board selection / creation page
+globs: src/app/boards/page.tsx,src/components/boards/**
+alwaysApply: false
+---
+
+# Boards Page Design Guide
+
+## Current Files
+
+| File | Lines | Role |
+|------|-------|------|
+| `src/app/boards/page.tsx` | 12 | Server component. Fetches boards via `fetchBoardsGrouped()`, renders `<BoardList>` in a max-width Tailwind container. |
+| `src/components/boards/BoardList.tsx` | 243 | Client component. Header + logout, "New Board" creation flow, grid of `<BoardCard>` components for owned + shared boards. All Tailwind. |
+| `src/components/boards/BoardCard.tsx` | 137 | Client component. Accessible card (`role="button"`, keyboard handlers) with hover-reveal actions (duplicate, delete, leave), role badge, rename-on-double-click. |
+| `src/components/boards/CreateBoardDialog.tsx` | 49 | Client component. Inline creation form with name input, Create/Cancel buttons. |
+| `src/components/boards/EmptyState.tsx` | 25 | Server component. Dashed-border empty state with icon and guidance text. |
+
+## What You Have to Work With
+
+- **Props**: `BoardList` receives `initialMyBoards` and `initialSharedBoards` (arrays of `BoardWithRole`).
+- **State**: `myBoards`, `sharedBoards`, `creating`, `newName`, `showNameInput`, `editingId`, `editName`, `error`.
+- **Actions**: `handleCreate`, `handleRename`, `handleDelete`, `handleLeaveBoard`, `handleDuplicateBoard`, `handleLogout`.
+- Supabase client stabilized via `useRef`.
+- Tailwind CSS used throughout. Indigo accent, slate neutrals.
+
+## Allowed Revisions
+
+- `src/app/boards/page.tsx` — layout wrapper
+- `src/components/boards/BoardList.tsx` — layout and styling
+- `src/components/boards/BoardCard.tsx` — card design
+- `src/components/boards/CreateBoardDialog.tsx` — creation form design
+- `src/components/boards/EmptyState.tsx` — empty state design
+
+## Allowed New Files
+
+- `src/components/boards/` — additional sub-components
+- `public/` — static assets
+
+## Constraints
+
+- Do NOT modify files under `src/components/board/`, `src/hooks/`, `src/lib/`, or `src/types/`.
+- All CRUD operations must remain functional.
+- Supabase client uses `useRef` pattern — keep it.
+- Prefer Tailwind classes. No inline `style={{}}` objects.
+- Do NOT add new npm dependencies without explicit approval.

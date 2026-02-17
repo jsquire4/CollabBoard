@@ -1,0 +1,48 @@
+---
+description: Frontend design guide for the board canvas and surrounding chrome
+globs: src/components/board/Canvas.tsx,src/components/board/BoardClient.tsx,src/components/board/BoardTopBar.tsx,src/components/board/CanvasErrorBoundary.tsx,src/components/board/ContextMenu.tsx,src/components/board/ShareDialog.tsx,src/components/board/ZoomControls.tsx,src/components/board/GroupBreadcrumb.tsx
+alwaysApply: false
+---
+
+# Canvas Design Guide
+
+## Current Files
+
+| File | Lines | Role |
+|------|-------|------|
+| `src/components/board/BoardClient.tsx` | 271 | Client component. Orchestrates hooks and renders `<BoardTopBar>`, `<LeftToolbar>`, `<Canvas>` (in `<CanvasErrorBoundary>`), `<GroupBreadcrumb>`, and `<ShareDialog>`. |
+| `src/components/board/BoardTopBar.tsx` | 137 | Client component. Top header bar: back button, board name (editable), share button, online user avatars, view-only badge, logout. |
+| `src/components/board/Canvas.tsx` | 923 | Client component. Konva `<Stage>` + `<Layer>`. Handles selection, rubber band, transforms, context menu, text editing overlay, remote cursors/selections, zoom controls. |
+| `src/components/board/CanvasErrorBoundary.tsx` | 66 | Class component error boundary with Tailwind-styled fallback. |
+| `src/components/board/ContextMenu.tsx` | 207 | Tailwind-styled right-click context menu with `MenuItem` component. |
+| `src/components/board/ShareDialog.tsx` | 452 | Tabbed share dialog (Members/Invite/Link). Tailwind styled. |
+| `src/components/board/ZoomControls.tsx` | 45 | Zoom in/out/reset with percentage display. |
+| `src/components/board/GroupBreadcrumb.tsx` | 24 | "Inside group" indicator with Exit button. |
+
+## What You Have to Work With
+
+- **Konva / react-konva**: `<Stage>` with pan and zoom. Shapes in a main `<Layer>`, remote cursors on a separate imperative layer.
+- **Canvas state**: `stagePos`, `stageScale`, `handleWheel`, `zoomIn`, `zoomOut`, `resetZoom` from `useCanvas` hook.
+- **Selection**: `selectedIds`, `activeGroupId`, rubber-band selection rect.
+- **Transformer**: Konva `<Transformer>` attached to selected nodes.
+- **Layout**: Top bar (h-14) + left toolbar (w-16) + canvas fills remaining space.
+- Tailwind CSS throughout.
+
+## Allowed Revisions
+
+- `src/components/board/BoardClient.tsx` — layout wrapper
+- `src/components/board/BoardTopBar.tsx` — top bar styling
+- `src/components/board/Canvas.tsx` — HTML overlay styling (textarea, context menu). Do NOT rewrite Konva rendering logic.
+- `src/components/board/CanvasErrorBoundary.tsx` — error fallback UI
+- `src/components/board/ContextMenu.tsx` — context menu styling
+- `src/components/board/ShareDialog.tsx` — visual styling only (do NOT change Supabase calls)
+- `src/components/board/ZoomControls.tsx` — zoom controls styling
+- `src/components/board/GroupBreadcrumb.tsx` — breadcrumb styling
+
+## Constraints
+
+- Do NOT modify `src/hooks/` files.
+- Do NOT modify shape components from this rule — use the shape design rule.
+- Do NOT change Konva `<Stage>`/`<Layer>`/`<Transformer>` structure or imperative cursor pipeline.
+- Do NOT alter realtime channel logic or board state management.
+- Do NOT add new npm dependencies without explicit approval.

@@ -1,19 +1,7 @@
 import { Circle } from 'react-konva'
-import { BoardObject } from '@/types/board'
 import Konva from 'konva'
 import { KonvaEventObject } from 'konva/lib/Node'
-
-interface CircleShapeProps {
-  object: BoardObject
-  onDragEnd: (id: string, x: number, y: number) => void
-  isSelected: boolean
-  onSelect: (id: string) => void
-  shapeRef: (id: string, node: Konva.Node | null) => void
-  onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
-  onContextMenu: (id: string, clientX: number, clientY: number) => void
-  onDoubleClick?: (id: string) => void
-  editable?: boolean
-}
+import { ShapeProps } from './shapeUtils'
 
 export function CircleShape({
   object,
@@ -25,7 +13,7 @@ export function CircleShape({
   onContextMenu,
   onDoubleClick,
   editable = true,
-}: CircleShapeProps) {
+}: ShapeProps) {
   const radius = Math.min(object.width, object.height) / 2
   const centerX = object.x + object.width / 2
   const centerY = object.y + object.height / 2
@@ -73,6 +61,9 @@ export function CircleShape({
         e.evt.preventDefault()
         onContextMenu(object.id, e.evt.clientX, e.evt.clientY)
       }}
+      shadowColor="rgba(0,0,0,0.12)"
+      shadowBlur={6}
+      shadowOffsetY={2}
       stroke={isSelected ? '#0EA5E9' : undefined}
       strokeWidth={isSelected ? 2 : undefined}
       onDblClick={() => onDoubleClick?.(object.id)}

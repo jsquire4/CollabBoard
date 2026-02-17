@@ -1,18 +1,9 @@
 import { Group, Rect, Text } from 'react-konva'
-import { BoardObject } from '@/types/board'
 import Konva from 'konva'
-import { handleShapeTransformEnd } from './shapeUtils'
+import { ShapeProps, handleShapeTransformEnd } from './shapeUtils'
 
-interface StickyNoteProps {
-  object: BoardObject
-  onDragEnd: (id: string, x: number, y: number) => void
-  isSelected: boolean
-  onSelect: (id: string) => void
+interface StickyNoteProps extends ShapeProps {
   onStartEdit: (id: string, node: Konva.Text) => void
-  shapeRef: (id: string, node: Konva.Node | null) => void
-  onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
-  onContextMenu: (id: string, clientX: number, clientY: number) => void
-  editable?: boolean
   isEditing?: boolean
 }
 
@@ -74,10 +65,10 @@ export function StickyNote({
         width={object.width}
         height={object.height}
         fill={object.color}
-        cornerRadius={4}
-        shadowColor="rgba(0,0,0,0.15)"
-        shadowBlur={8}
-        shadowOffsetY={2}
+        cornerRadius={8}
+        shadowColor="rgba(0,0,0,0.2)"
+        shadowBlur={10}
+        shadowOffsetY={3}
         stroke={isSelected ? '#0EA5E9' : undefined}
         strokeWidth={isSelected ? 2 : 0}
       />
@@ -89,10 +80,12 @@ export function StickyNote({
           height={object.height - padding * 2}
           text={object.text || ''}
           fontSize={object.font_size}
-          fontFamily="sans-serif"
-          fill="#333"
+          fontFamily={object.font_family || 'sans-serif'}
+          fontStyle={object.font_style || 'normal'}
+          fill="#1e293b"
           wrap="word"
           ellipsis={true}
+          lineHeight={1.4}
         />
       )}
     </Group>

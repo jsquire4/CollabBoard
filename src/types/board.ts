@@ -12,6 +12,13 @@ export type BoardObjectType =
   | 'circle'
   | 'frame'
   | 'group'
+  | 'line'
+  | 'triangle'
+  | 'chevron'
+  | 'arrow'
+  | 'parallelogram'
+
+export type FontStyle = 'normal' | 'bold' | 'italic' | 'bold italic'
 
 export interface BoardObject {
   id: string
@@ -25,6 +32,10 @@ export interface BoardObject {
   text: string
   color: string
   font_size: number
+  font_family?: string
+  font_style?: FontStyle
+  stroke_width?: number
+  stroke_dash?: string // JSON array e.g. "[5,5]"
   z_index: number
   parent_id: string | null
   created_by: string

@@ -1,0 +1,58 @@
+---
+description: Frontend design guide for the shape selector, format tools, and shape components
+globs: src/components/board/LeftToolbar.tsx,src/components/board/ShapeSelector.tsx,src/components/board/ColorPicker.tsx,src/components/board/FontSelector.tsx,src/components/board/ShapeIcon.tsx,src/components/board/StickyNote.tsx,src/components/board/RectangleShape.tsx,src/components/board/CircleShape.tsx,src/components/board/FrameShape.tsx,src/components/board/LineShape.tsx,src/components/board/TriangleShape.tsx,src/components/board/ArrowShape.tsx,src/components/board/HexagonShape.tsx,src/components/board/ParallelogramShape.tsx,src/components/board/shapeUtils.ts
+alwaysApply: false
+---
+
+# Shape Selector & Format Tools Design Guide
+
+## Current Files
+
+| File | Lines | Role |
+|------|-------|------|
+| `src/components/board/LeftToolbar.tsx` | 131 | Vertical sidebar (w-16). Sections: shapes, font options (when sticky note selected), color picker, duplicate/group/ungroup/delete. |
+| `src/components/board/ShapeSelector.tsx` | 173 | Popover shape picker. Categories: Basic (sticky note, rectangle, circle, frame), Lines (presets), Shapes (triangle, hexagon, arrow, parallelogram), Line color. |
+| `src/components/board/ColorPicker.tsx` | 115 | 18-color expanded palette + custom hex input. Exports `EXPANDED_PALETTE`. Compact/full modes. |
+| `src/components/board/FontSelector.tsx` | 145 | Font family (4 options), size (9 presets), style (normal/bold/italic/bold italic). Compact/full modes. |
+| `src/components/board/ShapeIcon.tsx` | 75 | SVG icons for all shape types. |
+| `src/components/board/shapeUtils.ts` | 38 | Shared `ShapeProps` interface and `handleShapeTransformEnd` utility. |
+
+### Shape Components (all use `ShapeProps` from shapeUtils.ts)
+
+| File | Lines | Notes |
+|------|-------|-------|
+| `StickyNote.tsx` | ~95 | Extends `ShapeProps` with `onStartEdit`, `isEditing`. Konva `<Group>` + `<Rect>` + `<Text>`. |
+| `RectangleShape.tsx` | ~50 | Uses `ShapeProps` directly. Konva `<Rect>`. |
+| `CircleShape.tsx` | ~70 | Uses `ShapeProps`. Custom radius-based transform (not shared util). |
+| `FrameShape.tsx` | ~95 | Extends `ShapeProps` with `onStartEdit`, `isEditing`. Container for child objects. |
+| `LineShape.tsx` | ~65 | Uses `ShapeProps`. Stroke width + dash patterns. |
+| `TriangleShape.tsx` | ~55 | Uses `ShapeProps`. Polygon via Konva `<Line>`. |
+| `ArrowShape.tsx` | ~60 | Uses `ShapeProps`. Konva `<Arrow>`. |
+| `HexagonShape.tsx` | ~55 | Uses `ShapeProps`. 6-point polygon (type is `chevron` in DB). |
+| `ParallelogramShape.tsx` | ~55 | Uses `ShapeProps`. Skewed quadrilateral. |
+
+## What You Have to Work With
+
+- **Color palette**: `EXPANDED_PALETTE` in `ColorPicker.tsx` — 18 colors. Also exported for context menu.
+- **Shape defaults** (from `useBoardState`): each shape type has default dimensions, color, and optional stroke settings.
+- **`ShapeProps` interface** in `shapeUtils.ts`: `object`, `onDragEnd`, `isSelected`, `onSelect`, `shapeRef`, `onTransformEnd`, `onContextMenu`, `onDoubleClick?`, `editable?`.
+- All popover components use `useClickOutside` hook and have ARIA attributes.
+- Tailwind CSS for toolbar components; Konva APIs for shape components.
+
+## Allowed Revisions
+
+- `src/components/board/LeftToolbar.tsx` — layout and styling
+- `src/components/board/ShapeSelector.tsx` — shape picker design
+- `src/components/board/ColorPicker.tsx` — color picker design
+- `src/components/board/FontSelector.tsx` — font picker design
+- `src/components/board/ShapeIcon.tsx` — icon SVGs
+- All shape components — visual tweaks (corner radius, shadow, Konva styling). Do NOT change callback wiring.
+- `src/components/board/shapeUtils.ts` — shared visual utilities
+
+## Constraints
+
+- Do NOT modify `src/hooks/useBoardState.ts` or any other hook.
+- Do NOT modify `Canvas.tsx` or `BoardClient.tsx` from this rule.
+- Do NOT change the `ShapeProps` interface in a way that removes existing fields.
+- `ShapeAddHandler` type and all existing callback signatures must remain compatible.
+- Do NOT add new npm dependencies without explicit approval.

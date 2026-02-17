@@ -9,14 +9,21 @@ import { usePresence } from '@/hooks/usePresence'
 import { useCursors } from '@/hooks/useCursors'
 import { BoardObject } from '@/types/board'
 import { BoardRole } from '@/types/sharing'
-import { Toolbar } from './Toolbar'
+import { BoardTopBar } from './BoardTopBar'
+import { LeftToolbar } from './LeftToolbar'
+import { EXPANDED_PALETTE } from './ColorPicker'
 import { ShareDialog } from './ShareDialog'
 import { CanvasErrorBoundary } from './CanvasErrorBoundary'
+import { GroupBreadcrumb } from './GroupBreadcrumb'
 
 // Konva is client-only — must disable SSR
 const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canvas })), {
   ssr: false,
-  loading: () => <div style={{ width: '100vw', height: '100vh', background: '#f5f5f5' }} />,
+  loading: () => (
+    <div className="flex h-screen w-screen items-center justify-center bg-slate-100">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-600" />
+    </div>
+  ),
 })
 
 interface BoardClientProps {
@@ -42,7 +49,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     moveGroupChildren, checkFrameContainment,
     getChildren, getDescendants,
     remoteSelections,
-    COLOR_PALETTE,
   } = useBoardState(userId, boardId, userRole, channel, onlineUsers)
   const { getViewportCenter } = useCanvas()
   const [shareOpen, setShareOpen] = useState(false)
@@ -62,28 +68,26 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
 
   const canEdit = userRole !== 'viewer'
 
-  const handleAddStickyNote = () => {
-    if (!canEdit) return
-    const center = getViewportCenter()
-    addObject('sticky_note', center.x - 75, center.y - 75)
+  const shapeOffsets: Record<string, { dx: number; dy: number }> = {
+    sticky_note: { dx: 75, dy: 75 },
+    rectangle: { dx: 100, dy: 70 },
+    circle: { dx: 60, dy: 60 },
+    frame: { dx: 200, dy: 150 },
+    line: { dx: 60, dy: 1 },
+    triangle: { dx: 50, dy: 45 },
+    chevron: { dx: 50, dy: 43 },
+    arrow: { dx: 60, dy: 20 },
+    parallelogram: { dx: 70, dy: 40 },
   }
 
-  const handleAddRectangle = () => {
+  const handleAddShape = (
+    type: Parameters<typeof addObject>[0],
+    overrides?: Partial<{ stroke_width: number; stroke_dash: string; color: string }>
+  ) => {
     if (!canEdit) return
     const center = getViewportCenter()
-    addObject('rectangle', center.x - 100, center.y - 70)
-  }
-
-  const handleAddCircle = () => {
-    if (!canEdit) return
-    const center = getViewportCenter()
-    addObject('circle', center.x - 60, center.y - 60)
-  }
-
-  const handleAddFrame = () => {
-    if (!canEdit) return
-    const center = getViewportCenter()
-    addObject('frame', center.x - 200, center.y - 150)
+    const { dx, dy } = shapeOffsets[type] ?? { dx: 75, dy: 75 }
+    addObject(type, center.x - dx, center.y - dy, overrides)
   }
 
   const handleDragEnd = (id: string, x: number, y: number) => {
@@ -116,12 +120,31 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     for (const id of selectedIds) {
       const obj = objects.get(id)
       if (obj?.type === 'group') {
-        // Apply color to all children of the group
         for (const child of getDescendants(id)) {
           if (child.type !== 'group') updateObject(child.id, { color })
         }
       } else {
         updateObject(id, { color })
+      }
+    }
+  }
+
+  const handleFontChange = (updates: { font_family?: string; font_size?: number; font_style?: 'normal' | 'bold' | 'italic' | 'bold italic' }) => {
+    if (!canEdit) return
+    for (const id of selectedIds) {
+      const obj = objects.get(id)
+      if (obj?.type === 'sticky_note') {
+        updateObject(id, updates)
+      }
+    }
+  }
+
+  const handleStrokeChange = (updates: { stroke_width?: number; stroke_dash?: string }) => {
+    if (!canEdit) return
+    for (const id of selectedIds) {
+      const obj = objects.get(id)
+      if (obj?.type === 'line' || obj?.type === 'arrow') {
+        updateObject(id, updates)
       }
     }
   }
@@ -136,75 +159,105 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     return false
   }, [selectedIds, objects])
 
-  // Get selected color (first selected object's color)
   const selectedColor = useMemo(() => {
     const firstId = selectedIds.values().next().value
     if (!firstId) return undefined
     return objects.get(firstId)?.color
   }, [selectedIds, objects])
 
+  const hasStickyNoteSelected = useMemo(() => {
+    for (const id of selectedIds) {
+      if (objects.get(id)?.type === 'sticky_note') return true
+    }
+    return false
+  }, [selectedIds, objects])
+
+  const selectedFontInfo = useMemo(() => {
+    const firstStickyId = [...selectedIds].find((id) => objects.get(id)?.type === 'sticky_note')
+    if (!firstStickyId) return {}
+    const obj = objects.get(firstStickyId)
+    return {
+      fontFamily: obj?.font_family,
+      fontSize: obj?.font_size,
+      fontStyle: obj?.font_style,
+    }
+  }, [selectedIds, objects])
+
   return (
-    <>
-      <Toolbar
+    <div className="relative flex h-screen flex-col">
+      <BoardTopBar
         boardId={boardId}
         boardName={boardName}
         userRole={userRole}
-        onAddStickyNote={handleAddStickyNote}
-        onAddRectangle={handleAddRectangle}
-        onAddCircle={handleAddCircle}
-        onAddFrame={handleAddFrame}
-        hasSelection={selectedIds.size > 0}
-        multiSelected={selectedIds.size > 1}
-        selectedColor={selectedColor}
-        colors={COLOR_PALETTE}
-        onColorChange={handleColorChange}
-        onDelete={handleDelete}
-        onDuplicate={handleDuplicate}
-        onGroup={groupSelected}
-        onUngroup={ungroupSelected}
-        canGroup={canGroup}
-        canUngroup={canUngroup}
         onShareClick={() => setShareOpen(true)}
         onlineUsers={onlineUsers}
       />
-      <CanvasErrorBoundary>
-        <Canvas
-          objects={objects}
-          sortedObjects={sortedObjects}
-          selectedIds={selectedIds}
-          activeGroupId={activeGroupId}
-          onSelect={selectObject}
-          onSelectObjects={selectObjects}
-          onClearSelection={clearSelection}
-          onEnterGroup={enterGroup}
-          onExitGroup={exitGroup}
-          onDragEnd={handleDragEnd}
-          onUpdateText={handleUpdateText}
-          onTransformEnd={handleTransformEnd}
+      {activeGroupId && (
+        <div className="absolute left-1/2 top-16 z-10 -translate-x-1/2">
+          <GroupBreadcrumb activeGroupId={activeGroupId} onExit={exitGroup} />
+        </div>
+      )}
+      <div className="relative flex flex-1 overflow-hidden">
+        <LeftToolbar
+          userRole={userRole}
+          onAddShape={handleAddShape}
+          hasSelection={selectedIds.size > 0}
+          hasStickyNoteSelected={hasStickyNoteSelected}
+          selectedColor={selectedColor}
+          selectedFontFamily={selectedFontInfo.fontFamily}
+          selectedFontSize={selectedFontInfo.fontSize}
+          selectedFontStyle={selectedFontInfo.fontStyle}
+          onColorChange={handleColorChange}
+          onFontChange={handleFontChange}
           onDelete={handleDelete}
           onDuplicate={handleDuplicate}
-          onColorChange={handleColorChange}
-          onBringToFront={bringToFront}
-          onBringForward={bringForward}
-          onSendBackward={sendBackward}
-          onSendToBack={sendToBack}
           onGroup={groupSelected}
           onUngroup={ungroupSelected}
           canGroup={canGroup}
           canUngroup={canUngroup}
-          onCheckFrameContainment={checkFrameContainment}
-          onMoveGroupChildren={moveGroupChildren}
-          getChildren={getChildren}
-          getDescendants={getDescendants}
-          colors={COLOR_PALETTE}
-          selectedColor={selectedColor}
-          userRole={userRole}
-          onlineUsers={onlineUsers}
-          onCursorMove={sendCursor}
-          onCursorUpdate={onCursorUpdate}
-          remoteSelections={remoteSelections}
         />
-      </CanvasErrorBoundary>
+        <div className="relative flex-1">
+          <CanvasErrorBoundary>
+            <Canvas
+              objects={objects}
+              sortedObjects={sortedObjects}
+              selectedIds={selectedIds}
+              activeGroupId={activeGroupId}
+              onSelect={selectObject}
+              onSelectObjects={selectObjects}
+              onClearSelection={clearSelection}
+              onEnterGroup={enterGroup}
+              onExitGroup={exitGroup}
+              onDragEnd={handleDragEnd}
+              onUpdateText={handleUpdateText}
+              onTransformEnd={handleTransformEnd}
+              onDelete={handleDelete}
+              onDuplicate={handleDuplicate}
+              onColorChange={handleColorChange}
+              onBringToFront={bringToFront}
+              onBringForward={bringForward}
+              onSendBackward={sendBackward}
+              onSendToBack={sendToBack}
+              onGroup={groupSelected}
+              onUngroup={ungroupSelected}
+              canGroup={canGroup}
+              canUngroup={canUngroup}
+              onStrokeChange={handleStrokeChange}
+              onCheckFrameContainment={checkFrameContainment}
+              onMoveGroupChildren={moveGroupChildren}
+              getChildren={getChildren}
+              getDescendants={getDescendants}
+              colors={EXPANDED_PALETTE}
+              selectedColor={selectedColor}
+              userRole={userRole}
+              onlineUsers={onlineUsers}
+              onCursorMove={sendCursor}
+              onCursorUpdate={onCursorUpdate}
+              remoteSelections={remoteSelections}
+            />
+          </CanvasErrorBoundary>
+        </div>
+      </div>
       {shareOpen && (
         <ShareDialog
           boardId={boardId}
@@ -212,6 +265,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
           onClose={() => setShareOpen(false)}
         />
       )}
-    </>
+    </div>
   )
 }

@@ -59,6 +59,19 @@ export function useCanvas() {
     return screenToCanvas(window.innerWidth / 2, window.innerHeight / 2)
   }, [screenToCanvas])
 
+  const zoomIn = useCallback(() => {
+    setStageScale(s => Math.min(s * ZOOM_SPEED, MAX_SCALE))
+  }, [])
+
+  const zoomOut = useCallback(() => {
+    setStageScale(s => Math.max(s / ZOOM_SPEED, MIN_SCALE))
+  }, [])
+
+  const resetZoom = useCallback(() => {
+    setStageScale(1)
+    setStagePos({ x: 0, y: 0 })
+  }, [])
+
   return {
     stagePos,
     stageScale,
@@ -66,5 +79,8 @@ export function useCanvas() {
     handleDragEnd,
     screenToCanvas,
     getViewportCenter,
+    zoomIn,
+    zoomOut,
+    resetZoom,
   }
 }

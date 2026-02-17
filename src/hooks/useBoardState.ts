@@ -164,11 +164,16 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     const now = new Date().toISOString()
 
     const defaults: Record<string, Partial<BoardObject>> = {
-      sticky_note: { width: 150, height: 150, color: '#FFEB3B', text: '' },
+      sticky_note: { width: 150, height: 150, color: '#FFEB3B', text: '', font_size: 14, font_family: 'sans-serif', font_style: 'normal' },
       rectangle: { width: 200, height: 140, color: '#2196F3', text: '' },
       circle: { width: 120, height: 120, color: '#4CAF50', text: '' },
       frame: { width: 400, height: 300, color: 'rgba(200,200,200,0.3)', text: 'Frame' },
       group: { width: 0, height: 0, color: 'transparent', text: '' },
+      line: { width: 120, height: 2, color: '#374151', stroke_width: 2, stroke_dash: undefined },
+      triangle: { width: 100, height: 90, color: '#8B5CF6', text: '' },
+      chevron: { width: 100, height: 87, color: '#10B981', text: '' }, // regular hexagon: height = width * sqrt(3)/2
+      arrow: { width: 120, height: 40, color: '#F59E0B', stroke_width: 2, text: '' },
+      parallelogram: { width: 140, height: 80, color: '#EC4899', text: '' },
     }
 
     const obj: BoardObject = {

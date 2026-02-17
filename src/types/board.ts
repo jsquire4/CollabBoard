@@ -41,4 +41,6 @@ export interface BoardObject {
   created_by: string
   created_at: string
   updated_at: string
+  field_clocks?: Record<string, { ts: number; c: number; n: string }>
+  deleted_at?: string | null
 }

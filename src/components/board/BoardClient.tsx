@@ -50,6 +50,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     checkFrameContainment,
     getChildren, getDescendants,
     remoteSelections,
+    reconcileOnReconnect,
   } = useBoardState(userId, boardId, userRole, channel, onlineUsers)
   const { getViewportCenter } = useCanvas()
   const [shareOpen, setShareOpen] = useState(false)
@@ -63,9 +64,11 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
       if (status === 'SUBSCRIBED') {
         console.log(`Realtime channel subscribed for board ${boardId}`)
         trackPresence()
+        // CRDT Phase 3: reconcile local state against DB on reconnect
+        reconcileOnReconnect()
       }
     })
-  }, [channel, boardId, trackPresence])
+  }, [channel, boardId, trackPresence, reconcileOnReconnect])
 
   const canEdit = userRole !== 'viewer'
 

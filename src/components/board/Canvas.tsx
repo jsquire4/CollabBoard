@@ -143,69 +143,15 @@ export function Canvas({
   const trRef = useRef<Konva.Transformer>(null)
   const cursorLayerRef = useRef<Konva.Layer>(null)
   const cursorNodesRef = useRef<Map<string, Konva.Group>>(new Map())
-  const cursorTargetsRef = useRef<Map<string, { x: number; y: number }>>(new Map())
-  const cursorAnimatingRef = useRef(false)
   const shapeRefs = useRef<Map<string, Konva.Node>>(new Map())
   const onlineUsersRef = useRef(onlineUsers)
   onlineUsersRef.current = onlineUsers
   const { shiftHeld, ctrlHeld } = useModifierKeys()
 
-  // Lerp animation loop for smooth cursor interpolation.
-  // Defined before the onCursorUpdate effect so it can be referenced there.
-  //
-  // Frame-rate normalized: uses exponential decay so cursors reach ~95% of
-  // target in LERP_TARGET_MS regardless of display refresh rate (30–144fps).
-  const LERP_TARGET_MS = 180
-  const LERP_DECAY = -Math.log(0.05) / LERP_TARGET_MS // ≈ 0.01665
-  const lastFrameTimeRef = useRef<number>(0)
-  const animateCursorsRef = useRef<((timestamp: number) => void) | null>(null)
-
-  // Use a ref-stable animate function so rAF always calls the latest version
-  if (!animateCursorsRef.current) {
-    animateCursorsRef.current = (timestamp: number) => {
-      if (cursorTargetsRef.current.size === 0) {
-        cursorAnimatingRef.current = false
-        lastFrameTimeRef.current = 0
-        return
-      }
-      const layer = cursorLayerRef.current
-      if (!layer) {
-        cursorAnimatingRef.current = false
-        lastFrameTimeRef.current = 0
-        return
-      }
-
-      // Compute frame-rate-normalized interpolation factor
-      const dt = lastFrameTimeRef.current ? timestamp - lastFrameTimeRef.current : 16.67
-      lastFrameTimeRef.current = timestamp
-      const factor = 1 - Math.exp(-LERP_DECAY * dt)
-
-      let needsDraw = false
-      for (const [uid, target] of cursorTargetsRef.current) {
-        const group = cursorNodesRef.current.get(uid)
-        if (!group) continue
-        const pos = group.position()
-        const dx = target.x - pos.x
-        const dy = target.y - pos.y
-        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-          group.position({
-            x: pos.x + dx * factor,
-            y: pos.y + dy * factor,
-          })
-          needsDraw = true
-        } else if (pos.x !== target.x || pos.y !== target.y) {
-          group.position(target) // snap to final position
-          needsDraw = true
-        }
-      }
-      if (needsDraw) layer.batchDraw()
-      requestAnimationFrame(animateCursorsRef.current!)
-    }
-  }
-
   // Imperatively update Konva cursor nodes — no React re-renders.
-  // Incoming positions are stored as targets; the lerp loop above smoothly
-  // interpolates each cursor toward its target every frame.
+  // Positions are snapped directly (same as remote shape updates) to avoid
+  // lag. The cursor broadcast is already throttled at 50ms intervals, which
+  // provides enough temporal density for smooth visual movement.
   useEffect(() => {
     if (!onCursorUpdate) return
 
@@ -217,7 +163,6 @@ export function Canvas({
 
       for (const [uid, cursor] of cursors.entries()) {
         activeIds.add(uid)
-        const isNew = !cursorNodesRef.current.has(uid)
         let group = cursorNodesRef.current.get(uid)
 
         if (!group) {
@@ -248,26 +193,15 @@ export function Canvas({
           cursorNodesRef.current.set(uid, group)
         }
 
-        // Store target position for lerp; snap new cursors immediately
-        cursorTargetsRef.current.set(uid, { x: cursor.x, y: cursor.y })
-        if (isNew) {
-          group.position({ x: cursor.x, y: cursor.y })
-        }
+        group.position({ x: cursor.x, y: cursor.y })
       }
 
-      // Remove stale cursor nodes and their targets
+      // Remove stale cursor nodes
       for (const [uid, group] of cursorNodesRef.current.entries()) {
         if (!activeIds.has(uid)) {
           group.destroy()
           cursorNodesRef.current.delete(uid)
-          cursorTargetsRef.current.delete(uid)
         }
-      }
-
-      // Start lerp animation loop if not already running
-      if (!cursorAnimatingRef.current && cursorTargetsRef.current.size > 0) {
-        cursorAnimatingRef.current = true
-        requestAnimationFrame(animateCursorsRef.current!)
       }
 
       layer.batchDraw()
@@ -502,11 +436,23 @@ export function Canvas({
 
     onDragMove(id, x, y)
 
+    // Broadcast cursor position during drag — stage onMouseMove doesn't fire
+    // while Konva is handling a shape drag, so we push the pointer position here.
+    if (onCursorMove) {
+      const stage = stageRef.current
+      const pos = stage?.getPointerPosition()
+      if (pos) {
+        const canvasX = (pos.x - stagePos.x) / stageScale
+        const canvasY = (pos.y - stagePos.y) / stageScale
+        onCursorMove(canvasX, canvasY)
+      }
+    }
+
     // If this is a frame, move children with skipDb
     if (obj.type === 'frame') {
       onMoveGroupChildren(id, dx, dy, true)
     }
-  }, [canEdit, objects, onDragMove, onMoveGroupChildren])
+  }, [canEdit, objects, onDragMove, onMoveGroupChildren, onCursorMove, stagePos, stageScale])
 
   // Handle drag end with frame containment check and group child movement
   const handleShapeDragEnd = useCallback((id: string, x: number, y: number) => {

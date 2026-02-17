@@ -38,7 +38,8 @@ interface BoardClientProps {
 export function BoardClient({ userId, boardId, boardName, userRole, displayName }: BoardClientProps) {
   const channel = useRealtimeChannel(boardId)
   const { onlineUsers, trackPresence } = usePresence(channel, userId, userRole, displayName)
-  const { sendCursor, onCursorUpdate } = useCursors(channel, userId)
+  const userCount = onlineUsers.length + 1 // include self
+  const { sendCursor, onCursorUpdate } = useCursors(channel, userId, userCount)
 
   const {
     objects, selectedIds, activeGroupId, sortedObjects,

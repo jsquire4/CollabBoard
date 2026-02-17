@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { BoardRole, BoardMember, BoardInvite, BoardShareLink } from '@/types/sharing'
 
@@ -19,7 +19,8 @@ const ROLE_OPTIONS: { value: BoardRole; label: string }[] = [
 ]
 
 export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
-  const supabase = createClient()
+  const supabaseRef = useRef(createClient())
+  const supabase = supabaseRef.current
   const [tab, setTab] = useState<Tab>('members')
   const [members, setMembers] = useState<BoardMember[]>([])
   const [invites, setInvites] = useState<BoardInvite[]>([])
@@ -40,11 +41,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
 
   const isOwner = userRole === 'owner'
 
-  useEffect(() => {
-    loadData()
-  }, [boardId])
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true)
     const [membersRes, invitesRes, linksRes] = await Promise.all([
       supabase.from('board_members').select('*').eq('board_id', boardId),
@@ -53,29 +50,29 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
     ])
 
     if (membersRes.data) {
-      // Look up emails for members
-      const membersWithEmails = await Promise.all(
-        membersRes.data.map(async (m) => {
-          const { data } = await supabase.rpc('lookup_user_by_email', { p_email: '' })
-          // We can't reverse-lookup email from user_id easily with client SDK.
-          // Instead, store user_id and show it. For a real app you'd have a profiles table.
-          return { ...m, email: m.user_id.slice(0, 8) + '...' } as BoardMember
-        })
-      )
-      setMembers(membersWithEmails)
+      // We can't reverse-lookup email from user_id with the client SDK.
+      // Show truncated user_id as placeholder. A profiles table would be better.
+      const membersWithLabels = membersRes.data.map((m) => {
+        return { ...m, email: m.user_id.slice(0, 8) + '...' } as BoardMember
+      })
+      setMembers(membersWithLabels)
     }
     if (invitesRes.data) setInvites(invitesRes.data as BoardInvite[])
     if (linksRes.data && linksRes.data.length > 0) setShareLink(linksRes.data[0] as BoardShareLink)
     setLoading(false)
-  }
+  }, [boardId, supabase])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   async function handleInvite() {
     const email = inviteEmail.trim().toLowerCase()
     if (!email) return
     setInviteStatus(null)
 
-    // Try to look up the user by email
-    const { data: userId } = await supabase.rpc('lookup_user_by_email', { p_email: email })
+    // Try to look up the user by email (board-scoped — requires manager/owner)
+    const { data: userId } = await supabase.rpc('lookup_user_by_email', { p_board_id: boardId, p_email: email })
 
     if (userId) {
       // User exists — add directly as member
@@ -135,21 +132,14 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
   async function confirmTransferOwnership() {
     if (!transferTarget) return
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    const { error } = await supabase.rpc('transfer_board_ownership', {
+      p_board_id: boardId,
+      p_new_owner_member_id: transferTarget,
+    })
 
-    // Set target as owner
-    await supabase
-      .from('board_members')
-      .update({ role: 'owner' })
-      .eq('id', transferTarget)
-
-    // Set self as manager
-    await supabase
-      .from('board_members')
-      .update({ role: 'manager' })
-      .eq('board_id', boardId)
-      .eq('user_id', user.id)
+    if (error) {
+      console.error('Failed to transfer ownership:', error.message)
+    }
 
     setTransferTarget(null)
     loadData()

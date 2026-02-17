@@ -1,6 +1,7 @@
 import { Group, Rect, Text } from 'react-konva'
 import { BoardObject } from '@/types/board'
 import Konva from 'konva'
+import { handleShapeTransformEnd } from './shapeUtils'
 
 interface StickyNoteProps {
   object: BoardObject
@@ -47,18 +48,7 @@ export function StickyNote({
   }
 
   const handleTransformEnd = (e: Konva.KonvaEventObject<Event>) => {
-    const node = e.target
-    const scaleX = node.scaleX()
-    const scaleY = node.scaleY()
-    node.scaleX(1)
-    node.scaleY(1)
-    onTransformEnd(object.id, {
-      x: node.x(),
-      y: node.y(),
-      width: Math.max(5, object.width * scaleX),
-      height: Math.max(5, object.height * scaleY),
-      rotation: node.rotation(),
-    })
+    handleShapeTransformEnd(e, object, onTransformEnd)
   }
 
   const padding = 10

@@ -10,11 +10,8 @@ export type BoardObjectType =
   | 'sticky_note'
   | 'rectangle'
   | 'circle'
-  | 'line'
   | 'frame'
   | 'group'
-  | 'connector'
-  | 'text'
 
 export interface BoardObject {
   id: string
@@ -30,12 +27,7 @@ export interface BoardObject {
   font_size: number
   z_index: number
   parent_id: string | null
-  from_id: string | null
-  to_id: string | null
-  connector_style: string
   created_by: string
   created_at: string
   updated_at: string
 }
-
-export type CreateBoardObject = Omit<BoardObject, 'id' | 'created_at' | 'updated_at'>

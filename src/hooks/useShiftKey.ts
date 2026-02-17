@@ -5,11 +5,6 @@ interface ModifierKeys {
   ctrlHeld: boolean
 }
 
-export function useShiftKey(): boolean {
-  const keys = useModifierKeys()
-  return keys.shiftHeld
-}
-
 export function useModifierKeys(): ModifierKeys {
   const [shiftHeld, setShiftHeld] = useState(false)
   const [ctrlHeld, setCtrlHeld] = useState(false)

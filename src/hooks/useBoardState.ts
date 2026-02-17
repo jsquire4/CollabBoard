@@ -21,9 +21,9 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
   const [objects, setObjects] = useState<Map<string, BoardObject>>(new Map())
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
-  const [loaded, setLoaded] = useState(false)
   const [remoteSelections, setRemoteSelections] = useState<Map<string, Set<string>>>(new Map())
-  const supabase = createClient()
+  const supabaseRef = useRef(createClient())
+  const supabase = supabaseRef.current
 
   const canEdit = userRole !== 'viewer'
 
@@ -36,7 +36,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
 
     if (error) {
       console.error('Failed to load board objects:', error.message)
-      setLoaded(true)
       return
     }
 
@@ -45,8 +44,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       map.set(obj.id, obj as BoardObject)
     }
     setObjects(map)
-    setLoaded(true)
-  }, [boardId, supabase])
+  }, [boardId])
 
   // Load on mount
   useEffect(() => {
@@ -154,13 +152,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     return current.id
   }, [objects])
 
-  // Helper: find the group/frame that directly contains this object
-  const getParentContainer = useCallback((id: string): BoardObject | null => {
-    const obj = objects.get(id)
-    if (!obj?.parent_id) return null
-    return objects.get(obj.parent_id) ?? null
-  }, [objects])
-
   const addObject = useCallback((
     type: BoardObjectType,
     x: number,
@@ -194,9 +185,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       font_size: 14,
       z_index: getMaxZIndex() + 1,
       parent_id: null,
-      from_id: null,
-      to_id: null,
-      connector_style: 'arrow',
       created_by: userId,
       created_at: now,
       updated_at: now,
@@ -210,19 +198,23 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       return next
     })
 
-    broadcastChanges([{ action: 'create', object: obj }])
-
-    // Persist to Supabase
+    // Persist to Supabase, then broadcast on success
     const { id: _id, created_at, updated_at, ...insertData } = obj
     supabase
       .from('board_objects')
       .insert({ ...insertData, id: obj.id })
       .then(({ error }) => {
-        if (error) console.error('Failed to save object:', error.message)
+        if (error) {
+          console.error('Failed to save object:', error.message)
+          // Rollback optimistic update
+          setObjects(prev => { const next = new Map(prev); next.delete(id); return next })
+        } else {
+          broadcastChanges([{ action: 'create', object: obj }])
+        }
       })
 
     return obj
-  }, [userId, boardId, supabase, canEdit, getMaxZIndex, broadcastChanges])
+  }, [userId, boardId, canEdit, getMaxZIndex, broadcastChanges])
 
   const updateObject = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
@@ -235,25 +227,28 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       return next
     })
 
-    broadcastChanges([{ action: 'update', object: { id, ...updates } }])
-
-    // Persist to Supabase
+    // Persist to Supabase, then broadcast on success
     supabase
       .from('board_objects')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id)
       .then(({ error }) => {
-        if (error) console.error('Failed to update object:', error.message)
+        if (error) {
+          console.error('Failed to update object:', error.message)
+        } else {
+          broadcastChanges([{ action: 'update', object: { id, ...updates } }])
+        }
       })
-  }, [supabase, canEdit, broadcastChanges])
+  }, [canEdit, broadcastChanges])
 
-  const deleteObject = useCallback((id: string) => {
+  const deleteObject = useCallback(async (id: string) => {
     if (!canEdit) return
 
     // Also delete all descendants
     const descendants = getDescendants(id)
     const idsToDelete = [id, ...descendants.map(d => d.id)]
 
+    // Optimistic local update
     setObjects(prev => {
       const next = new Map(prev)
       for (const did of idsToDelete) {
@@ -269,19 +264,25 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       return next
     })
 
-    broadcastChanges(idsToDelete.map(did => ({ action: 'delete', object: { id: did } as BoardObject })))
-
-    // Persist — delete descendants first (children before parent due to FK)
-    for (const did of [...descendants.map(d => d.id).reverse(), id]) {
-      supabase
+    // Persist — delete descendants first (leaves before parents for FK ordering)
+    const orderedIds = [...descendants.map(d => d.id).reverse(), id]
+    let failed = false
+    for (const did of orderedIds) {
+      const { error } = await supabase
         .from('board_objects')
         .delete()
         .eq('id', did)
-        .then(({ error }) => {
-          if (error) console.error('Failed to delete object:', error.message)
-        })
+      if (error) {
+        console.error('Failed to delete object:', error.message)
+        failed = true
+        break
+      }
     }
-  }, [supabase, canEdit, getDescendants, broadcastChanges])
+
+    if (!failed) {
+      broadcastChanges(idsToDelete.map(did => ({ action: 'delete' as const, object: { id: did } as BoardObject })))
+    }
+  }, [canEdit, getDescendants, broadcastChanges])
 
   const deleteSelected = useCallback(() => {
     if (!canEdit) return
@@ -387,7 +388,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     })
     if (newObj) setSelectedIds(new Set([newObj.id]))
     return newObj
-  }, [objects, addObject, canEdit, getDescendants, getMaxZIndex, userId, supabase, broadcastChanges])
+  }, [objects, addObject, canEdit, getDescendants, getMaxZIndex, userId, broadcastChanges])
 
   const duplicateSelected = useCallback(() => {
     if (!canEdit) return
@@ -587,9 +588,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       font_size: 14,
       z_index: Math.max(...selectedObjs.map(o => o.z_index)),
       parent_id: null,
-      from_id: null,
-      to_id: null,
-      connector_style: 'arrow',
       created_by: userId,
       created_at: now,
       updated_at: now,
@@ -638,7 +636,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     }
 
     return groupObj
-  }, [canEdit, selectedIds, objects, boardId, userId, supabase, broadcastChanges])
+  }, [canEdit, selectedIds, objects, boardId, userId, broadcastChanges])
 
   // Ungroup: dissolve a group, freeing its children
   const ungroupSelected = useCallback(() => {
@@ -666,7 +664,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
         })
     }
     setSelectedIds(new Set())
-  }, [canEdit, selectedIds, objects, getChildren, updateObject, supabase, broadcastChanges])
+  }, [canEdit, selectedIds, objects, getChildren, updateObject, broadcastChanges])
 
   // Move group/frame: move all children by delta (batched — single state update + single broadcast)
   const moveGroupChildren = useCallback((parentId: string, dx: number, dy: number) => {
@@ -702,7 +700,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
           if (error) console.error('Failed to update child position:', error.message)
         })
     }
-  }, [canEdit, getDescendants, broadcastChanges, supabase])
+  }, [canEdit, getDescendants, broadcastChanges])
 
   // Frame containment: check if an object should be inside a frame after drag
   const checkFrameContainment = useCallback((id: string) => {
@@ -804,13 +802,10 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     objects,
     selectedIds,
     activeGroupId,
-    loaded,
     sortedObjects,
     addObject,
     updateObject,
-    deleteObject,
     deleteSelected,
-    duplicateObject,
     duplicateSelected,
     selectObject,
     selectObjects,
@@ -827,8 +822,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     checkFrameContainment,
     getChildren,
     getDescendants,
-    getTopLevelAncestor,
-    getParentContainer,
     remoteSelections,
     COLOR_PALETTE,
   }

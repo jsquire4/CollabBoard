@@ -42,4 +42,6 @@ next-env.d.ts
 .env.local
 
 BUILD_INSTRUCTIONS.md
+CLAUDE.md
+.cursorrules
 .claude

@@ -17,9 +17,12 @@ export function FrameShape({
   onTransformEnd,
   onContextMenu,
   onDragMove,
+  onDragStart,
   editable = true,
   isEditing = false,
 }: FrameShapeProps) {
+  const handleDragStart = () => onDragStart?.(object.id)
+
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     onDragEnd(object.id, e.target.x(), e.target.y())
   }
@@ -56,6 +59,7 @@ export function FrameShape({
       draggable={editable}
       onClick={handleClick}
       onTap={handleClick}
+      onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragMove={handleDragMove}
       onDblClick={handleDblClick}

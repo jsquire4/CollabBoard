@@ -510,6 +510,35 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     return obj
   }, [userId, boardId, canEdit, getMaxZIndex, queueBroadcast, stampCreate])
 
+  const addObjectWithId = useCallback((obj: BoardObject) => {
+    if (!canEdit) return
+
+    const clocks = stampCreate(obj.id, obj)
+
+    setObjects(prev => {
+      const next = new Map(prev)
+      next.set(obj.id, { ...obj, updated_at: new Date().toISOString() })
+      return next
+    })
+
+    const { id: _id, created_at, updated_at, field_clocks: _fc, deleted_at: _da, ...insertData } = obj
+    const insertRow = CRDT_ENABLED
+      ? { ...insertData, id: obj.id, field_clocks: fieldClocksRef.current.get(obj.id) ?? {} }
+      : { ...insertData, id: obj.id }
+    supabase
+      .from('board_objects')
+      .upsert(insertRow, { onConflict: 'id' })
+      .then(({ error }) => {
+        if (error) {
+          console.error('Failed to re-insert object:', error.message)
+          setObjects(prev => { const next = new Map(prev); next.delete(obj.id); return next })
+          fieldClocksRef.current.delete(obj.id)
+        } else {
+          queueBroadcast([{ action: 'create', object: obj, clocks }])
+        }
+      })
+  }, [canEdit, queueBroadcast, stampCreate])
+
   const updateObject = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
 
@@ -738,20 +767,22 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     return newObj
   }, [objects, addObject, canEdit, getDescendants, getMaxZIndex, userId, queueBroadcast, stampCreate])
 
-  const duplicateSelected = useCallback(() => {
-    if (!canEdit) return
+  const duplicateSelected = useCallback((): string[] => {
+    if (!canEdit) return []
     const ids = Array.from(selectedIds)
     if (ids.length === 1) {
-      duplicateObject(ids[0])
+      const newObj = duplicateObject(ids[0])
+      return newObj ? [newObj.id] : []
     } else if (ids.length > 1) {
-      // Duplicate each selected object
       const newIds: string[] = []
       for (const id of ids) {
         const newObj = duplicateObject(id)
         if (newObj) newIds.push(newObj.id)
       }
       setSelectedIds(new Set(newIds))
+      return newIds
     }
+    return []
   }, [selectedIds, duplicateObject, canEdit])
 
   // Selection
@@ -1357,5 +1388,8 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     remoteSelections,
     reconcileOnReconnect,
     COLOR_PALETTE,
+    deleteObject,
+    getZOrderSet,
+    addObjectWithId,
   }
 }

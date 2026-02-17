@@ -11,9 +11,12 @@ export function HexagonShape({
   onTransformEnd,
   onContextMenu,
   onDragMove,
+  onDragStart,
   onDoubleClick,
   editable = true,
 }: ShapeProps) {
+  const handleDragStart = () => onDragStart?.(object.id)
+
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     onDragEnd(object.id, e.target.x(), e.target.y())
   }
@@ -44,6 +47,7 @@ export function HexagonShape({
       draggable={editable}
       onClick={handleClick}
       onTap={handleClick}
+      onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragMove={handleDragMove}
       onTransformEnd={handleTransformEnd}

@@ -12,9 +12,12 @@ export function CircleShape({
   onTransformEnd,
   onContextMenu,
   onDragMove,
+  onDragStart,
   onDoubleClick,
   editable = true,
 }: ShapeProps) {
+  const handleDragStartCb = () => onDragStart?.(object.id)
+
   const radius = Math.min(object.width, object.height) / 2
   const centerX = object.x + object.width / 2
   const centerY = object.y + object.height / 2
@@ -60,6 +63,7 @@ export function CircleShape({
       draggable={editable}
       onClick={handleClick}
       onTap={handleClick}
+      onDragStart={handleDragStartCb}
       onDragEnd={handleDragEnd}
       onDragMove={handleDragMove}
       onTransformEnd={handleTransformEnd}

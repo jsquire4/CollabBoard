@@ -11,8 +11,11 @@ export function LineShape({
   onTransformEnd,
   onContextMenu,
   onDragMove,
+  onDragStart,
   editable = true,
 }: ShapeProps) {
+  const handleDragStart = () => onDragStart?.(object.id)
+
   const strokeWidth = object.stroke_width ?? 2
   let dash: number[] | undefined
   if (object.stroke_dash) {
@@ -58,6 +61,7 @@ export function LineShape({
       draggable={editable}
       onClick={handleClick}
       onTap={handleClick}
+      onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragMove={handleDragMove}
       onTransformEnd={handleTransformEnd}

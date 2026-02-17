@@ -106,6 +106,9 @@ interface CanvasProps {
   canGroup: boolean
   canUngroup: boolean
   onStrokeChange?: (updates: { stroke_width?: number; stroke_dash?: string }) => void
+  onDragStart?: (id: string) => void
+  onUndo?: () => void
+  onRedo?: () => void
   onCheckFrameContainment: (id: string) => void
   onMoveGroupChildren: (parentId: string, dx: number, dy: number, skipDb?: boolean) => void
   getChildren: (parentId: string) => BoardObject[]
@@ -127,6 +130,8 @@ export function Canvas({
   onBringToFront, onBringForward, onSendBackward, onSendToBack,
   onGroup, onUngroup, canGroup, canUngroup,
   onStrokeChange,
+  onDragStart: onDragStartProp,
+  onUndo, onRedo,
   onCheckFrameContainment, onMoveGroupChildren,
   getChildren, getDescendants,
   colors, selectedColor, userRole,
@@ -326,6 +331,12 @@ export function Canvas({
       } else if (canEdit && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') {
         e.preventDefault()
         onGroup()
+      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        onRedo?.()
+      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        onUndo?.()
       } else if (e.key === 'Escape') {
         if (activeGroupId) {
           onExitGroup()
@@ -337,7 +348,7 @@ export function Canvas({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editingId, selectedIds, activeGroupId, onDelete, onDuplicate, onGroup, onUngroup, onClearSelection, onExitGroup, canEdit])
+  }, [editingId, selectedIds, activeGroupId, onDelete, onDuplicate, onGroup, onUngroup, onClearSelection, onExitGroup, canEdit, onUndo, onRedo])
 
   // Attach/detach Transformer to effective selected shapes (groups expanded to children)
   useEffect(() => {
@@ -474,6 +485,11 @@ export function Canvas({
       onEnterGroup(id)
     }
   }, [objects, onEnterGroup])
+
+  // Handle drag start: notify parent for undo capture
+  const handleShapeDragStart = useCallback((id: string) => {
+    onDragStartProp?.(id)
+  }, [onDragStartProp])
 
   // Handle drag move: update local state + broadcast, no DB write
   const handleShapeDragMove = useCallback((id: string, x: number, y: number) => {
@@ -689,6 +705,7 @@ export function Canvas({
             object={obj}
             onDragEnd={handleShapeDragEnd}
             onDragMove={handleShapeDragMove}
+            onDragStart={handleShapeDragStart}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             onStartEdit={handleStartEdit}
@@ -706,6 +723,7 @@ export function Canvas({
             object={obj}
             onDragEnd={handleShapeDragEnd}
             onDragMove={handleShapeDragMove}
+            onDragStart={handleShapeDragStart}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             shapeRef={handleShapeRef}
@@ -722,6 +740,7 @@ export function Canvas({
             object={obj}
             onDragEnd={handleShapeDragEnd}
             onDragMove={handleShapeDragMove}
+            onDragStart={handleShapeDragStart}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             shapeRef={handleShapeRef}
@@ -738,6 +757,7 @@ export function Canvas({
             object={obj}
             onDragEnd={handleShapeDragEnd}
             onDragMove={handleShapeDragMove}
+            onDragStart={handleShapeDragStart}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             onStartEdit={handleStartEdit}
@@ -755,6 +775,7 @@ export function Canvas({
             object={obj}
             onDragEnd={handleShapeDragEnd}
             onDragMove={handleShapeDragMove}
+            onDragStart={handleShapeDragStart}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             shapeRef={handleShapeRef}
@@ -770,6 +791,7 @@ export function Canvas({
             object={obj}
             onDragEnd={handleShapeDragEnd}
             onDragMove={handleShapeDragMove}
+            onDragStart={handleShapeDragStart}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             shapeRef={handleShapeRef}
@@ -786,6 +808,7 @@ export function Canvas({
             object={obj}
             onDragEnd={handleShapeDragEnd}
             onDragMove={handleShapeDragMove}
+            onDragStart={handleShapeDragStart}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             shapeRef={handleShapeRef}
@@ -802,6 +825,7 @@ export function Canvas({
             object={obj}
             onDragEnd={handleShapeDragEnd}
             onDragMove={handleShapeDragMove}
+            onDragStart={handleShapeDragStart}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             shapeRef={handleShapeRef}
@@ -818,6 +842,7 @@ export function Canvas({
             object={obj}
             onDragEnd={handleShapeDragEnd}
             onDragMove={handleShapeDragMove}
+            onDragStart={handleShapeDragStart}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             shapeRef={handleShapeRef}

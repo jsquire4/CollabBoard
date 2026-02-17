@@ -11,6 +11,7 @@ export interface ShapeProps {
   onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
   onContextMenu: (id: string, clientX: number, clientY: number) => void
   onDragMove?: (id: string, x: number, y: number) => void
+  onDragStart?: (id: string) => void
   onDoubleClick?: (id: string) => void
   editable?: boolean
 }

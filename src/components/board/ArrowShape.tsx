@@ -11,9 +11,12 @@ export function ArrowShape({
   onTransformEnd,
   onContextMenu,
   onDragMove,
+  onDragStart,
   onDoubleClick,
   editable = true,
 }: ShapeProps) {
+  const handleDragStart = () => onDragStart?.(object.id)
+
   const strokeWidth = object.stroke_width ?? 2
 
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -49,6 +52,7 @@ export function ArrowShape({
       draggable={editable}
       onClick={handleClick}
       onTap={handleClick}
+      onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragMove={handleDragMove}
       onTransformEnd={handleTransformEnd}

@@ -67,6 +67,31 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // ─── Auth: verify JWT and check board access ──────────────
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      })
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+    // Create a user-scoped client to verify JWT and check access
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    })
+    const { data: { user }, error: authError } = await userClient.auth.getUser()
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Invalid or expired token' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      })
+    }
+
     const { boardId, changes } = (await req.json()) as {
       boardId: string
       changes: CrdtChange[]
@@ -78,14 +103,25 @@ Deno.serve(async (req: Request) => {
       })
     }
 
-    // Create Supabase client with service role key (bypasses RLS)
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    // Verify the user has access to this board (RLS on boards table enforces ownership)
+    const { data: board, error: boardError } = await userClient
+      .from('boards')
+      .select('id')
+      .eq('id', boardId)
+      .maybeSingle()
+    if (boardError || !board) {
+      return new Response(JSON.stringify({ error: 'Board not found or access denied' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      })
+    }
+
+    // Proceed with service role client (bypasses RLS for merge operations)
+    const serviceClient = createClient(supabaseUrl, supabaseServiceKey)
 
     // Fetch affected objects from DB
     const objectIds = [...new Set(changes.map(c => c.objectId))]
-    const { data: dbObjects, error: fetchError } = await supabase
+    const { data: dbObjects, error: fetchError } = await serviceClient
       .from('board_objects')
       .select('id, field_clocks, deleted_at')
       .eq('board_id', boardId)
@@ -126,7 +162,7 @@ Deno.serve(async (req: Request) => {
 
         if (deleteWins && !dbDeletedMap.get(change.objectId)) {
           // Apply tombstone
-          await supabase
+          await serviceClient
             .from('board_objects')
             .update({ deleted_at: new Date().toISOString() })
             .eq('id', change.objectId)
@@ -162,7 +198,7 @@ Deno.serve(async (req: Request) => {
     // Apply winning updates
     let mergedCount = 0
     for (const update of updates) {
-      const { error: updateError } = await supabase
+      const { error: updateError } = await serviceClient
         .from('board_objects')
         .update({
           ...update.fields,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { useBoardState } from '@/hooks/useBoardState'
 import { useCanvas } from '@/hooks/useCanvas'
@@ -58,6 +58,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
   // Subscribe LAST — after all hooks have registered their .on() listeners.
   // React runs useEffect hooks in definition order, so this must come after
   // usePresence, useCursors, and useBoardState have set up their handlers.
+  const hasConnectedRef = useRef(false)
   useEffect(() => {
     if (!channel) return
     channel.subscribe((status) => {
@@ -65,7 +66,12 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
         console.log(`Realtime channel subscribed for board ${boardId}`)
         trackPresence()
         // CRDT Phase 3: reconcile local state against DB on reconnect
-        reconcileOnReconnect()
+        // Skip reconcile on the very first subscribe — initial data was just loaded.
+        if (hasConnectedRef.current) {
+          reconcileOnReconnect()
+        } else {
+          hasConnectedRef.current = true
+        }
       }
     })
   }, [channel, boardId, trackPresence, reconcileOnReconnect])

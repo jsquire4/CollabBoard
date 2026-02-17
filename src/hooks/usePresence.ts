@@ -6,7 +6,9 @@ import { BoardRole } from '@/types/sharing'
 
 const CURSOR_COLORS = [
   '#E91E63', '#9C27B0', '#673AB7', '#3F51B5',
-  '#009688', '#FF5722', '#795548', '#607D8B',
+  '#2196F3', '#00BCD4', '#009688', '#4CAF50',
+  '#8BC34A', '#FF9800', '#FF5722', '#795548',
+  '#F44336', '#607D8B', '#3949AB', '#00897B',
 ]
 
 export interface OnlineUser {
@@ -16,9 +18,13 @@ export interface OnlineUser {
   role: BoardRole
 }
 
+/** Hash the full userId string to distribute colors evenly across the palette. */
 export function getColorForUser(userId: string): string {
-  const colorIndex = userId.charCodeAt(0) % CURSOR_COLORS.length
-  return CURSOR_COLORS[colorIndex]
+  let hash = 0
+  for (let i = 0; i < userId.length; i++) {
+    hash = ((hash << 5) - hash + userId.charCodeAt(i)) | 0
+  }
+  return CURSOR_COLORS[Math.abs(hash) % CURSOR_COLORS.length]
 }
 
 export function usePresence(

@@ -46,7 +46,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     enterGroup, exitGroup,
     bringToFront, sendToBack, bringForward, sendBackward,
     groupSelected, ungroupSelected,
-    moveGroupChildren, checkFrameContainment,
+    moveGroupChildren, updateObjectDrag, updateObjectDragEnd,
+    checkFrameContainment,
     getChildren, getDescendants,
     remoteSelections,
   } = useBoardState(userId, boardId, userRole, channel, onlineUsers)
@@ -90,9 +91,14 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     addObject(type, center.x - dx, center.y - dy, overrides)
   }
 
+  const handleDragMove = (id: string, x: number, y: number) => {
+    if (!canEdit) return
+    updateObjectDrag(id, { x, y })
+  }
+
   const handleDragEnd = (id: string, x: number, y: number) => {
     if (!canEdit) return
-    updateObject(id, { x, y })
+    updateObjectDragEnd(id, { x, y })
   }
 
   const handleUpdateText = (id: string, text: string) => {
@@ -229,6 +235,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
               onEnterGroup={enterGroup}
               onExitGroup={exitGroup}
               onDragEnd={handleDragEnd}
+              onDragMove={handleDragMove}
               onUpdateText={handleUpdateText}
               onTransformEnd={handleTransformEnd}
               onDelete={handleDelete}

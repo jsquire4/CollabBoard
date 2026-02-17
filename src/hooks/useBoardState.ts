@@ -11,11 +11,58 @@ import { OnlineUser } from '@/hooks/usePresence'
 interface BoardChange {
   action: 'create' | 'update' | 'delete'
   object: Partial<BoardObject> & { id: string }
+  timestamp?: number
 }
 
 const COLOR_PALETTE = ['#FFEB3B', '#FF9800', '#E91E63', '#9C27B0', '#2196F3', '#4CAF50']
 
 const SELECTION_BROADCAST_DEBOUNCE_MS = 100
+const BROADCAST_BATCH_MS = 50
+
+/**
+ * Coalesces a queue of broadcast changes from a single user within a batch window.
+ * Deduplicates updates to the same object ID (merges partial updates), preserving
+ * create/delete ordering. Isolated as a pure function so it can be swapped for
+ * CRDT-aware merge logic later.
+ */
+export function coalesceBroadcastQueue(pending: BoardChange[]): BoardChange[] {
+  const result: BoardChange[] = []
+  const seen = new Map<string, number>() // object id -> index in result
+
+  for (const change of pending) {
+    const id = change.object.id
+    const existingIdx = seen.get(id)
+
+    if (change.action === 'delete') {
+      // If there's a prior create for this id, remove it entirely
+      if (existingIdx !== undefined && result[existingIdx]?.action === 'create') {
+        result[existingIdx] = undefined as unknown as BoardChange // mark for removal
+        seen.delete(id)
+      } else if (existingIdx !== undefined) {
+        // Replace any prior update with delete
+        result[existingIdx] = change
+      } else {
+        seen.set(id, result.length)
+        result.push(change)
+      }
+    } else if (change.action === 'update' && existingIdx !== undefined) {
+      const existing = result[existingIdx]
+      if (existing && (existing.action === 'update' || existing.action === 'create')) {
+        // Merge partial updates
+        result[existingIdx] = {
+          ...existing,
+          object: { ...existing.object, ...change.object },
+          timestamp: change.timestamp ?? existing.timestamp,
+        }
+      }
+    } else {
+      seen.set(id, result.length)
+      result.push(change)
+    }
+  }
+
+  return result.filter(Boolean)
+}
 
 export function useBoardState(userId: string, boardId: string, userRole: BoardRole = 'viewer', channel?: RealtimeChannel | null, onlineUsers?: OnlineUser[]) {
   const [objects, setObjects] = useState<Map<string, BoardObject>>(new Map())
@@ -60,6 +107,38 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       payload: { changes, sender_id: userId },
     })
   }, [channel, userId])
+
+  // Broadcast batching: coalesce outbound changes within a 50ms window
+  const pendingBroadcastRef = useRef<BoardChange[]>([])
+  const broadcastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const flushBroadcast = useCallback(() => {
+    broadcastTimerRef.current = null
+    if (pendingBroadcastRef.current.length === 0) return
+    const coalesced = coalesceBroadcastQueue(pendingBroadcastRef.current)
+    pendingBroadcastRef.current = []
+    if (coalesced.length > 0) {
+      broadcastChanges(coalesced)
+    }
+  }, [broadcastChanges])
+
+  const queueBroadcast = useCallback((changes: BoardChange[]) => {
+    const stamped = changes.map(c => ({ ...c, timestamp: c.timestamp ?? Date.now() }))
+    pendingBroadcastRef.current.push(...stamped)
+    if (!broadcastTimerRef.current) {
+      broadcastTimerRef.current = setTimeout(flushBroadcast, BROADCAST_BATCH_MS)
+    }
+  }, [flushBroadcast])
+
+  // Cleanup broadcast timer on unmount
+  useEffect(() => {
+    return () => {
+      if (broadcastTimerRef.current) {
+        clearTimeout(broadcastTimerRef.current)
+        broadcastTimerRef.current = null
+      }
+    }
+  }, [])
 
   // Listen for incoming object sync broadcasts
   useEffect(() => {
@@ -214,12 +293,12 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
           // Rollback optimistic update
           setObjects(prev => { const next = new Map(prev); next.delete(id); return next })
         } else {
-          broadcastChanges([{ action: 'create', object: obj }])
+          queueBroadcast([{ action: 'create', object: obj }])
         }
       })
 
     return obj
-  }, [userId, boardId, canEdit, getMaxZIndex, broadcastChanges])
+  }, [userId, boardId, canEdit, getMaxZIndex, queueBroadcast])
 
   const updateObject = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
@@ -241,10 +320,10 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
         if (error) {
           console.error('Failed to update object:', error.message)
         } else {
-          broadcastChanges([{ action: 'update', object: { id, ...updates } }])
+          queueBroadcast([{ action: 'update', object: { id, ...updates } }])
         }
       })
-  }, [canEdit, broadcastChanges])
+  }, [canEdit, queueBroadcast])
 
   const deleteObject = useCallback(async (id: string) => {
     if (!canEdit) return
@@ -285,9 +364,9 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     }
 
     if (!failed) {
-      broadcastChanges(idsToDelete.map(did => ({ action: 'delete' as const, object: { id: did } as BoardObject })))
+      queueBroadcast(idsToDelete.map(did => ({ action: 'delete' as const, object: { id: did } as BoardObject })))
     }
-  }, [canEdit, getDescendants, broadcastChanges])
+  }, [canEdit, getDescendants, queueBroadcast])
 
   const deleteSelected = useCallback(() => {
     if (!canEdit) return
@@ -351,7 +430,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
         return next
       })
 
-      broadcastChanges(newObjects.map(obj => ({ action: 'create' as const, object: obj })))
+      queueBroadcast(newObjects.map(obj => ({ action: 'create' as const, object: obj })))
 
       // Persist: insert parent first (await), then children
       const parentObj = newObjects[0]
@@ -393,7 +472,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     })
     if (newObj) setSelectedIds(new Set([newObj.id]))
     return newObj
-  }, [objects, addObject, canEdit, getDescendants, getMaxZIndex, userId, broadcastChanges])
+  }, [objects, addObject, canEdit, getDescendants, getMaxZIndex, userId, queueBroadcast])
 
   const duplicateSelected = useCallback(() => {
     if (!canEdit) return
@@ -495,7 +574,13 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     return [obj]
   }, [objects, getDescendants])
 
-  // Z-ordering — shifts the whole group/frame set by the same delta to preserve internal order
+  // Z-ordering — batched: single setObjects + single queueBroadcast + single DB upsert
+  const persistZIndexBatch = useCallback((updates: { id: string; z_index: number }[], now: string) => {
+    const rows = updates.map(u => ({ id: u.id, z_index: u.z_index, updated_at: now }))
+    supabase.from('board_objects').upsert(rows, { onConflict: 'id' })
+      .then(({ error }) => { if (error) console.error('Failed to batch update z_index:', error.message) })
+  }, [])
+
   const bringToFront = useCallback((id: string) => {
     if (!canEdit) return
     const set = getZOrderSet(id)
@@ -503,10 +588,24 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     const maxZ = getMaxZIndex()
     const minInSet = Math.min(...set.map(o => o.z_index))
     const delta = maxZ - minInSet + 1
-    for (const o of set) {
-      updateObject(o.id, { z_index: o.z_index + delta })
-    }
-  }, [canEdit, getZOrderSet, getMaxZIndex, updateObject])
+
+    const now = new Date().toISOString()
+    const changes: BoardChange[] = []
+    const dbUpdates: { id: string; z_index: number }[] = []
+    setObjects(prev => {
+      const next = new Map(prev)
+      for (const o of set) {
+        const newZ = o.z_index + delta
+        const existing = next.get(o.id)
+        if (existing) next.set(o.id, { ...existing, z_index: newZ, updated_at: now })
+        changes.push({ action: 'update', object: { id: o.id, z_index: newZ } })
+        dbUpdates.push({ id: o.id, z_index: newZ })
+      }
+      return next
+    })
+    queueBroadcast(changes)
+    persistZIndexBatch(dbUpdates, now)
+  }, [canEdit, getZOrderSet, getMaxZIndex, queueBroadcast, persistZIndexBatch])
 
   const sendToBack = useCallback((id: string) => {
     if (!canEdit) return
@@ -515,10 +614,24 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     const minZ = getMinZIndex()
     const maxInSet = Math.max(...set.map(o => o.z_index))
     const delta = maxInSet - minZ + 1
-    for (const o of set) {
-      updateObject(o.id, { z_index: o.z_index - delta })
-    }
-  }, [canEdit, getZOrderSet, getMinZIndex, updateObject])
+
+    const now = new Date().toISOString()
+    const changes: BoardChange[] = []
+    const dbUpdates: { id: string; z_index: number }[] = []
+    setObjects(prev => {
+      const next = new Map(prev)
+      for (const o of set) {
+        const newZ = o.z_index - delta
+        const existing = next.get(o.id)
+        if (existing) next.set(o.id, { ...existing, z_index: newZ, updated_at: now })
+        changes.push({ action: 'update', object: { id: o.id, z_index: newZ } })
+        dbUpdates.push({ id: o.id, z_index: newZ })
+      }
+      return next
+    })
+    queueBroadcast(changes)
+    persistZIndexBatch(dbUpdates, now)
+  }, [canEdit, getZOrderSet, getMinZIndex, queueBroadcast, persistZIndexBatch])
 
   const bringForward = useCallback((id: string) => {
     if (!canEdit) return
@@ -526,24 +639,42 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     if (!obj) return
     const set = getZOrderSet(id)
     const maxInSet = Math.max(...set.map(o => o.z_index))
-    // Find the next higher object outside this set
     const setIds = new Set(set.map(o => o.id))
     const sorted = Array.from(objects.values())
       .filter(o => !setIds.has(o.id) && o.parent_id === obj.parent_id)
       .sort((a, b) => a.z_index - b.z_index)
     const nextHigher = sorted.find(o => o.z_index > maxInSet)
-    if (nextHigher) {
-      const nextSet = getZOrderSet(nextHigher.id)
-      const maxNext = Math.max(...nextSet.map(o => o.z_index))
-      const delta = maxNext - maxInSet
+    if (!nextHigher) return
+
+    const nextSet = getZOrderSet(nextHigher.id)
+    const maxNext = Math.max(...nextSet.map(o => o.z_index))
+    const fwdDelta = maxNext - maxInSet
+    const bwdDelta = set.length > 1 ? maxInSet - Math.min(...set.map(s => s.z_index)) + 1 : 1
+
+    const now = new Date().toISOString()
+    const changes: BoardChange[] = []
+    const dbUpdates: { id: string; z_index: number }[] = []
+    setObjects(prev => {
+      const next = new Map(prev)
       for (const o of set) {
-        updateObject(o.id, { z_index: o.z_index + delta })
+        const newZ = o.z_index + fwdDelta
+        const existing = next.get(o.id)
+        if (existing) next.set(o.id, { ...existing, z_index: newZ, updated_at: now })
+        changes.push({ action: 'update', object: { id: o.id, z_index: newZ } })
+        dbUpdates.push({ id: o.id, z_index: newZ })
       }
       for (const o of nextSet) {
-        updateObject(o.id, { z_index: o.z_index - (set.length > 1 ? maxInSet - Math.min(...set.map(s => s.z_index)) + 1 : 1) })
+        const newZ = o.z_index - bwdDelta
+        const existing = next.get(o.id)
+        if (existing) next.set(o.id, { ...existing, z_index: newZ, updated_at: now })
+        changes.push({ action: 'update', object: { id: o.id, z_index: newZ } })
+        dbUpdates.push({ id: o.id, z_index: newZ })
       }
-    }
-  }, [objects, canEdit, getZOrderSet, updateObject])
+      return next
+    })
+    queueBroadcast(changes)
+    persistZIndexBatch(dbUpdates, now)
+  }, [objects, canEdit, getZOrderSet, queueBroadcast, persistZIndexBatch])
 
   const sendBackward = useCallback((id: string) => {
     if (!canEdit) return
@@ -551,24 +682,42 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     if (!obj) return
     const set = getZOrderSet(id)
     const minInSet = Math.min(...set.map(o => o.z_index))
-    // Find the next lower object outside this set
     const setIds = new Set(set.map(o => o.id))
     const sorted = Array.from(objects.values())
       .filter(o => !setIds.has(o.id) && o.parent_id === obj.parent_id)
       .sort((a, b) => b.z_index - a.z_index)
     const nextLower = sorted.find(o => o.z_index < minInSet)
-    if (nextLower) {
-      const nextSet = getZOrderSet(nextLower.id)
-      const minNext = Math.min(...nextSet.map(o => o.z_index))
-      const delta = minInSet - minNext
+    if (!nextLower) return
+
+    const nextSet = getZOrderSet(nextLower.id)
+    const minNext = Math.min(...nextSet.map(o => o.z_index))
+    const bwdDelta = minInSet - minNext
+    const fwdDelta = set.length > 1 ? Math.max(...set.map(s => s.z_index)) - minInSet + 1 : 1
+
+    const now = new Date().toISOString()
+    const changes: BoardChange[] = []
+    const dbUpdates: { id: string; z_index: number }[] = []
+    setObjects(prev => {
+      const next = new Map(prev)
       for (const o of set) {
-        updateObject(o.id, { z_index: o.z_index - delta })
+        const newZ = o.z_index - bwdDelta
+        const existing = next.get(o.id)
+        if (existing) next.set(o.id, { ...existing, z_index: newZ, updated_at: now })
+        changes.push({ action: 'update', object: { id: o.id, z_index: newZ } })
+        dbUpdates.push({ id: o.id, z_index: newZ })
       }
       for (const o of nextSet) {
-        updateObject(o.id, { z_index: o.z_index + (set.length > 1 ? Math.max(...set.map(s => s.z_index)) - minInSet + 1 : 1) })
+        const newZ = o.z_index + fwdDelta
+        const existing = next.get(o.id)
+        if (existing) next.set(o.id, { ...existing, z_index: newZ, updated_at: now })
+        changes.push({ action: 'update', object: { id: o.id, z_index: newZ } })
+        dbUpdates.push({ id: o.id, z_index: newZ })
       }
-    }
-  }, [objects, canEdit, getZOrderSet, updateObject])
+      return next
+    })
+    queueBroadcast(changes)
+    persistZIndexBatch(dbUpdates, now)
+  }, [objects, canEdit, getZOrderSet, queueBroadcast, persistZIndexBatch])
 
   // Group selected objects
   const groupSelected = useCallback(async () => {
@@ -612,7 +761,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     })
     setSelectedIds(new Set([groupId]))
 
-    broadcastChanges([
+    queueBroadcast([
       { action: 'create', object: groupObj },
       ...selectedObjs.map(obj => ({
         action: 'update' as const,
@@ -641,7 +790,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     }
 
     return groupObj
-  }, [canEdit, selectedIds, objects, boardId, userId, broadcastChanges])
+  }, [canEdit, selectedIds, objects, boardId, userId, queueBroadcast])
 
   // Ungroup: dissolve a group, freeing its children
   const ungroupSelected = useCallback(() => {
@@ -659,7 +808,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
         next.delete(id)
         return next
       })
-      broadcastChanges([{ action: 'delete', object: { id } as BoardObject }])
+      queueBroadcast([{ action: 'delete', object: { id } as BoardObject }])
       supabase
         .from('board_objects')
         .delete()
@@ -669,10 +818,10 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
         })
     }
     setSelectedIds(new Set())
-  }, [canEdit, selectedIds, objects, getChildren, updateObject, broadcastChanges])
+  }, [canEdit, selectedIds, objects, getChildren, updateObject, queueBroadcast])
 
   // Move group/frame: move all children by delta (batched — single state update + single broadcast)
-  const moveGroupChildren = useCallback((parentId: string, dx: number, dy: number) => {
+  const moveGroupChildren = useCallback((parentId: string, dx: number, dy: number, skipDb = false) => {
     if (!canEdit) return
     const descendants = getDescendants(parentId)
     if (descendants.length === 0) return
@@ -693,19 +842,60 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       return next
     })
 
-    broadcastChanges(changes)
+    queueBroadcast(changes)
 
-    // Persist each update to Supabase
-    for (const d of descendants) {
-      supabase
-        .from('board_objects')
-        .update({ x: d.x + dx, y: d.y + dy, updated_at: now })
-        .eq('id', d.id)
-        .then(({ error }) => {
-          if (error) console.error('Failed to update child position:', error.message)
-        })
+    if (!skipDb) {
+      // Persist each update to Supabase
+      for (const d of descendants) {
+        supabase
+          .from('board_objects')
+          .update({ x: d.x + dx, y: d.y + dy, updated_at: now })
+          .eq('id', d.id)
+          .then(({ error }) => {
+            if (error) console.error('Failed to update child position:', error.message)
+          })
+      }
     }
-  }, [canEdit, getDescendants, broadcastChanges])
+  }, [canEdit, getDescendants, queueBroadcast])
+
+  // Drag-specific updates: local state + broadcast only (no DB write)
+  const updateObjectDrag = useCallback((id: string, updates: Partial<BoardObject>) => {
+    if (!canEdit) return
+
+    setObjects(prev => {
+      const existing = prev.get(id)
+      if (!existing) return prev
+      const next = new Map(prev)
+      next.set(id, { ...existing, ...updates, updated_at: new Date().toISOString() })
+      return next
+    })
+
+    queueBroadcast([{ action: 'update', object: { id, ...updates } }])
+  }, [canEdit, queueBroadcast])
+
+  // Drag end: local state + DB write + broadcast
+  const updateObjectDragEnd = useCallback((id: string, updates: Partial<BoardObject>) => {
+    if (!canEdit) return
+
+    const now = new Date().toISOString()
+    setObjects(prev => {
+      const existing = prev.get(id)
+      if (!existing) return prev
+      const next = new Map(prev)
+      next.set(id, { ...existing, ...updates, updated_at: now })
+      return next
+    })
+
+    queueBroadcast([{ action: 'update', object: { id, ...updates } }])
+
+    supabase
+      .from('board_objects')
+      .update({ ...updates, updated_at: now })
+      .eq('id', id)
+      .then(({ error }) => {
+        if (error) console.error('Failed to update object:', error.message)
+      })
+  }, [canEdit, queueBroadcast])
 
   // Frame containment: check if an object should be inside a frame after drag
   const checkFrameContainment = useCallback((id: string) => {
@@ -824,6 +1014,8 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     groupSelected,
     ungroupSelected,
     moveGroupChildren,
+    updateObjectDrag,
+    updateObjectDragEnd,
     checkFrameContainment,
     getChildren,
     getDescendants,

@@ -10,11 +10,16 @@ export function RectangleShape({
   shapeRef,
   onTransformEnd,
   onContextMenu,
+  onDragMove,
   onDoubleClick,
   editable = true,
 }: ShapeProps) {
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     onDragEnd(object.id, e.target.x(), e.target.y())
+  }
+
+  const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    onDragMove?.(object.id, e.target.x(), e.target.y())
   }
 
   const handleClick = () => {
@@ -37,6 +42,7 @@ export function RectangleShape({
       onClick={handleClick}
       onTap={handleClick}
       onDragEnd={handleDragEnd}
+      onDragMove={handleDragMove}
       onTransformEnd={handleTransformEnd}
       onContextMenu={(e) => {
         e.evt.preventDefault()

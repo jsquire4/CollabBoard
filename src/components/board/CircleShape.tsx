@@ -11,6 +11,7 @@ export function CircleShape({
   shapeRef,
   onTransformEnd,
   onContextMenu,
+  onDragMove,
   onDoubleClick,
   editable = true,
 }: ShapeProps) {
@@ -22,6 +23,10 @@ export function CircleShape({
     const newX = e.target.x() - object.width / 2
     const newY = e.target.y() - object.height / 2
     onDragEnd(object.id, newX, newY)
+  }
+
+  const handleDragMove = (e: KonvaEventObject<DragEvent>) => {
+    onDragMove?.(object.id, e.target.x() - object.width / 2, e.target.y() - object.height / 2)
   }
 
   const handleClick = () => {
@@ -56,6 +61,7 @@ export function CircleShape({
       onClick={handleClick}
       onTap={handleClick}
       onDragEnd={handleDragEnd}
+      onDragMove={handleDragMove}
       onTransformEnd={handleTransformEnd}
       onContextMenu={(e) => {
         e.evt.preventDefault()

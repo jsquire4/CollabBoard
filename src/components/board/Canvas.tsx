@@ -91,6 +91,7 @@ interface CanvasProps {
   onEnterGroup: (groupId: string, selectChildId?: string) => void
   onExitGroup: () => void
   onDragEnd: (id: string, x: number, y: number) => void
+  onDragMove?: (id: string, x: number, y: number) => void
   onUpdateText: (id: string, text: string) => void
   onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
   onDelete: () => void
@@ -106,7 +107,7 @@ interface CanvasProps {
   canUngroup: boolean
   onStrokeChange?: (updates: { stroke_width?: number; stroke_dash?: string }) => void
   onCheckFrameContainment: (id: string) => void
-  onMoveGroupChildren: (parentId: string, dx: number, dy: number) => void
+  onMoveGroupChildren: (parentId: string, dx: number, dy: number, skipDb?: boolean) => void
   getChildren: (parentId: string) => BoardObject[]
   getDescendants: (parentId: string) => BoardObject[]
   colors: string[]
@@ -121,7 +122,7 @@ interface CanvasProps {
 export function Canvas({
   objects, sortedObjects, selectedIds, activeGroupId,
   onSelect, onSelectObjects, onClearSelection, onEnterGroup, onExitGroup,
-  onDragEnd, onUpdateText, onTransformEnd,
+  onDragEnd, onDragMove, onUpdateText, onTransformEnd,
   onDelete, onDuplicate, onColorChange,
   onBringToFront, onBringForward, onSendBackward, onSendToBack,
   onGroup, onUngroup, canGroup, canUngroup,
@@ -405,10 +406,24 @@ export function Canvas({
     }
   }, [objects, onEnterGroup])
 
+  // Handle drag move: update local state + broadcast, no DB write
+  const handleShapeDragMove = useCallback((id: string, x: number, y: number) => {
+    if (!canEdit || !onDragMove) return
+    const obj = objects.get(id)
+    if (!obj) return
+
+    const dx = x - obj.x
+    const dy = y - obj.y
+
+    onDragMove(id, x, y)
+
+    // If this is a frame, move children with skipDb
+    if (obj.type === 'frame') {
+      onMoveGroupChildren(id, dx, dy, true)
+    }
+  }, [canEdit, objects, onDragMove, onMoveGroupChildren])
+
   // Handle drag end with frame containment check and group child movement
-  // NOTE: Group children movement is handled by the Transformer (all children are
-  // attached via effectiveNodeIds). Each child's own onTransformEnd persists its
-  // new position. We do NOT manually move siblings here to avoid doubling.
   const handleShapeDragEnd = useCallback((id: string, x: number, y: number) => {
     if (!canEdit) return
     const obj = objects.get(id)
@@ -419,9 +434,9 @@ export function Canvas({
 
     onDragEnd(id, x, y)
 
-    // If this is a frame, move all children
+    // If this is a frame, move all children (with DB write)
     if (obj.type === 'frame') {
-      onMoveGroupChildren(id, dx, dy)
+      onMoveGroupChildren(id, dx, dy, false)
     }
 
     // Check frame containment for non-frame objects
@@ -604,6 +619,7 @@ export function Canvas({
             key={obj.id}
             object={obj}
             onDragEnd={handleShapeDragEnd}
+            onDragMove={handleShapeDragMove}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             onStartEdit={handleStartEdit}
@@ -620,6 +636,7 @@ export function Canvas({
             key={obj.id}
             object={obj}
             onDragEnd={handleShapeDragEnd}
+            onDragMove={handleShapeDragMove}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             shapeRef={handleShapeRef}
@@ -635,6 +652,7 @@ export function Canvas({
             key={obj.id}
             object={obj}
             onDragEnd={handleShapeDragEnd}
+            onDragMove={handleShapeDragMove}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             shapeRef={handleShapeRef}
@@ -650,6 +668,7 @@ export function Canvas({
             key={obj.id}
             object={obj}
             onDragEnd={handleShapeDragEnd}
+            onDragMove={handleShapeDragMove}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             onStartEdit={handleStartEdit}
@@ -666,6 +685,7 @@ export function Canvas({
             key={obj.id}
             object={obj}
             onDragEnd={handleShapeDragEnd}
+            onDragMove={handleShapeDragMove}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             shapeRef={handleShapeRef}
@@ -680,6 +700,7 @@ export function Canvas({
             key={obj.id}
             object={obj}
             onDragEnd={handleShapeDragEnd}
+            onDragMove={handleShapeDragMove}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             shapeRef={handleShapeRef}
@@ -695,6 +716,7 @@ export function Canvas({
             key={obj.id}
             object={obj}
             onDragEnd={handleShapeDragEnd}
+            onDragMove={handleShapeDragMove}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             shapeRef={handleShapeRef}
@@ -710,6 +732,7 @@ export function Canvas({
             key={obj.id}
             object={obj}
             onDragEnd={handleShapeDragEnd}
+            onDragMove={handleShapeDragMove}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             shapeRef={handleShapeRef}
@@ -725,6 +748,7 @@ export function Canvas({
             key={obj.id}
             object={obj}
             onDragEnd={handleShapeDragEnd}
+            onDragMove={handleShapeDragMove}
             isSelected={isSelected}
             onSelect={handleShapeSelect}
             shapeRef={handleShapeRef}

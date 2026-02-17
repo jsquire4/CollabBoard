@@ -10,6 +10,7 @@ export function LineShape({
   shapeRef,
   onTransformEnd,
   onContextMenu,
+  onDragMove,
   editable = true,
 }: ShapeProps) {
   const strokeWidth = object.stroke_width ?? 2
@@ -27,6 +28,10 @@ export function LineShape({
 
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     onDragEnd(object.id, e.target.x(), e.target.y())
+  }
+
+  const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    onDragMove?.(object.id, e.target.x(), e.target.y())
   }
 
   const handleClick = () => onSelect(object.id)
@@ -54,6 +59,7 @@ export function LineShape({
       onClick={handleClick}
       onTap={handleClick}
       onDragEnd={handleDragEnd}
+      onDragMove={handleDragMove}
       onTransformEnd={handleTransformEnd}
       onContextMenu={(e) => {
         e.evt.preventDefault()

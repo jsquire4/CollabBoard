@@ -10,6 +10,7 @@ export interface ShapeProps {
   shapeRef: (id: string, node: Konva.Node | null) => void
   onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
   onContextMenu: (id: string, clientX: number, clientY: number) => void
+  onDragMove?: (id: string, x: number, y: number) => void
   onDoubleClick?: (id: string) => void
   editable?: boolean
 }

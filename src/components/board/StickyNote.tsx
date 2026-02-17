@@ -16,11 +16,16 @@ export function StickyNote({
   shapeRef,
   onTransformEnd,
   onContextMenu,
+  onDragMove,
   editable = true,
   isEditing = false,
 }: StickyNoteProps) {
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     onDragEnd(object.id, e.target.x(), e.target.y())
+  }
+
+  const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    onDragMove?.(object.id, e.target.x(), e.target.y())
   }
 
   const handleClick = () => {
@@ -53,6 +58,7 @@ export function StickyNote({
       onClick={handleClick}
       onTap={handleClick}
       onDragEnd={handleDragEnd}
+      onDragMove={handleDragMove}
       onDblClick={handleDblClick}
       onDblTap={handleDblClick}
       onTransformEnd={handleTransformEnd}

@@ -16,11 +16,16 @@ export function FrameShape({
   shapeRef,
   onTransformEnd,
   onContextMenu,
+  onDragMove,
   editable = true,
   isEditing = false,
 }: FrameShapeProps) {
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     onDragEnd(object.id, e.target.x(), e.target.y())
+  }
+
+  const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    onDragMove?.(object.id, e.target.x(), e.target.y())
   }
 
   const handleClick = () => {
@@ -52,6 +57,7 @@ export function FrameShape({
       onClick={handleClick}
       onTap={handleClick}
       onDragEnd={handleDragEnd}
+      onDragMove={handleDragMove}
       onDblClick={handleDblClick}
       onDblTap={handleDblClick}
       onTransformEnd={handleTransformEnd}

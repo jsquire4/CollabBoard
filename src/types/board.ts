@@ -26,6 +26,8 @@ export interface BoardObject {
   type: BoardObjectType
   x: number
   y: number
+  x2?: number | null
+  y2?: number | null
   width: number
   height: number
   rotation: number

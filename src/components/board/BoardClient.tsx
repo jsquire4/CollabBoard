@@ -58,7 +58,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
   const { getViewportCenter } = useCanvas()
   const [shareOpen, setShareOpen] = useState(false)
   const undoStack = useUndoStack()
-  const preDragRef = useRef<Map<string, { x: number; y: number; parent_id: string | null }>>(new Map())
+  const preDragRef = useRef<Map<string, { x: number; y: number; x2?: number | null; y2?: number | null; parent_id: string | null }>>(new Map())
 
   // Subscribe LAST — after all hooks have registered their .on() listeners.
   // React runs useEffect hooks in definition order, so this must come after
@@ -133,13 +133,16 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
         return { type: 'update', patches: inversePatches }
       }
       case 'move': {
-        // Undo move = restore pre-drag positions + parent_ids
-        const inversePatches: { id: string; before: { x: number; y: number; parent_id: string | null } }[] = []
+        // Undo move = restore pre-drag positions + parent_ids + endpoints
+        const inversePatches: { id: string; before: { x: number; y: number; x2?: number | null; y2?: number | null; parent_id: string | null } }[] = []
         for (const patch of entry.patches) {
           const current = objects.get(patch.id)
           if (!current) continue
-          inversePatches.push({ id: patch.id, before: { x: current.x, y: current.y, parent_id: current.parent_id } })
-          updateObject(patch.id, { x: patch.before.x, y: patch.before.y, parent_id: patch.before.parent_id })
+          inversePatches.push({ id: patch.id, before: { x: current.x, y: current.y, x2: current.x2, y2: current.y2, parent_id: current.parent_id } })
+          const updates: Partial<BoardObject> = { x: patch.before.x, y: patch.before.y, parent_id: patch.before.parent_id }
+          if (patch.before.x2 !== undefined) updates.x2 = patch.before.x2
+          if (patch.before.y2 !== undefined) updates.y2 = patch.before.y2
+          updateObject(patch.id, updates)
         }
         return { type: 'move', patches: inversePatches }
       }
@@ -216,12 +219,12 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     if (!canEdit) return
     const obj = objects.get(id)
     if (!obj) return
-    const map = new Map<string, { x: number; y: number; parent_id: string | null }>()
-    map.set(id, { x: obj.x, y: obj.y, parent_id: obj.parent_id })
+    const map = new Map<string, { x: number; y: number; x2?: number | null; y2?: number | null; parent_id: string | null }>()
+    map.set(id, { x: obj.x, y: obj.y, x2: obj.x2, y2: obj.y2, parent_id: obj.parent_id })
     // For frames, also capture all descendants
     if (obj.type === 'frame') {
       for (const d of getDescendants(id)) {
-        map.set(d.id, { x: d.x, y: d.y, parent_id: d.parent_id })
+        map.set(d.id, { x: d.x, y: d.y, x2: d.x2, y2: d.y2, parent_id: d.parent_id })
       }
     }
     preDragRef.current = map
@@ -244,10 +247,34 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     }
   }, [canEdit, updateObjectDragEnd, undoStack])
 
+  // Endpoint drag for vector types (line/arrow)
+  const handleEndpointDragMove = useCallback((id: string, updates: Partial<BoardObject>) => {
+    if (!canEdit) return
+    updateObjectDrag(id, updates)
+  }, [canEdit, updateObjectDrag])
+
+  const handleEndpointDragEnd = useCallback((id: string, updates: Partial<BoardObject>) => {
+    if (!canEdit) return
+    updateObjectDragEnd(id, updates)
+
+    // Push undo entry from pre-drag snapshot
+    if (preDragRef.current.size > 0) {
+      const patches = Array.from(preDragRef.current.entries()).map(([pid, before]) => ({ id: pid, before }))
+      undoStack.push({ type: 'move' as const, patches })
+      preDragRef.current = new Map()
+    }
+  }, [canEdit, updateObjectDragEnd, undoStack])
+
   const handleUpdateText = (id: string, text: string) => {
     if (!canEdit) return
     updateObject(id, { text })
   }
+
+  // Broadcast intermediate transform state (no DB write) — rotation/resize visible to remotes in real-time
+  const handleTransformMove = useCallback((id: string, updates: Partial<BoardObject>) => {
+    if (!canEdit) return
+    updateObjectDrag(id, updates)
+  }, [canEdit, updateObjectDrag])
 
   const handleTransformEnd = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
@@ -510,6 +537,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
               onDragMove={handleDragMove}
               onUpdateText={handleUpdateText}
               onTransformEnd={handleTransformEnd}
+              onTransformMove={handleTransformMove}
               onDelete={handleDelete}
               onDuplicate={handleDuplicate}
               onColorChange={handleColorChange}
@@ -522,6 +550,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
               canGroup={canGroup}
               canUngroup={canUngroup}
               onStrokeChange={handleStrokeChange}
+              onEndpointDragMove={handleEndpointDragMove}
+              onEndpointDragEnd={handleEndpointDragEnd}
               onUndo={performUndo}
               onRedo={performRedo}
               onCheckFrameContainment={checkFrameContainment}

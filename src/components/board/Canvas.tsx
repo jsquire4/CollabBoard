@@ -16,10 +16,38 @@ import { TriangleShape } from './TriangleShape'
 import { HexagonShape } from './HexagonShape'
 import { ArrowShape } from './ArrowShape'
 import { ParallelogramShape } from './ParallelogramShape'
+import { isVectorType } from './shapeUtils'
 import { ContextMenu } from './ContextMenu'
 import { ZoomControls } from './ZoomControls'
 import { RemoteCursorData } from '@/hooks/useCursors'
 import { OnlineUser, getColorForUser } from '@/hooks/usePresence'
+
+// Compute the axis-aligned bounding box of a rect after rotation around its top-left corner.
+// Returns { minX, minY } of the rotated AABB — used to position the name label at the visual top.
+function getRotatedAABB(
+  ox: number, oy: number, w: number, h: number, rotDeg: number
+): { minX: number; minY: number; maxX: number; maxY: number } {
+  const rad = (rotDeg * Math.PI) / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+  // Four corners of the highlight rect relative to the rotation origin (ox, oy)
+  const corners = [
+    { x: -4, y: -4 },
+    { x: w + 4, y: -4 },
+    { x: -4, y: h + 4 },
+    { x: w + 4, y: h + 4 },
+  ]
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const c of corners) {
+    const rx = ox + c.x * cos - c.y * sin
+    const ry = oy + c.x * sin + c.y * cos
+    if (rx < minX) minX = rx
+    if (ry < minY) minY = ry
+    if (rx > maxX) maxX = rx
+    if (ry > maxY) maxY = ry
+  }
+  return { minX, minY, maxX, maxY }
+}
 
 // Memoized remote selection highlights — only re-renders when selections/objects change,
 // not when the parent Canvas re-renders from drags, transforms, etc.
@@ -27,10 +55,12 @@ const RemoteSelectionHighlights = memo(function RemoteSelectionHighlights({
   remoteSelections,
   onlineUsers,
   objects,
+  getDescendants,
 }: {
   remoteSelections: Map<string, Set<string>>
   onlineUsers?: OnlineUser[]
   objects: Map<string, BoardObject>
+  getDescendants: (parentId: string) => BoardObject[]
 }) {
   return (
     <>
@@ -40,37 +70,124 @@ const RemoteSelectionHighlights = memo(function RemoteSelectionHighlights({
         const name = user?.display_name ?? 'User'
         return Array.from(objIds).map(objId => {
           const obj = objects.get(objId)
-          if (!obj || obj.type === 'group') return null
+          if (!obj) return null
+
+          // For groups, compute bounding box from descendants
+          if (obj.type === 'group') {
+            const children = getDescendants(objId).filter(c => c.type !== 'group')
+            if (children.length === 0) return null
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+            for (const c of children) {
+              if (isVectorType(c.type)) {
+                const cx2 = c.x2 ?? c.x + c.width
+                const cy2 = c.y2 ?? c.y + c.height
+                minX = Math.min(minX, c.x, cx2)
+                minY = Math.min(minY, c.y, cy2)
+                maxX = Math.max(maxX, c.x, cx2)
+                maxY = Math.max(maxY, c.y, cy2)
+              } else {
+                minX = Math.min(minX, c.x)
+                minY = Math.min(minY, c.y)
+                maxX = Math.max(maxX, c.x + c.width)
+                maxY = Math.max(maxY, c.y + c.height)
+              }
+            }
+            const gx = minX - 8
+            const gy = minY - 8
+            const gw = maxX - minX + 16
+            const gh = maxY - minY + 16
+            const labelWidth = Math.min(name.length * 7 + 12, 120)
+            return (
+              <KonvaGroup key={`remote-sel-${uid}-${objId}`} listening={false}>
+                <KonvaRect
+                  x={gx} y={gy} width={gw} height={gh}
+                  fill="transparent" stroke={color} strokeWidth={2}
+                  cornerRadius={6} dash={[8, 4]}
+                  shadowColor={`${color}4D`} shadowBlur={12}
+                />
+                <KonvaRect
+                  x={gx} y={gy - 20}
+                  width={labelWidth} height={16}
+                  fill={color} cornerRadius={3}
+                />
+                <KonvaText
+                  x={gx + 6} y={gy - 20 + 2}
+                  text={name} fontSize={10} fill="white"
+                  width={labelWidth - 12} ellipsis={true} wrap="none"
+                />
+              </KonvaGroup>
+            )
+          }
+
+          const labelWidth = Math.min(name.length * 7 + 12, 120)
+
+          // For vector types, use AABB from endpoints (no rotation)
+          if (isVectorType(obj.type)) {
+            const ex2 = obj.x2 ?? obj.x + obj.width
+            const ey2 = obj.y2 ?? obj.y + obj.height
+            const bx = Math.min(obj.x, ex2)
+            const by = Math.min(obj.y, ey2)
+            const bw = Math.abs(ex2 - obj.x)
+            const bh = Math.abs(ey2 - obj.y)
+            return (
+              <KonvaGroup key={`remote-sel-${uid}-${objId}`} listening={false}>
+                <KonvaRect
+                  x={bx - 4} y={by - 4}
+                  width={bw + 8} height={bh + 8}
+                  fill="transparent" stroke={color} strokeWidth={2}
+                  cornerRadius={4} dash={[6, 3]}
+                />
+                <KonvaRect
+                  x={bx - 4} y={by - 20}
+                  width={labelWidth} height={16}
+                  fill={color} cornerRadius={3}
+                />
+                <KonvaText
+                  x={bx - 4 + 6} y={by - 20 + 2}
+                  text={name} fontSize={10} fill="white"
+                  width={labelWidth - 12} ellipsis={true} wrap="none"
+                />
+              </KonvaGroup>
+            )
+          }
+
+          // For non-vector shapes: rotate the highlight with the shape
+          const rotation = (obj.type === 'circle') ? 0 : (obj.rotation || 0)
+          const bw = obj.width
+          const bh = obj.height
+
+          // Compute where the visual top of the rotated box is for the name label
+          let labelX: number, labelY: number
+          if (rotation !== 0) {
+            const aabb = getRotatedAABB(obj.x, obj.y, bw, bh, rotation)
+            labelX = aabb.minX
+            labelY = aabb.minY - 16
+          } else {
+            labelX = obj.x - 4
+            labelY = obj.y - 20
+          }
+
           return (
             <KonvaGroup key={`remote-sel-${uid}-${objId}`} listening={false}>
+              {/* Dashed highlight rect — rotated with the shape */}
+              <KonvaGroup x={obj.x} y={obj.y} rotation={rotation}>
+                <KonvaRect
+                  x={-4} y={-4}
+                  width={bw + 8} height={bh + 8}
+                  fill="transparent" stroke={color} strokeWidth={2}
+                  cornerRadius={4} dash={[6, 3]}
+                />
+              </KonvaGroup>
+              {/* Name label — always horizontal, at visual top */}
               <KonvaRect
-                x={obj.x - 4}
-                y={obj.y - 4}
-                width={obj.width + 8}
-                height={obj.height + 8}
-                fill="transparent"
-                stroke={color}
-                strokeWidth={2}
-                cornerRadius={4}
-                dash={[6, 3]}
-              />
-              <KonvaRect
-                x={obj.x - 4}
-                y={obj.y - 20}
-                width={Math.min(name.length * 7 + 12, 120)}
-                height={16}
-                fill={color}
-                cornerRadius={3}
+                x={labelX} y={labelY}
+                width={labelWidth} height={16}
+                fill={color} cornerRadius={3}
               />
               <KonvaText
-                x={obj.x - 4 + 6}
-                y={obj.y - 20 + 2}
-                text={name}
-                fontSize={10}
-                fill="white"
-                width={Math.min(name.length * 7 + 12, 120) - 12}
-                ellipsis={true}
-                wrap="none"
+                x={labelX + 6} y={labelY + 2}
+                text={name} fontSize={10} fill="white"
+                width={labelWidth - 12} ellipsis={true} wrap="none"
               />
             </KonvaGroup>
           )
@@ -94,6 +211,7 @@ interface CanvasProps {
   onDragMove?: (id: string, x: number, y: number) => void
   onUpdateText: (id: string, text: string) => void
   onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
+  onTransformMove?: (id: string, updates: Partial<BoardObject>) => void
   onDelete: () => void
   onDuplicate: () => void
   onColorChange: (color: string) => void
@@ -117,6 +235,8 @@ interface CanvasProps {
   selectedColor?: string
   userRole: BoardRole
   onlineUsers?: OnlineUser[]
+  onEndpointDragMove?: (id: string, updates: Partial<BoardObject>) => void
+  onEndpointDragEnd?: (id: string, updates: Partial<BoardObject>) => void
   onCursorMove?: (x: number, y: number) => void
   onCursorUpdate?: (fn: (cursors: Map<string, RemoteCursorData>) => void) => void
   remoteSelections?: Map<string, Set<string>>
@@ -125,7 +245,7 @@ interface CanvasProps {
 export function Canvas({
   objects, sortedObjects, selectedIds, activeGroupId,
   onSelect, onSelectObjects, onClearSelection, onEnterGroup, onExitGroup,
-  onDragEnd, onDragMove, onUpdateText, onTransformEnd,
+  onDragEnd, onDragMove, onUpdateText, onTransformEnd, onTransformMove,
   onDelete, onDuplicate, onColorChange,
   onBringToFront, onBringForward, onSendBackward, onSendToBack,
   onGroup, onUngroup, canGroup, canUngroup,
@@ -135,6 +255,7 @@ export function Canvas({
   onCheckFrameContainment, onMoveGroupChildren,
   getChildren, getDescendants,
   colors, selectedColor, userRole,
+  onEndpointDragMove, onEndpointDragEnd,
   onlineUsers, onCursorMove, onCursorUpdate, remoteSelections,
 }: CanvasProps) {
   const canEdit = userRole !== 'viewer'
@@ -213,17 +334,17 @@ export function Canvas({
     })
   }, [onCursorUpdate])
 
-  // Expand group IDs in selectedIds to their visible children (for Transformer attachment)
+  // Expand group IDs in selectedIds to their visible children (for Transformer attachment).
+  // Vector types (line/arrow) are excluded — they use endpoint anchors instead.
   const effectiveNodeIds = useMemo(() => {
     const ids = new Set<string>()
     for (const id of selectedIds) {
       const obj = objects.get(id)
       if (obj?.type === 'group') {
-        // Expand group to all descendant non-group shapes
         for (const d of getDescendants(id)) {
-          if (d.type !== 'group') ids.add(d.id)
+          if (d.type !== 'group' && !isVectorType(d.type)) ids.add(d.id)
         }
-      } else {
+      } else if (obj && !isVectorType(obj.type)) {
         ids.add(id)
       }
     }
@@ -561,15 +682,28 @@ export function Canvas({
         if (obj.type === 'group') continue
         if (activeGroupId && obj.parent_id !== activeGroupId) continue
 
-        const objRight = obj.x + obj.width
-        const objBottom = obj.y + obj.height
+        // For vector types, compute AABB from endpoints
+        let objLeft: number, objTop: number, objRight: number, objBottom: number
+        if (isVectorType(obj.type)) {
+          const ex2 = obj.x2 ?? obj.x + obj.width
+          const ey2 = obj.y2 ?? obj.y + obj.height
+          objLeft = Math.min(obj.x, ex2)
+          objTop = Math.min(obj.y, ey2)
+          objRight = Math.max(obj.x, ex2)
+          objBottom = Math.max(obj.y, ey2)
+        } else {
+          objLeft = obj.x
+          objTop = obj.y
+          objRight = obj.x + obj.width
+          objBottom = obj.y + obj.height
+        }
         const marqRight = m.x + m.width
         const marqBottom = m.y + m.height
 
         const intersects =
-          obj.x < marqRight &&
+          objLeft < marqRight &&
           objRight > m.x &&
-          obj.y < marqBottom &&
+          objTop < marqBottom &&
           objBottom > m.y
 
         if (intersects) {
@@ -661,10 +795,19 @@ export function Canvas({
     if (children.length === 0) return null
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
     for (const c of children) {
-      minX = Math.min(minX, c.x)
-      minY = Math.min(minY, c.y)
-      maxX = Math.max(maxX, c.x + c.width)
-      maxY = Math.max(maxY, c.y + c.height)
+      if (isVectorType(c.type)) {
+        const cx2 = c.x2 ?? c.x + c.width
+        const cy2 = c.y2 ?? c.y + c.height
+        minX = Math.min(minX, c.x, cx2)
+        minY = Math.min(minY, c.y, cy2)
+        maxX = Math.max(maxX, c.x, cx2)
+        maxY = Math.max(maxY, c.y, cy2)
+      } else {
+        minX = Math.min(minX, c.x)
+        minY = Math.min(minY, c.y)
+        maxX = Math.max(maxX, c.x + c.width)
+        maxY = Math.max(maxY, c.y + c.height)
+      }
     }
     return { x: minX - 8, y: minY - 8, width: maxX - minX + 16, height: maxY - minY + 16 }
   }, [getDescendants])
@@ -796,6 +939,8 @@ export function Canvas({
             onTransformEnd={onTransformEnd}
             onContextMenu={handleContextMenu}
             editable={canEdit}
+            onEndpointDragMove={onEndpointDragMove}
+            onEndpointDragEnd={onEndpointDragEnd}
           />
         )
       case 'triangle':
@@ -845,8 +990,9 @@ export function Canvas({
             shapeRef={handleShapeRef}
             onTransformEnd={onTransformEnd}
             onContextMenu={handleContextMenu}
-            onDoubleClick={handleShapeDoubleClick}
             editable={canEdit}
+            onEndpointDragMove={onEndpointDragMove}
+            onEndpointDragEnd={onEndpointDragEnd}
           />
         )
       case 'parallelogram':
@@ -955,6 +1101,7 @@ export function Canvas({
               remoteSelections={remoteSelections}
               onlineUsers={onlineUsers}
               objects={objects}
+              getDescendants={getDescendants}
             />
           )}
 
@@ -985,6 +1132,26 @@ export function Canvas({
                   return _oldBox
                 }
                 return newBox
+              }}
+              onTransform={() => {
+                if (!onTransformMove) return
+                const tr = trRef.current
+                if (!tr) return
+                for (const node of tr.nodes()) {
+                  const id = Array.from(shapeRefs.current.entries()).find(([, n]) => n === node)?.[0]
+                  if (!id) continue
+                  const obj = objects.get(id)
+                  if (!obj) continue
+                  const scaleX = node.scaleX()
+                  const scaleY = node.scaleY()
+                  onTransformMove(id, {
+                    x: node.x(),
+                    y: node.y(),
+                    width: Math.max(5, obj.width * scaleX),
+                    height: Math.max(5, obj.height * scaleY),
+                    rotation: node.rotation(),
+                  })
+                }
               }}
             />
           )}

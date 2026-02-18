@@ -1,6 +1,6 @@
-import { Arrow } from 'react-konva'
+import { Group, Arrow, Circle } from 'react-konva'
 import Konva from 'konva'
-import { ShapeProps, handleShapeTransformEnd } from './shapeUtils'
+import { ShapeProps } from './shapeUtils'
 
 export function ArrowShape({
   object,
@@ -8,64 +8,151 @@ export function ArrowShape({
   isSelected,
   onSelect,
   shapeRef,
-  onTransformEnd,
   onContextMenu,
   onDragMove,
   onDragStart,
-  onDoubleClick,
   editable = true,
+  onEndpointDragMove,
+  onEndpointDragEnd,
 }: ShapeProps) {
-  const handleDragStart = () => onDragStart?.(object.id)
-
   const strokeWidth = object.stroke_width ?? 2
 
-  const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
-    onDragEnd(object.id, e.target.x(), e.target.y())
-  }
-
-  const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
-    onDragMove?.(object.id, e.target.x(), e.target.y())
-  }
+  // Compute endpoint: use x2/y2 if available, fallback to x+width/y+height
+  const x2 = object.x2 ?? object.x + object.width
+  const y2 = object.y2 ?? object.y + object.height
+  const dx = x2 - object.x
+  const dy = y2 - object.y
 
   const handleClick = () => onSelect(object.id)
 
-  const handleTransformEnd = (e: Konva.KonvaEventObject<Event>) => {
-    handleShapeTransformEnd(e, object, onTransformEnd)
+  // Whole-arrow drag: compute delta and shift both endpoints
+  const handleLineDragStart = () => onDragStart?.(object.id)
+
+  const handleLineDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (!onEndpointDragMove) return
+    const node = e.target
+    const offsetX = node.x()
+    const offsetY = node.y()
+    node.x(0)
+    node.y(0)
+    onEndpointDragMove(object.id, {
+      x: object.x + offsetX,
+      y: object.y + offsetY,
+      x2: x2 + offsetX,
+      y2: y2 + offsetY,
+    })
   }
 
-  const w = Math.max(object.width, 40)
-  const h = object.height ?? 0
+  const handleLineDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (!onEndpointDragEnd) return
+    const node = e.target
+    const offsetX = node.x()
+    const offsetY = node.y()
+    node.x(0)
+    node.y(0)
+    onEndpointDragEnd(object.id, {
+      x: object.x + offsetX,
+      y: object.y + offsetY,
+      x2: x2 + offsetX,
+      y2: y2 + offsetY,
+    })
+  }
+
+  // Start anchor drag
+  const handleStartAnchorDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (!onEndpointDragMove) return
+    const node = e.target
+    const newX = object.x + node.x()
+    const newY = object.y + node.y()
+    onEndpointDragMove(object.id, { x: newX, y: newY })
+  }
+
+  const handleStartAnchorDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (!onEndpointDragEnd) return
+    const node = e.target
+    const newX = object.x + node.x()
+    const newY = object.y + node.y()
+    node.x(0)
+    node.y(0)
+    onEndpointDragEnd(object.id, { x: newX, y: newY })
+  }
+
+  // End anchor drag
+  const handleEndAnchorDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (!onEndpointDragMove) return
+    const node = e.target
+    const newX2 = object.x + node.x()
+    const newY2 = object.y + node.y()
+    onEndpointDragMove(object.id, { x2: newX2, y2: newY2 })
+  }
+
+  const handleEndAnchorDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (!onEndpointDragEnd) return
+    const node = e.target
+    const newX2 = object.x + node.x()
+    const newY2 = object.y + node.y()
+    node.x(dx)
+    node.y(dy)
+    onEndpointDragEnd(object.id, { x2: newX2, y2: newY2 })
+  }
 
   return (
-    <Arrow
+    <Group
       ref={(node) => shapeRef(object.id, node)}
       x={object.x}
       y={object.y}
-      points={[0, 0, w, h]}
-      stroke={object.color}
-      strokeWidth={strokeWidth}
-      fill={object.color}
-      pointerLength={12}
-      pointerWidth={12}
-      lineCap="round"
-      lineJoin="round"
-      draggable={editable}
       onClick={handleClick}
       onTap={handleClick}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      onDragMove={handleDragMove}
-      onTransformEnd={handleTransformEnd}
       onContextMenu={(e) => {
         e.evt.preventDefault()
         onContextMenu(object.id, e.evt.clientX, e.evt.clientY)
       }}
-      onDblClick={() => onDoubleClick?.(object.id)}
-      onDblTap={() => onDoubleClick?.(object.id)}
-      shadowColor="rgba(0,0,0,0.12)"
-      shadowBlur={6}
-      shadowOffsetY={2}
-      hitStrokeWidth={40}
-    />
+    >
+      <Arrow
+        points={[0, 0, dx, dy]}
+        stroke={object.color}
+        strokeWidth={strokeWidth}
+        fill={object.color}
+        pointerLength={12}
+        pointerWidth={12}
+        lineCap="round"
+        lineJoin="round"
+        draggable={editable}
+        onDragStart={handleLineDragStart}
+        onDragMove={handleLineDragMove}
+        onDragEnd={handleLineDragEnd}
+        shadowColor="rgba(0,0,0,0.12)"
+        shadowBlur={6}
+        shadowOffsetY={2}
+        hitStrokeWidth={40}
+      />
+      {/* Endpoint anchors — only visible when selected and editable */}
+      {isSelected && editable && (
+        <>
+          <Circle
+            x={0}
+            y={0}
+            radius={6}
+            fill="white"
+            stroke="#0EA5E9"
+            strokeWidth={2}
+            draggable
+            onDragMove={handleStartAnchorDragMove}
+            onDragEnd={handleStartAnchorDragEnd}
+          />
+          <Circle
+            x={dx}
+            y={dy}
+            radius={6}
+            fill="white"
+            stroke="#0EA5E9"
+            strokeWidth={2}
+            draggable
+            onDragMove={handleEndAnchorDragMove}
+            onDragEnd={handleEndAnchorDragEnd}
+          />
+        </>
+      )}
+    </Group>
   )
 }

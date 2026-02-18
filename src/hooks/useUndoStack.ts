@@ -5,7 +5,7 @@ export type UndoEntry =
   | { type: 'add'; ids: string[] }
   | { type: 'delete'; objects: BoardObject[] }
   | { type: 'update'; patches: { id: string; before: Partial<BoardObject> }[] }
-  | { type: 'move'; patches: { id: string; before: { x: number; y: number; parent_id: string | null } }[] }
+  | { type: 'move'; patches: { id: string; before: { x: number; y: number; x2?: number | null; y2?: number | null; parent_id: string | null } }[] }
   | { type: 'group'; groupId: string; childIds: string[]; previousParentIds: Map<string, string | null> }
   | { type: 'ungroup'; groupSnapshot: BoardObject; childIds: string[] }
   | { type: 'duplicate'; ids: string[] }

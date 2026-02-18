@@ -1,5 +1,10 @@
 import Konva from 'konva'
-import { BoardObject } from '@/types/board'
+import { BoardObject, BoardObjectType } from '@/types/board'
+
+/** Returns true for shape types that use endpoint-based (vector) rendering instead of width/height. */
+export function isVectorType(type: BoardObjectType | string): boolean {
+  return type === 'line' || type === 'arrow'
+}
 
 /** Common props shared by all shape components. */
 export interface ShapeProps {
@@ -14,6 +19,8 @@ export interface ShapeProps {
   onDragStart?: (id: string) => void
   onDoubleClick?: (id: string) => void
   editable?: boolean
+  onEndpointDragMove?: (id: string, updates: Partial<BoardObject>) => void
+  onEndpointDragEnd?: (id: string, updates: Partial<BoardObject>) => void
 }
 
 /**

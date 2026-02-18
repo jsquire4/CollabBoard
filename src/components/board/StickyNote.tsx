@@ -57,6 +57,7 @@ export function StickyNote({
       ref={(node) => shapeRef(object.id, node)}
       x={object.x}
       y={object.y}
+      rotation={object.rotation}
       draggable={editable}
       onClick={handleClick}
       onTap={handleClick}

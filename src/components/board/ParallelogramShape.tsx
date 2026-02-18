@@ -42,6 +42,7 @@ export function ParallelogramShape({
       ref={(node) => shapeRef(object.id, node)}
       x={object.x}
       y={object.y}
+      rotation={object.rotation}
       points={points}
       fill={object.color}
       closed={true}

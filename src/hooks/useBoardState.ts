@@ -460,6 +460,13 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       parallelogram: { width: 140, height: 80, color: '#EC4899', text: '' },
     }
 
+    // For vector types, compute x2/y2 from x + default width/height
+    if (type === 'line' || type === 'arrow') {
+      const dw = defaults[type]?.width ?? 120
+      const dh = defaults[type]?.height ?? 0
+      defaults[type] = { ...defaults[type], x2: x + dw, y2: y + dh }
+    }
+
     const obj: BoardObject = {
       id,
       board_id: boardId,
@@ -694,7 +701,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
 
       // Clone descendants
       for (const d of descendants) {
-        newObjects.push({
+        const cloned: BoardObject = {
           ...d,
           id: idMap.get(d.id)!,
           x: d.x + 20,
@@ -704,7 +711,10 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
           created_by: userId,
           created_at: now,
           updated_at: now,
-        })
+        }
+        if (d.x2 != null) cloned.x2 = d.x2 + 20
+        if (d.y2 != null) cloned.y2 = d.y2 + 20
+        newObjects.push(cloned)
       }
 
       setObjects(prev => {
@@ -756,7 +766,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     }
 
     // Simple object duplication
-    const newObj = addObject(original.type, original.x + 20, original.y + 20, {
+    const dupOverrides: Partial<BoardObject> = {
       color: original.color,
       width: original.width,
       height: original.height,
@@ -764,7 +774,11 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       text: original.text,
       font_size: original.font_size,
       parent_id: original.parent_id,
-    })
+    }
+    // Copy endpoints for vector types with +20 offset
+    if (original.x2 != null) dupOverrides.x2 = original.x2 + 20
+    if (original.y2 != null) dupOverrides.y2 = original.y2 + 20
+    const newObj = addObject(original.type, original.x + 20, original.y + 20, dupOverrides)
     if (newObj) setSelectedIds(new Set([newObj.id]))
     return newObj
   }, [objects, addObject, canEdit, getDescendants, getMaxZIndex, userId, queueBroadcast, stampCreate])
@@ -1189,8 +1203,12 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     const now = new Date().toISOString()
     const changes: BoardChange[] = []
     for (const d of descendants) {
-      const clocks = stampChange(d.id, ['x', 'y'])
-      changes.push({ action: 'update', object: { id: d.id, x: d.x + dx, y: d.y + dy }, clocks })
+      const hasEndpoints = d.x2 != null && d.y2 != null
+      const fields = hasEndpoints ? ['x', 'y', 'x2', 'y2'] : ['x', 'y']
+      const clocks = stampChange(d.id, fields)
+      const update: Partial<BoardObject> & { id: string } = { id: d.id, x: d.x + dx, y: d.y + dy }
+      if (hasEndpoints) { update.x2 = d.x2! + dx; update.y2 = d.y2! + dy }
+      changes.push({ action: 'update', object: update, clocks })
     }
 
     setObjects(prev => {
@@ -1198,7 +1216,10 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       for (const d of descendants) {
         const existing = next.get(d.id)
         if (existing) {
-          next.set(d.id, { ...existing, x: existing.x + dx, y: existing.y + dy, updated_at: now })
+          const updated = { ...existing, x: existing.x + dx, y: existing.y + dy, updated_at: now }
+          if (existing.x2 != null) updated.x2 = existing.x2 + dx
+          if (existing.y2 != null) updated.y2 = existing.y2 + dy
+          next.set(d.id, updated)
         }
       }
       return next
@@ -1207,11 +1228,10 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     queueBroadcast(changes)
 
     if (!skipDb) {
-      // Persist all descendant position updates with parallel individual updates.
-      // Uses .update() instead of .upsert() — the INSERT RLS policy requires
-      // board_id/created_by which aren't in position-only patches.
       Promise.all(descendants.map(d => {
         const patch: Record<string, unknown> = { x: d.x + dx, y: d.y + dy, updated_at: now }
+        if (d.x2 != null) patch.x2 = d.x2 + dx
+        if (d.y2 != null) patch.y2 = d.y2 + dy
         if (CRDT_ENABLED) {
           patch.field_clocks = fieldClocksRef.current.get(d.id) ?? {}
           patch.deleted_at = null
@@ -1278,8 +1298,15 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     const obj = objects.get(id)
     if (!obj || obj.type === 'frame') return
 
-    const centerX = obj.x + obj.width / 2
-    const centerY = obj.y + obj.height / 2
+    // For vector types, use midpoint of endpoints
+    let centerX: number, centerY: number
+    if (obj.x2 != null && obj.y2 != null) {
+      centerX = (obj.x + obj.x2) / 2
+      centerY = (obj.y + obj.y2) / 2
+    } else {
+      centerX = obj.x + obj.width / 2
+      centerY = obj.y + obj.height / 2
+    }
 
     // Find frames that contain this object's center
     let bestFrame: BoardObject | null = null

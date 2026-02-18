@@ -38,6 +38,7 @@ export function RectangleShape({
       ref={(node) => shapeRef(object.id, node)}
       x={object.x}
       y={object.y}
+      rotation={object.rotation}
       width={object.width}
       height={object.height}
       fill={object.color}

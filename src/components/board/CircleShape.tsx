@@ -58,6 +58,7 @@ export function CircleShape({
       ref={(node) => shapeRef(object.id, node)}
       x={centerX}
       y={centerY}
+      rotation={object.rotation}
       radius={radius}
       fill={object.color}
       draggable={editable}

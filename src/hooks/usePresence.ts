@@ -5,10 +5,10 @@ import { RealtimeChannel } from '@supabase/supabase-js'
 import { BoardRole } from '@/types/sharing'
 
 const CURSOR_COLORS = [
-  '#E91E63', '#9C27B0', '#673AB7', '#3F51B5',
-  '#2196F3', '#00BCD4', '#009688', '#4CAF50',
-  '#8BC34A', '#FF9800', '#FF5722', '#795548',
-  '#F44336', '#607D8B', '#3949AB', '#00897B',
+  '#C2185B', '#7B1FA2', '#4527A0', '#283593',
+  '#1565C0', '#00838F', '#00695C', '#2E7D32',
+  '#558B2F', '#E65100', '#BF360C', '#4E342E',
+  '#B71C1C', '#37474F', '#1A237E', '#004D40',
 ]
 
 export interface OnlineUser {

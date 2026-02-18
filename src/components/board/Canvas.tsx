@@ -22,6 +22,20 @@ import { ZoomControls } from './ZoomControls'
 import { RemoteCursorData } from '@/hooks/useCursors'
 import { OnlineUser, getColorForUser } from '@/hooks/usePresence'
 
+// Shape types that support triple-click text editing
+const TRIPLE_CLICK_TEXT_TYPES = new Set(['rectangle', 'circle', 'triangle', 'chevron', 'parallelogram'])
+// Character limits by shape type (sticky notes are unlimited)
+const SHAPE_TEXT_CHAR_LIMIT = 1024
+const FRAME_TITLE_CHAR_LIMIT = 256
+const STICKY_TITLE_CHAR_LIMIT = 256
+const UNLIMITED_TEXT_TYPES = new Set(['sticky_note'])
+
+function getTextCharLimit(type: string): number | undefined {
+  if (UNLIMITED_TEXT_TYPES.has(type)) return undefined
+  if (type === 'frame') return FRAME_TITLE_CHAR_LIMIT
+  return SHAPE_TEXT_CHAR_LIMIT
+}
+
 // Compute the axis-aligned bounding box of a rect after rotation around its top-left corner.
 // Returns { minX, minY } of the rotated AABB — used to position the name label at the visual top.
 function getRotatedAABB(
@@ -210,6 +224,7 @@ interface CanvasProps {
   onDragEnd: (id: string, x: number, y: number) => void
   onDragMove?: (id: string, x: number, y: number) => void
   onUpdateText: (id: string, text: string) => void
+  onUpdateTitle: (id: string, title: string) => void
   onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
   onTransformMove?: (id: string, updates: Partial<BoardObject>) => void
   onDelete: () => void
@@ -223,7 +238,8 @@ interface CanvasProps {
   onUngroup: () => void
   canGroup: boolean
   canUngroup: boolean
-  onStrokeChange?: (updates: { stroke_width?: number; stroke_dash?: string }) => void
+  onStrokeStyleChange?: (updates: { stroke_color?: string | null; stroke_width?: number; stroke_dash?: string }) => void
+  onOpacityChange?: (opacity: number) => void
   onDragStart?: (id: string) => void
   onUndo?: () => void
   onRedo?: () => void
@@ -231,6 +247,7 @@ interface CanvasProps {
   onMoveGroupChildren: (parentId: string, dx: number, dy: number, skipDb?: boolean) => void
   getChildren: (parentId: string) => BoardObject[]
   getDescendants: (parentId: string) => BoardObject[]
+  recentColors?: string[]
   colors: string[]
   selectedColor?: string
   userRole: BoardRole
@@ -245,16 +262,17 @@ interface CanvasProps {
 export function Canvas({
   objects, sortedObjects, selectedIds, activeGroupId,
   onSelect, onSelectObjects, onClearSelection, onEnterGroup, onExitGroup,
-  onDragEnd, onDragMove, onUpdateText, onTransformEnd, onTransformMove,
+  onDragEnd, onDragMove, onUpdateText, onUpdateTitle, onTransformEnd, onTransformMove,
   onDelete, onDuplicate, onColorChange,
   onBringToFront, onBringForward, onSendBackward, onSendToBack,
   onGroup, onUngroup, canGroup, canUngroup,
-  onStrokeChange,
+  onStrokeStyleChange,
+  onOpacityChange,
   onDragStart: onDragStartProp,
   onUndo, onRedo,
   onCheckFrameContainment, onMoveGroupChildren,
   getChildren, getDescendants,
-  colors, selectedColor, userRole,
+  recentColors, colors, selectedColor, userRole,
   onEndpointDragMove, onEndpointDragEnd,
   onlineUsers, onCursorMove, onCursorUpdate, remoteSelections,
 }: CanvasProps) {
@@ -265,6 +283,9 @@ export function Canvas({
   const cursorLayerRef = useRef<Konva.Layer>(null)
   const cursorNodesRef = useRef<Map<string, Konva.Group>>(new Map())
   const shapeRefs = useRef<Map<string, Konva.Node>>(new Map())
+  // Snapshot of each node's width/height at transform start — prevents feedback loops
+  // when onTransformMove updates state and the next tick reads stale dimensions.
+  const transformOriginRef = useRef<Map<string, { width: number; height: number }>>(new Map())
   const onlineUsersRef = useRef(onlineUsers)
   onlineUsersRef.current = onlineUsers
   const { shiftHeld, ctrlHeld } = useModifierKeys()
@@ -299,22 +320,47 @@ export function Canvas({
           const name = user?.display_name ?? 'User'
 
           group = new Konva.Group({ listening: false })
+          // Traditional pointer cursor shape
           const arrow = new Konva.Line({
-            points: [0, 0, 0, 18, 12, 12],
+            points: [
+              0, 0,       // tip
+              0, 20,      // down left edge
+              5.5, 15.5,  // notch inward
+              10, 22,     // lower-right tail
+              12.5, 20.5, // tail right edge
+              8, 14,      // notch back
+              14, 14,     // right wing
+            ],
             fill: color,
             closed: true,
-            stroke: color,
-            strokeWidth: 1,
+            stroke: '#FFFFFF',
+            strokeWidth: 1.5,
+            lineJoin: 'round',
+          })
+          // Name label with background pill
+          const labelText = name
+          const tempText = new Konva.Text({ text: labelText, fontSize: 11, fontStyle: 'bold' })
+          const textW = tempText.width()
+          tempText.destroy()
+          const pillPadX = 6
+          const pillPadY = 3
+          const labelBg = new Konva.Rect({
+            x: 12,
+            y: 18,
+            width: textW + pillPadX * 2,
+            height: 11 + pillPadY * 2,
+            fill: color,
+            cornerRadius: 4,
           })
           const label = new Konva.Text({
-            x: 14,
-            y: 10,
-            text: name,
-            fontSize: 12,
-            fill: color,
+            x: 12 + pillPadX,
+            y: 18 + pillPadY,
+            text: labelText,
+            fontSize: 11,
+            fill: '#FFFFFF',
             fontStyle: 'bold',
           })
-          group.add(arrow, label)
+          group.add(arrow, labelBg, label)
           layer.add(group)
           cursorNodesRef.current.set(uid, group)
         }
@@ -353,6 +399,7 @@ export function Canvas({
 
   // Textarea overlay state for editing sticky notes / frame titles
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingField, setEditingField] = useState<'text' | 'title'>('text')
   const [textareaStyle, setTextareaStyle] = useState<React.CSSProperties>({})
   const [editText, setEditText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -469,7 +516,7 @@ export function Canvas({
     return false
   }, [objects, selectedIds, activeGroupId, onEnterGroup])
 
-  const handleStartEdit = useCallback((id: string, textNode: Konva.Text) => {
+  const handleStartEdit = useCallback((id: string, textNode: Konva.Text, field: 'text' | 'title' = 'text') => {
     if (!canEdit) return
     // If double-clicking a child of a selected group, enter the group instead
     if (tryEnterGroup(id)) return
@@ -483,15 +530,27 @@ export function Canvas({
     const textRect = textNode.getClientRect()
 
     setEditingId(id)
-    setEditText(obj.text || '')
+    setEditingField(field)
+
+    let initialText: string
+    if (field === 'title') {
+      initialText = (obj.title ?? 'Note').slice(0, STICKY_TITLE_CHAR_LIMIT)
+    } else {
+      const charLimit = getTextCharLimit(obj.type)
+      initialText = charLimit ? (obj.text || '').slice(0, charLimit) : (obj.text || '')
+    }
+    setEditText(initialText)
+
+    const fontSize = field === 'title' ? 14 : obj.font_size
     setTextareaStyle({
       position: 'absolute',
       top: `${textRect.y}px`,
       left: `${textRect.x}px`,
       width: `${textRect.width}px`,
       height: `${textRect.height}px`,
-      fontSize: `${obj.font_size * stageScale}px`,
+      fontSize: `${fontSize * stageScale}px`,
       fontFamily: 'sans-serif',
+      fontWeight: field === 'title' ? 'bold' : 'normal',
       padding: '0px',
       margin: '0px',
       border: 'none',
@@ -500,22 +559,51 @@ export function Canvas({
       background: 'transparent',
       color: '#333',
       overflow: 'hidden',
-      lineHeight: '1.2',
+      lineHeight: field === 'title' ? '1.3' : '1.2',
       zIndex: 100,
     })
   }, [objects, stageScale, canEdit, tryEnterGroup])
 
-  // Double-click handler for non-text shapes (Rectangle, Circle)
+  // Track last double-click for triple-click detection on geometric shapes
+  const lastDblClickRef = useRef<{ id: string; time: number } | null>(null)
+
+  // Double-click handler for non-text shapes — only enters group, records for triple-click
   const handleShapeDoubleClick = useCallback((id: string) => {
-    tryEnterGroup(id)
+    if (tryEnterGroup(id)) return
+    // Record for triple-click detection (geometric shapes use triple-click to edit text)
+    lastDblClickRef.current = { id, time: Date.now() }
   }, [tryEnterGroup])
+
+  // Start text editing on a geometric shape (used by triple-click)
+  const startGeometricTextEdit = useCallback((id: string) => {
+    const obj = objects.get(id)
+    if (!obj || !canEdit) return
+    const konvaNode = shapeRefs.current.get(id)
+    if (!konvaNode) return
+    const textNode = (konvaNode as Konva.Group).findOne?.('Text') as Konva.Text | undefined
+    if (textNode) {
+      handleStartEdit(id, textNode)
+    } else {
+      // Shape has no text yet — add empty text so re-render creates the Text node
+      onUpdateText(id, ' ')
+      setTimeout(() => {
+        const node = shapeRefs.current.get(id)
+        const tn = (node as Konva.Group)?.findOne?.('Text') as Konva.Text | undefined
+        if (tn) handleStartEdit(id, tn)
+      }, 50)
+    }
+  }, [objects, canEdit, handleStartEdit, onUpdateText])
 
   const handleFinishEdit = useCallback(() => {
     if (editingId) {
-      onUpdateText(editingId, editText)
+      if (editingField === 'title') {
+        onUpdateTitle(editingId, editText.slice(0, STICKY_TITLE_CHAR_LIMIT))
+      } else {
+        onUpdateText(editingId, editText)
+      }
       setEditingId(null)
     }
-  }, [editingId, editText, onUpdateText])
+  }, [editingId, editingField, editText, onUpdateText, onUpdateTitle])
 
   useEffect(() => {
     if (editingId && textareaRef.current) {
@@ -541,10 +629,20 @@ export function Canvas({
     }
   }, [onClearSelection, onExitGroup, activeGroupId])
 
-  // Handle shape click with modifier keys
+  // Handle shape click with modifier keys + triple-click detection
   const handleShapeSelect = useCallback((id: string) => {
+    // Triple-click detection: a click shortly after a double-click on the same shape
+    const prev = lastDblClickRef.current
+    if (prev && prev.id === id && Date.now() - prev.time < 500) {
+      lastDblClickRef.current = null
+      const obj = objects.get(id)
+      if (obj && TRIPLE_CLICK_TEXT_TYPES.has(obj.type)) {
+        startGeometricTextEdit(id)
+        return
+      }
+    }
     onSelect(id, { shift: shiftHeld, ctrl: ctrlHeld })
-  }, [onSelect, shiftHeld, ctrlHeld])
+  }, [onSelect, shiftHeld, ctrlHeld, objects, startGeometricTextEdit])
 
   // Handle double-click on group/frame to enter it
   const handleShapeDblClick = useCallback((id: string) => {
@@ -723,6 +821,7 @@ export function Canvas({
     setMarquee(null)
   }, [sortedObjects, activeGroupId, onSelectObjects])
 
+  const containerRef = useRef<HTMLDivElement>(null)
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
 
   // Manual right-click pan using native pointer events.
@@ -781,12 +880,15 @@ export function Canvas({
   }, [setStagePos])
 
   useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
     const updateSize = () => {
-      setDimensions({ width: window.innerWidth, height: window.innerHeight })
+      setDimensions({ width: el.clientWidth, height: el.clientHeight })
     }
     updateSize()
-    window.addEventListener('resize', updateSize)
-    return () => window.removeEventListener('resize', updateSize)
+    const ro = new ResizeObserver(updateSize)
+    ro.observe(el)
+    return () => ro.disconnect()
   }, [])
 
   // Compute group bounding boxes for visual treatment
@@ -871,6 +973,7 @@ export function Canvas({
             onContextMenu={handleContextMenu}
             editable={canEdit}
             isEditing={editingId === obj.id}
+            editingField={editingId === obj.id ? editingField : undefined}
           />
         )
       case 'rectangle':
@@ -887,6 +990,7 @@ export function Canvas({
             onTransformEnd={onTransformEnd}
             onContextMenu={handleContextMenu}
             onDoubleClick={handleShapeDoubleClick}
+            isEditing={editingId === obj.id}
             editable={canEdit}
           />
         )
@@ -904,6 +1008,7 @@ export function Canvas({
             onTransformEnd={onTransformEnd}
             onContextMenu={handleContextMenu}
             onDoubleClick={handleShapeDoubleClick}
+            isEditing={editingId === obj.id}
             editable={canEdit}
           />
         )
@@ -957,6 +1062,7 @@ export function Canvas({
             onTransformEnd={onTransformEnd}
             onContextMenu={handleContextMenu}
             onDoubleClick={handleShapeDoubleClick}
+            isEditing={editingId === obj.id}
             editable={canEdit}
           />
         )
@@ -974,6 +1080,7 @@ export function Canvas({
             onTransformEnd={onTransformEnd}
             onContextMenu={handleContextMenu}
             onDoubleClick={handleShapeDoubleClick}
+            isEditing={editingId === obj.id}
             editable={canEdit}
           />
         )
@@ -1009,6 +1116,7 @@ export function Canvas({
             onTransformEnd={onTransformEnd}
             onContextMenu={handleContextMenu}
             onDoubleClick={handleShapeDoubleClick}
+            isEditing={editingId === obj.id}
             editable={canEdit}
           />
         )
@@ -1021,7 +1129,8 @@ export function Canvas({
 
   return (
     <div
-      className="relative h-screen w-screen overflow-hidden"
+      ref={containerRef}
+      className="relative h-full w-full overflow-hidden"
       style={{
         backgroundColor: '#cbd5e1',
         backgroundImage: `
@@ -1133,6 +1242,18 @@ export function Canvas({
                 }
                 return newBox
               }}
+              onTransformStart={() => {
+                const tr = trRef.current
+                if (!tr) return
+                const origins = new Map<string, { width: number; height: number }>()
+                for (const node of tr.nodes()) {
+                  const id = Array.from(shapeRefs.current.entries()).find(([, n]) => n === node)?.[0]
+                  if (!id) continue
+                  const obj = objects.get(id)
+                  if (obj) origins.set(id, { width: obj.width, height: obj.height })
+                }
+                transformOriginRef.current = origins
+              }}
               onTransform={() => {
                 if (!onTransformMove) return
                 const tr = trRef.current
@@ -1140,15 +1261,15 @@ export function Canvas({
                 for (const node of tr.nodes()) {
                   const id = Array.from(shapeRefs.current.entries()).find(([, n]) => n === node)?.[0]
                   if (!id) continue
-                  const obj = objects.get(id)
-                  if (!obj) continue
+                  const origin = transformOriginRef.current.get(id)
+                  if (!origin) continue
                   const scaleX = node.scaleX()
                   const scaleY = node.scaleY()
                   onTransformMove(id, {
                     x: node.x(),
                     y: node.y(),
-                    width: Math.max(5, obj.width * scaleX),
-                    height: Math.max(5, obj.height * scaleY),
+                    width: Math.max(5, origin.width * scaleX),
+                    height: Math.max(5, origin.height * scaleY),
                     rotation: node.rotation(),
                   })
                 }
@@ -1165,9 +1286,25 @@ export function Canvas({
         <textarea
           ref={textareaRef}
           value={editText}
+          maxLength={editingField === 'title' ? STICKY_TITLE_CHAR_LIMIT : (editingId ? getTextCharLimit(objects.get(editingId)?.type ?? '') : undefined)}
           onChange={e => {
-            setEditText(e.target.value)
-            if (editingId) onUpdateText(editingId, e.target.value)
+            let value = e.target.value
+            if (editingField === 'title') {
+              value = value.slice(0, STICKY_TITLE_CHAR_LIMIT)
+            } else if (editingId) {
+              const limit = getTextCharLimit(objects.get(editingId)?.type ?? '')
+              if (limit !== undefined) {
+                value = value.slice(0, limit)
+              }
+            }
+            setEditText(value)
+            if (editingId) {
+              if (editingField === 'title') {
+                onUpdateTitle(editingId, value)
+              } else {
+                onUpdateText(editingId, value)
+              }
+            }
           }}
           onBlur={handleFinishEdit}
           onKeyDown={e => {
@@ -1178,7 +1315,7 @@ export function Canvas({
       )}
 
       {/* Zoom controls */}
-      <div className="absolute bottom-4 right-4">
+      <div className="pointer-events-auto absolute bottom-4 right-4 z-50">
         <ZoomControls
           scale={stageScale}
           onZoomIn={zoomIn}
@@ -1198,12 +1335,16 @@ export function Canvas({
           onDuplicate={onDuplicate}
           onColorChange={onColorChange}
           onClose={() => setContextMenu(null)}
+          recentColors={recentColors}
           colors={colors}
           currentColor={selectedColor}
           isLine={isLine}
-          onStrokeChange={onStrokeChange}
+          onStrokeStyleChange={onStrokeStyleChange}
+          onOpacityChange={onOpacityChange}
           currentStrokeWidth={ctxObj?.stroke_width}
           currentStrokeDash={ctxObj?.stroke_dash}
+          currentStrokeColor={ctxObj?.stroke_color}
+          currentOpacity={ctxObj?.opacity ?? 1}
           onBringToFront={handleCtxBringToFront}
           onBringForward={handleCtxBringForward}
           onSendBackward={handleCtxSendBackward}

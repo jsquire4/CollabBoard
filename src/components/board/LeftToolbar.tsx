@@ -4,44 +4,76 @@ import { BoardRole } from '@/types/sharing'
 import { ShapeSelector, type ShapeAddHandler } from './ShapeSelector'
 import { ColorPicker } from './ColorPicker'
 import { FontSelector } from './FontSelector'
+import { StylePanel } from './StylePanel'
 import type { FontStyle } from '@/types/board'
 
 interface LeftToolbarProps {
   userRole: BoardRole
   onAddShape: ShapeAddHandler
   hasSelection: boolean
-  hasStickyNoteSelected: boolean
+  hasTextShapeSelected: boolean
   selectedColor?: string
   selectedFontFamily?: string
   selectedFontSize?: number
   selectedFontStyle?: FontStyle
+  selectedTextAlign?: string
+  selectedTextVerticalAlign?: string
+  selectedTextColor?: string
   onColorChange: (color: string) => void
   onFontChange: (updates: { font_family?: string; font_size?: number; font_style?: FontStyle }) => void
+  onTextStyleChange: (updates: { text_align?: string; text_vertical_align?: string; text_color?: string }) => void
   onDelete: () => void
   onDuplicate: () => void
   onGroup: () => void
   onUngroup: () => void
   canGroup: boolean
   canUngroup: boolean
+  // Style panel props
+  selectedStrokeColor?: string | null
+  selectedStrokeWidth?: number
+  selectedStrokeDash?: string
+  selectedOpacity?: number
+  selectedShadowBlur?: number
+  selectedCornerRadius?: number
+  showCornerRadius?: boolean
+  onStrokeStyleChange: (updates: { stroke_color?: string | null; stroke_width?: number; stroke_dash?: string }) => void
+  onOpacityChange: (opacity: number) => void
+  onShadowChange: (updates: { shadow_blur?: number; shadow_color?: string; shadow_offset_x?: number; shadow_offset_y?: number }) => void
+  onCornerRadiusChange: (corner_radius: number) => void
 }
 
 export function LeftToolbar({
   userRole,
   onAddShape,
   hasSelection,
-  hasStickyNoteSelected,
+  hasTextShapeSelected,
   selectedColor,
   selectedFontFamily,
   selectedFontSize,
   selectedFontStyle,
+  selectedTextAlign,
+  selectedTextVerticalAlign,
+  selectedTextColor,
   onColorChange,
   onFontChange,
+  onTextStyleChange,
   onDelete,
   onDuplicate,
   onGroup,
   onUngroup,
   canGroup,
   canUngroup,
+  selectedStrokeColor,
+  selectedStrokeWidth,
+  selectedStrokeDash,
+  selectedOpacity,
+  selectedShadowBlur,
+  selectedCornerRadius,
+  showCornerRadius,
+  onStrokeStyleChange,
+  onOpacityChange,
+  onShadowChange,
+  onCornerRadiusChange,
 }: LeftToolbarProps) {
   const canEdit = userRole !== 'viewer'
 
@@ -56,14 +88,19 @@ export function LeftToolbar({
           </div>
           <ShapeSelector onAddShape={onAddShape} compact />
 
-          {hasStickyNoteSelected && (
+          {hasTextShapeSelected && (
             <>
               <div className="my-2 h-px w-8 bg-slate-200" />
               <FontSelector
                 fontFamily={selectedFontFamily}
                 fontSize={selectedFontSize}
                 fontStyle={selectedFontStyle}
+                textAlign={selectedTextAlign}
+                textVerticalAlign={selectedTextVerticalAlign}
+                textColor={selectedTextColor}
+                showTextLayout={true}
                 onFontChange={onFontChange}
+                onTextStyleChange={onTextStyleChange}
                 compact
               />
             </>
@@ -75,6 +112,20 @@ export function LeftToolbar({
               <ColorPicker
                 selectedColor={selectedColor}
                 onColorChange={onColorChange}
+                compact
+              />
+              <StylePanel
+                strokeColor={selectedStrokeColor}
+                strokeWidth={selectedStrokeWidth}
+                strokeDash={selectedStrokeDash}
+                opacity={selectedOpacity}
+                shadowBlur={selectedShadowBlur}
+                cornerRadius={selectedCornerRadius}
+                showCornerRadius={showCornerRadius}
+                onStrokeStyleChange={onStrokeStyleChange}
+                onOpacityChange={onOpacityChange}
+                onShadowChange={onShadowChange}
+                onCornerRadiusChange={onCornerRadiusChange}
                 compact
               />
               <div className="my-2 h-px w-8 bg-slate-200" />

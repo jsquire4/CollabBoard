@@ -23,6 +23,49 @@ export interface ShapeProps {
   onEndpointDragEnd?: (id: string, updates: Partial<BoardObject>) => void
 }
 
+/** Try to parse a JSON string; return undefined on failure. */
+function tryParseJson(s: string): number[] | undefined {
+  try {
+    const parsed = JSON.parse(s)
+    return Array.isArray(parsed) ? parsed : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Returns Konva-compatible outline/stroke props. Selection stroke overrides user stroke. */
+export function getOutlineProps(obj: BoardObject, isSelected: boolean) {
+  if (isSelected) {
+    return {
+      stroke: '#0EA5E9',
+      strokeWidth: 2,
+      dash: undefined as number[] | undefined,
+    }
+  }
+  if (obj.stroke_color) {
+    return {
+      stroke: obj.stroke_color,
+      strokeWidth: obj.stroke_width ?? 2,
+      dash: obj.stroke_dash ? tryParseJson(obj.stroke_dash) : undefined,
+    }
+  }
+  return {
+    stroke: undefined as string | undefined,
+    strokeWidth: 0,
+    dash: undefined as number[] | undefined,
+  }
+}
+
+/** Returns Konva-compatible shadow props from object fields. */
+export function getShadowProps(obj: BoardObject) {
+  return {
+    shadowColor: obj.shadow_color ?? 'rgba(0,0,0,0.12)',
+    shadowBlur: obj.shadow_blur ?? 6,
+    shadowOffsetX: obj.shadow_offset_x ?? 0,
+    shadowOffsetY: obj.shadow_offset_y ?? 2,
+  }
+}
+
 /**
  * Creates a standard transform-end handler that resets scale and
  * reports the final dimensions back via the callback.

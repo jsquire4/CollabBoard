@@ -1,6 +1,6 @@
 import { Group, Line, Circle } from 'react-konva'
 import Konva from 'konva'
-import { ShapeProps } from './shapeUtils'
+import { ShapeProps, getShadowProps } from './shapeUtils'
 
 export function LineShape({
   object,
@@ -116,10 +116,11 @@ export function LineShape({
         e.evt.preventDefault()
         onContextMenu(object.id, e.evt.clientX, e.evt.clientY)
       }}
+      opacity={object.opacity ?? 1}
     >
       <Line
         points={[0, 0, dx, dy]}
-        stroke={object.color}
+        stroke={object.stroke_color ?? object.color}
         strokeWidth={isSelected ? Math.max(strokeWidth + 2, 4) : strokeWidth}
         dash={dash}
         lineCap="round"
@@ -128,8 +129,10 @@ export function LineShape({
         onDragStart={handleLineDragStart}
         onDragMove={handleLineDragMove}
         onDragEnd={handleLineDragEnd}
-        shadowColor={isSelected ? '#0EA5E9' : undefined}
-        shadowBlur={isSelected ? 8 : 0}
+        shadowColor={isSelected ? '#0EA5E9' : getShadowProps(object).shadowColor}
+        shadowBlur={isSelected ? 8 : getShadowProps(object).shadowBlur}
+        shadowOffsetX={isSelected ? 0 : getShadowProps(object).shadowOffsetX}
+        shadowOffsetY={isSelected ? 0 : getShadowProps(object).shadowOffsetY}
         hitStrokeWidth={40}
       />
       {/* Endpoint anchors — only visible when selected and editable */}

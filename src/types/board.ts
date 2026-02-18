@@ -43,6 +43,18 @@ export interface BoardObject {
   created_by: string
   created_at: string
   updated_at: string
+  stroke_color?: string | null
+  opacity?: number | null
+  shadow_color?: string | null
+  shadow_blur?: number | null
+  shadow_offset_x?: number | null
+  shadow_offset_y?: number | null
+  text_align?: string | null
+  text_vertical_align?: string | null
+  text_padding?: number | null
+  text_color?: string | null
+  corner_radius?: number | null
+  title?: string | null
   field_clocks?: Record<string, { ts: number; c: number; n: string }>
   deleted_at?: string | null
 }

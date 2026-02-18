@@ -1,6 +1,6 @@
 import { Group, Arrow, Circle } from 'react-konva'
 import Konva from 'konva'
-import { ShapeProps } from './shapeUtils'
+import { ShapeProps, getShadowProps } from './shapeUtils'
 
 export function ArrowShape({
   object,
@@ -107,12 +107,13 @@ export function ArrowShape({
         e.evt.preventDefault()
         onContextMenu(object.id, e.evt.clientX, e.evt.clientY)
       }}
+      opacity={object.opacity ?? 1}
     >
       <Arrow
         points={[0, 0, dx, dy]}
-        stroke={object.color}
+        stroke={object.stroke_color ?? object.color}
         strokeWidth={strokeWidth}
-        fill={object.color}
+        fill={object.stroke_color ?? object.color}
         pointerLength={12}
         pointerWidth={12}
         lineCap="round"
@@ -121,9 +122,7 @@ export function ArrowShape({
         onDragStart={handleLineDragStart}
         onDragMove={handleLineDragMove}
         onDragEnd={handleLineDragEnd}
-        shadowColor="rgba(0,0,0,0.12)"
-        shadowBlur={6}
-        shadowOffsetY={2}
+        {...getShadowProps(object)}
         hitStrokeWidth={40}
       />
       {/* Endpoint anchors — only visible when selected and editable */}

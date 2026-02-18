@@ -1,10 +1,35 @@
 import { Group, Rect, Text } from 'react-konva'
 import Konva from 'konva'
-import { ShapeProps, handleShapeTransformEnd } from './shapeUtils'
+import { ShapeProps, handleShapeTransformEnd, getShadowProps } from './shapeUtils'
 
 interface FrameShapeProps extends ShapeProps {
   onStartEdit: (id: string, node: Konva.Text) => void
   isEditing?: boolean
+}
+
+/** Measure wrapped text height using an offscreen canvas for accurate word-break metrics. */
+function measureWrappedHeight(
+  text: string, fontSize: number, fontStyle: string, fontFamily: string,
+  maxWidth: number, lineHeight: number
+): number {
+  if (typeof document === 'undefined') return fontSize * lineHeight
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return fontSize * lineHeight
+  ctx.font = `${fontStyle} ${fontSize}px ${fontFamily}`
+  const words = text.split(/\s+/)
+  let lines = 1
+  let currentLine = ''
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word
+    if (ctx.measureText(testLine).width > maxWidth && currentLine) {
+      lines++
+      currentLine = word
+    } else {
+      currentLine = testLine
+    }
+  }
+  return lines * fontSize * lineHeight
 }
 
 export function FrameShape({
@@ -49,7 +74,24 @@ export function FrameShape({
     handleShapeTransformEnd(e, object, onTransformEnd)
   }
 
-  const titleHeight = 28
+  const titleFontSize = 13
+  const titlePadX = 10
+  const titlePadY = 6
+  const titleLineHeight = 1.3
+  const availableWidth = Math.max(1, object.width - titlePadX * 2)
+  const titleText = object.text || 'Frame'
+
+  const textHeight = measureWrappedHeight(titleText, titleFontSize, 'bold', 'sans-serif', availableWidth, titleLineHeight)
+  const naturalHeight = titlePadY + textHeight + titlePadY
+  const maxTitleHeight = object.height * 0.4
+  const titleHeight = Math.max(28, Math.min(naturalHeight, maxTitleHeight))
+
+  const shadow = getShadowProps(object)
+
+  // Frame uses its own border logic: dashed border when not selected, solid selection border
+  const borderStroke = isSelected ? '#0EA5E9' : (object.stroke_color || 'rgba(148,163,184,0.5)')
+  const borderWidth = isSelected ? 2 : (object.stroke_color ? (object.stroke_width ?? 1) : 1)
+  const borderDash = isSelected ? undefined : (object.stroke_color ? undefined : [8, 4])
 
   return (
     <Group
@@ -70,6 +112,7 @@ export function FrameShape({
         e.evt.preventDefault()
         onContextMenu(object.id, e.evt.clientX, e.evt.clientY)
       }}
+      opacity={object.opacity ?? 1}
     >
       {/* Background fill */}
       <Rect
@@ -77,9 +120,10 @@ export function FrameShape({
         height={object.height}
         fill={object.color || 'rgba(241,245,249,0.8)'}
         cornerRadius={8}
-        stroke={isSelected ? '#0EA5E9' : 'rgba(148,163,184,0.5)'}
-        strokeWidth={isSelected ? 2 : 1}
-        dash={isSelected ? undefined : [8, 4]}
+        stroke={borderStroke}
+        strokeWidth={borderWidth}
+        dash={borderDash}
+        {...shadow}
       />
       {/* Title bar background */}
       <Rect
@@ -91,16 +135,18 @@ export function FrameShape({
       {/* Title text — hidden during editing to avoid duplication with textarea overlay */}
       {!isEditing && (
         <Text
-          x={10}
-          y={6}
-          width={object.width - 20}
-          height={titleHeight - 6}
-          text={object.text || 'Frame'}
-          fontSize={13}
+          x={titlePadX}
+          y={titlePadY}
+          width={availableWidth}
+          height={titleHeight - titlePadY}
+          text={titleText}
+          fontSize={titleFontSize}
           fontFamily="sans-serif"
           fontStyle="bold"
-          fill="#475569"
+          fill={object.text_color ?? '#475569'}
+          wrap="word"
           ellipsis={true}
+          lineHeight={titleLineHeight}
         />
       )}
     </Group>

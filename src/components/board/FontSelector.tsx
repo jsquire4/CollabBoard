@@ -20,11 +20,22 @@ const FONT_STYLES: { value: FontStyle; label: string }[] = [
   { value: 'bold italic', label: 'Bold Italic' },
 ]
 
+const TEXT_COLOR_SWATCHES = [
+  '#000000', '#1E293B', '#374151', '#FFFFFF',
+  '#EF4444', '#F97316', '#EAB308', '#22C55E',
+  '#3B82F6', '#8B5CF6', '#EC4899', '#14B8A6',
+]
+
 interface FontSelectorProps {
   fontFamily?: string
   fontSize?: number
   fontStyle?: FontStyle
+  textAlign?: string
+  textVerticalAlign?: string
+  textColor?: string
+  showTextLayout?: boolean
   onFontChange: (updates: { font_family?: string; font_size?: number; font_style?: FontStyle }) => void
+  onTextStyleChange?: (updates: { text_align?: string; text_vertical_align?: string; text_color?: string }) => void
   disabled?: boolean
   compact?: boolean
 }
@@ -33,7 +44,12 @@ export function FontSelector({
   fontFamily = 'sans-serif',
   fontSize = 14,
   fontStyle = 'normal',
+  textAlign = 'center',
+  textVerticalAlign = 'middle',
+  textColor = '#000000',
+  showTextLayout = false,
   onFontChange,
+  onTextStyleChange,
   disabled,
   compact,
 }: FontSelectorProps) {
@@ -108,6 +124,72 @@ export function FontSelector({
           ))}
         </div>
       </div>
+
+      {/* Text layout controls */}
+      {showTextLayout && onTextStyleChange && (
+        <>
+          <div>
+            <div className="mb-1 text-xs font-medium text-slate-500">Align</div>
+            <div className="flex gap-1">
+              {(['left', 'center', 'right'] as const).map((align) => (
+                <button
+                  key={align}
+                  type="button"
+                  onClick={() => onTextStyleChange({ text_align: align })}
+                  disabled={disabled}
+                  className={`flex-1 rounded px-2 py-1 text-xs font-medium transition disabled:opacity-50 ${
+                    textAlign === align
+                      ? 'bg-indigo-100 text-indigo-700'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {align.charAt(0).toUpperCase() + align.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="mb-1 text-xs font-medium text-slate-500">Vertical</div>
+            <div className="flex gap-1">
+              {(['top', 'middle', 'bottom'] as const).map((valign) => (
+                <button
+                  key={valign}
+                  type="button"
+                  onClick={() => onTextStyleChange({ text_vertical_align: valign })}
+                  disabled={disabled}
+                  className={`flex-1 rounded px-2 py-1 text-xs font-medium transition disabled:opacity-50 ${
+                    textVerticalAlign === valign
+                      ? 'bg-indigo-100 text-indigo-700'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {valign.charAt(0).toUpperCase() + valign.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="mb-1 text-xs font-medium text-slate-500">Text Color</div>
+            <div className="flex flex-wrap gap-1">
+              {TEXT_COLOR_SWATCHES.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => onTextStyleChange({ text_color: color })}
+                  disabled={disabled}
+                  className={`h-5 w-5 rounded-full transition hover:scale-110 disabled:opacity-50 ${
+                    color === '#FFFFFF' ? 'border border-slate-300' : ''
+                  } ${
+                    color === textColor ? 'ring-2 ring-slate-700 ring-offset-1' : ''
+                  }`}
+                  style={{ backgroundColor: color }}
+                  title={color}
+                />
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 

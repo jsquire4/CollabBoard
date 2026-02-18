@@ -58,11 +58,17 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
   const { getViewportCenter } = useCanvas()
   const [shareOpen, setShareOpen] = useState(false)
   const undoStack = useUndoStack()
+  const MAX_RECENT_COLORS = 6
+  const [recentColors, setRecentColors] = useState<string[]>(() => EXPANDED_PALETTE.slice(0, MAX_RECENT_COLORS))
+  const pushRecentColor = useCallback((color: string) => {
+    setRecentColors(prev => {
+      const next = [color, ...prev.filter(c => c !== color)]
+      return next.length > MAX_RECENT_COLORS ? next.slice(0, MAX_RECENT_COLORS) : next
+    })
+  }, [])
   const preDragRef = useRef<Map<string, { x: number; y: number; x2?: number | null; y2?: number | null; parent_id: string | null }>>(new Map())
 
   // Subscribe LAST — after all hooks have registered their .on() listeners.
-  // React runs useEffect hooks in definition order, so this must come after
-  // usePresence, useCursors, and useBoardState have set up their handlers.
   const hasConnectedRef = useRef(false)
   useEffect(() => {
     if (!channel) return
@@ -70,8 +76,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
       if (status === 'SUBSCRIBED') {
         console.log(`Realtime channel subscribed for board ${boardId}`)
         trackPresence()
-        // CRDT Phase 3: reconcile local state against DB on reconnect
-        // Skip reconcile on the very first subscribe — initial data was just loaded.
         if (hasConnectedRef.current) {
           reconcileOnReconnect()
         } else {
@@ -99,7 +103,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
   const executeUndo = useCallback((entry: UndoEntry): UndoEntry | null => {
     switch (entry.type) {
       case 'add': {
-        // Undo add = delete the added objects
         const snapshots: BoardObject[] = []
         for (const id of entry.ids) {
           const obj = objects.get(id)
@@ -111,14 +114,12 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
         return snapshots.length > 0 ? { type: 'delete', objects: snapshots } : null
       }
       case 'delete': {
-        // Undo delete = re-insert objects (parents first — array is already ordered)
         for (const obj of entry.objects) {
           addObjectWithId(obj)
         }
         return { type: 'add', ids: entry.objects.map(o => o.id) }
       }
       case 'update': {
-        // Undo update = apply before-patches, capture current as inverse
         const inversePatches: { id: string; before: Partial<BoardObject> }[] = []
         for (const patch of entry.patches) {
           const current = objects.get(patch.id)
@@ -133,7 +134,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
         return { type: 'update', patches: inversePatches }
       }
       case 'move': {
-        // Undo move = restore pre-drag positions + parent_ids + endpoints
         const inversePatches: { id: string; before: { x: number; y: number; x2?: number | null; y2?: number | null; parent_id: string | null } }[] = []
         for (const patch of entry.patches) {
           const current = objects.get(patch.id)
@@ -147,13 +147,11 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
         return { type: 'move', patches: inversePatches }
       }
       case 'duplicate': {
-        // Undo duplicate = delete the duplicated objects
         const snapshots: BoardObject[] = []
         for (const id of entry.ids) {
           const obj = objects.get(id)
           if (obj) {
             snapshots.push({ ...obj })
-            // Also capture descendants for groups/frames
             const descendants = getDescendants(id)
             for (const d of descendants) {
               snapshots.push({ ...d })
@@ -161,11 +159,9 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
             deleteObject(id)
           }
         }
-        // Inverse: re-insert (treat as 'delete' entry so redo re-deletes)
         return snapshots.length > 0 ? { type: 'delete', objects: snapshots } : null
       }
       case 'group': {
-        // Undo group = restore children's parent_ids then delete the group
         for (const childId of entry.childIds) {
           const prevParent = entry.previousParentIds.get(childId) ?? null
           updateObject(childId, { parent_id: prevParent })
@@ -174,7 +170,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
         return { type: 'ungroup', groupSnapshot: objects.get(entry.groupId)!, childIds: entry.childIds }
       }
       case 'ungroup': {
-        // Undo ungroup = re-create the group, then re-parent children
         addObjectWithId(entry.groupSnapshot)
         for (const childId of entry.childIds) {
           updateObject(childId, { parent_id: entry.groupSnapshot.id })
@@ -221,7 +216,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     if (!obj) return
     const map = new Map<string, { x: number; y: number; x2?: number | null; y2?: number | null; parent_id: string | null }>()
     map.set(id, { x: obj.x, y: obj.y, x2: obj.x2, y2: obj.y2, parent_id: obj.parent_id })
-    // For frames, also capture all descendants
     if (obj.type === 'frame') {
       for (const d of getDescendants(id)) {
         map.set(d.id, { x: d.x, y: d.y, x2: d.x2, y2: d.y2, parent_id: d.parent_id })
@@ -239,7 +233,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     if (!canEdit) return
     updateObjectDragEnd(id, { x, y })
 
-    // Push undo entry from pre-drag snapshot
     if (preDragRef.current.size > 0) {
       const patches = Array.from(preDragRef.current.entries()).map(([pid, before]) => ({ id: pid, before }))
       undoStack.push({ type: 'move', patches })
@@ -247,7 +240,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     }
   }, [canEdit, updateObjectDragEnd, undoStack])
 
-  // Endpoint drag for vector types (line/arrow)
   const handleEndpointDragMove = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
     updateObjectDrag(id, updates)
@@ -257,20 +249,35 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     if (!canEdit) return
     updateObjectDragEnd(id, updates)
 
-    // Push undo entry from pre-drag snapshot
     if (preDragRef.current.size > 0) {
       const patches = Array.from(preDragRef.current.entries()).map(([pid, before]) => ({ id: pid, before }))
       undoStack.push({ type: 'move' as const, patches })
       preDragRef.current = new Map()
     }
-  }, [canEdit, updateObjectDragEnd, undoStack])
 
-  const handleUpdateText = (id: string, text: string) => {
+    // Check frame containment for lines/arrows after drag
+    setTimeout(() => checkFrameContainment(id), 0)
+  }, [canEdit, updateObjectDragEnd, undoStack, checkFrameContainment])
+
+  const handleUpdateText = useCallback((id: string, text: string) => {
     if (!canEdit) return
-    updateObject(id, { text })
-  }
+    const obj = objects.get(id)
+    if (!obj) return
+    // Enforce character limits: sticky notes unlimited, frames 256, geometric shapes 1024
+    const UNLIMITED = new Set(['sticky_note'])
+    let limited = text
+    if (!UNLIMITED.has(obj.type)) {
+      const max = obj.type === 'frame' ? 256 : 1024
+      limited = text.slice(0, max)
+    }
+    updateObject(id, { text: limited })
+  }, [canEdit, objects, updateObject])
 
-  // Broadcast intermediate transform state (no DB write) — rotation/resize visible to remotes in real-time
+  const handleUpdateTitle = useCallback((id: string, title: string) => {
+    if (!canEdit) return
+    updateObject(id, { title: title.slice(0, 256) })
+  }, [canEdit, updateObject])
+
   const handleTransformMove = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
     updateObjectDrag(id, updates)
@@ -291,7 +298,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
 
   const handleDelete = useCallback(() => {
     if (!canEdit) return
-    // Snapshot all selected objects + descendants before deleting
     const snapshots: BoardObject[] = []
     for (const id of selectedIds) {
       const obj = objects.get(id)
@@ -317,6 +323,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
 
   const handleColorChange = useCallback((color: string) => {
     if (!canEdit) return
+    pushRecentColor(color)
     const patches: { id: string; before: Partial<BoardObject> }[] = []
     for (const id of selectedIds) {
       const obj = objects.get(id)
@@ -333,14 +340,16 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
       }
     }
     if (patches.length > 0) undoStack.push({ type: 'update', patches })
-  }, [canEdit, selectedIds, objects, getDescendants, updateObject, undoStack])
+  }, [canEdit, selectedIds, objects, getDescendants, updateObject, undoStack, pushRecentColor])
 
   const handleFontChange = useCallback((updates: { font_family?: string; font_size?: number; font_style?: 'normal' | 'bold' | 'italic' | 'bold italic' }) => {
     if (!canEdit) return
     const patches: { id: string; before: Partial<BoardObject> }[] = []
     for (const id of selectedIds) {
       const obj = objects.get(id)
-      if (obj?.type === 'sticky_note') {
+      if (!obj) continue
+      // Apply to any shape that has text or is a sticky note
+      if (obj.type === 'sticky_note' || obj.text) {
         const before: Partial<BoardObject> = {}
         for (const key of Object.keys(updates)) {
           (before as unknown as Record<string, unknown>)[key] = (obj as unknown as Record<string, unknown>)[key]
@@ -352,19 +361,76 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     if (patches.length > 0) undoStack.push({ type: 'update', patches })
   }, [canEdit, selectedIds, objects, updateObject, undoStack])
 
-  const handleStrokeChange = useCallback((updates: { stroke_width?: number; stroke_dash?: string }) => {
+  // --- Style handlers ---
+
+  const handleStrokeStyleChange = useCallback((updates: { stroke_color?: string | null; stroke_width?: number; stroke_dash?: string }) => {
     if (!canEdit) return
     const patches: { id: string; before: Partial<BoardObject> }[] = []
     for (const id of selectedIds) {
       const obj = objects.get(id)
-      if (obj?.type === 'line' || obj?.type === 'arrow') {
-        const before: Partial<BoardObject> = {}
-        for (const key of Object.keys(updates)) {
-          (before as unknown as Record<string, unknown>)[key] = (obj as unknown as Record<string, unknown>)[key]
-        }
-        patches.push({ id, before })
-        updateObject(id, updates)
+      if (!obj) continue
+      const before: Partial<BoardObject> = {}
+      for (const key of Object.keys(updates)) {
+        (before as unknown as Record<string, unknown>)[key] = (obj as unknown as Record<string, unknown>)[key]
       }
+      patches.push({ id, before })
+      updateObject(id, updates as Partial<BoardObject>)
+    }
+    if (patches.length > 0) undoStack.push({ type: 'update', patches })
+  }, [canEdit, selectedIds, objects, updateObject, undoStack])
+
+  const handleOpacityChange = useCallback((opacity: number) => {
+    if (!canEdit) return
+    const patches: { id: string; before: Partial<BoardObject> }[] = []
+    for (const id of selectedIds) {
+      const obj = objects.get(id)
+      if (!obj) continue
+      patches.push({ id, before: { opacity: obj.opacity ?? 1 } })
+      updateObject(id, { opacity })
+    }
+    if (patches.length > 0) undoStack.push({ type: 'update', patches })
+  }, [canEdit, selectedIds, objects, updateObject, undoStack])
+
+  const handleShadowChange = useCallback((updates: { shadow_blur?: number; shadow_color?: string; shadow_offset_x?: number; shadow_offset_y?: number }) => {
+    if (!canEdit) return
+    const patches: { id: string; before: Partial<BoardObject> }[] = []
+    for (const id of selectedIds) {
+      const obj = objects.get(id)
+      if (!obj) continue
+      const before: Partial<BoardObject> = {}
+      for (const key of Object.keys(updates)) {
+        (before as unknown as Record<string, unknown>)[key] = (obj as unknown as Record<string, unknown>)[key]
+      }
+      patches.push({ id, before })
+      updateObject(id, updates as Partial<BoardObject>)
+    }
+    if (patches.length > 0) undoStack.push({ type: 'update', patches })
+  }, [canEdit, selectedIds, objects, updateObject, undoStack])
+
+  const handleCornerRadiusChange = useCallback((corner_radius: number) => {
+    if (!canEdit) return
+    const patches: { id: string; before: Partial<BoardObject> }[] = []
+    for (const id of selectedIds) {
+      const obj = objects.get(id)
+      if (!obj || obj.type !== 'rectangle') continue
+      patches.push({ id, before: { corner_radius: obj.corner_radius ?? 6 } })
+      updateObject(id, { corner_radius })
+    }
+    if (patches.length > 0) undoStack.push({ type: 'update', patches })
+  }, [canEdit, selectedIds, objects, updateObject, undoStack])
+
+  const handleTextStyleChange = useCallback((updates: { text_align?: string; text_vertical_align?: string; text_color?: string }) => {
+    if (!canEdit) return
+    const patches: { id: string; before: Partial<BoardObject> }[] = []
+    for (const id of selectedIds) {
+      const obj = objects.get(id)
+      if (!obj) continue
+      const before: Partial<BoardObject> = {}
+      for (const key of Object.keys(updates)) {
+        (before as unknown as Record<string, unknown>)[key] = (obj as unknown as Record<string, unknown>)[key]
+      }
+      patches.push({ id, before })
+      updateObject(id, updates as Partial<BoardObject>)
     }
     if (patches.length > 0) undoStack.push({ type: 'update', patches })
   }, [canEdit, selectedIds, objects, updateObject, undoStack])
@@ -387,7 +453,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
   }, [getZOrderSet, sendToBack, undoStack])
 
   const handleBringForward = useCallback((id: string) => {
-    // Capture both the object's set and the next-higher set
     const obj = objects.get(id)
     if (!obj) return
     const set = getZOrderSet(id)
@@ -469,21 +534,50 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     return objects.get(firstId)?.color
   }, [selectedIds, objects])
 
-  const hasStickyNoteSelected = useMemo(() => {
+  // Determine if any text-capable shape is selected
+  const TEXT_TYPES = new Set(['sticky_note', 'rectangle', 'circle', 'triangle', 'chevron', 'parallelogram', 'frame'])
+
+  const hasTextShapeSelected = useMemo(() => {
     for (const id of selectedIds) {
-      if (objects.get(id)?.type === 'sticky_note') return true
+      const obj = objects.get(id)
+      if (obj && TEXT_TYPES.has(obj.type)) return true
     }
     return false
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIds, objects])
 
   const selectedFontInfo = useMemo(() => {
-    const firstStickyId = [...selectedIds].find((id) => objects.get(id)?.type === 'sticky_note')
-    if (!firstStickyId) return {}
-    const obj = objects.get(firstStickyId)
+    const firstTextId = [...selectedIds].find((id) => {
+      const obj = objects.get(id)
+      return obj && TEXT_TYPES.has(obj.type)
+    })
+    if (!firstTextId) return {}
+    const obj = objects.get(firstTextId)
     return {
       fontFamily: obj?.font_family,
       fontSize: obj?.font_size,
       fontStyle: obj?.font_style,
+      textAlign: obj?.text_align ?? 'center',
+      textVerticalAlign: obj?.text_vertical_align ?? 'middle',
+      textColor: obj?.text_color ?? '#000000',
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIds, objects])
+
+  // Style info for the first selected object
+  const selectedStyleInfo = useMemo(() => {
+    const firstId = selectedIds.values().next().value
+    if (!firstId) return {}
+    const obj = objects.get(firstId)
+    if (!obj) return {}
+    return {
+      strokeColor: obj.stroke_color,
+      strokeWidth: obj.stroke_width,
+      strokeDash: obj.stroke_dash,
+      opacity: obj.opacity ?? 1,
+      shadowBlur: obj.shadow_blur ?? 6,
+      cornerRadius: obj.corner_radius ?? (obj.type === 'rectangle' ? 6 : 0),
+      isRectangle: obj.type === 'rectangle',
     }
   }, [selectedIds, objects])
 
@@ -506,19 +600,35 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
           userRole={userRole}
           onAddShape={handleAddShape}
           hasSelection={selectedIds.size > 0}
-          hasStickyNoteSelected={hasStickyNoteSelected}
+          hasTextShapeSelected={hasTextShapeSelected}
           selectedColor={selectedColor}
           selectedFontFamily={selectedFontInfo.fontFamily}
           selectedFontSize={selectedFontInfo.fontSize}
           selectedFontStyle={selectedFontInfo.fontStyle}
+          selectedTextAlign={selectedFontInfo.textAlign}
+          selectedTextVerticalAlign={selectedFontInfo.textVerticalAlign}
+          selectedTextColor={selectedFontInfo.textColor}
           onColorChange={handleColorChange}
           onFontChange={handleFontChange}
+          onTextStyleChange={handleTextStyleChange}
           onDelete={handleDelete}
           onDuplicate={handleDuplicate}
           onGroup={handleGroup}
           onUngroup={handleUngroup}
           canGroup={canGroup}
           canUngroup={canUngroup}
+          // Style panel props
+          selectedStrokeColor={selectedStyleInfo.strokeColor}
+          selectedStrokeWidth={selectedStyleInfo.strokeWidth}
+          selectedStrokeDash={selectedStyleInfo.strokeDash}
+          selectedOpacity={selectedStyleInfo.opacity}
+          selectedShadowBlur={selectedStyleInfo.shadowBlur}
+          selectedCornerRadius={selectedStyleInfo.cornerRadius}
+          showCornerRadius={selectedStyleInfo.isRectangle}
+          onStrokeStyleChange={handleStrokeStyleChange}
+          onOpacityChange={handleOpacityChange}
+          onShadowChange={handleShadowChange}
+          onCornerRadiusChange={handleCornerRadiusChange}
         />
         <div className="relative flex-1">
           <CanvasErrorBoundary>
@@ -536,6 +646,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
               onDragEnd={handleDragEnd}
               onDragMove={handleDragMove}
               onUpdateText={handleUpdateText}
+              onUpdateTitle={handleUpdateTitle}
               onTransformEnd={handleTransformEnd}
               onTransformMove={handleTransformMove}
               onDelete={handleDelete}
@@ -549,7 +660,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
               onUngroup={handleUngroup}
               canGroup={canGroup}
               canUngroup={canUngroup}
-              onStrokeChange={handleStrokeChange}
+              onStrokeStyleChange={handleStrokeStyleChange}
+              onOpacityChange={handleOpacityChange}
               onEndpointDragMove={handleEndpointDragMove}
               onEndpointDragEnd={handleEndpointDragEnd}
               onUndo={performUndo}
@@ -558,6 +670,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
               onMoveGroupChildren={moveGroupChildren}
               getChildren={getChildren}
               getDescendants={getDescendants}
+              recentColors={recentColors}
               colors={EXPANDED_PALETTE}
               selectedColor={selectedColor}
               userRole={userRole}

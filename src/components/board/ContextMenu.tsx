@@ -27,6 +27,11 @@ interface ContextMenuProps {
   onUngroup?: () => void
   canGroup?: boolean
   canUngroup?: boolean
+  isLocked?: boolean
+  onLock?: () => void
+  onUnlock?: () => void
+  canLockShape?: boolean
+  canUnlockShape?: boolean
 }
 
 function MenuItem({
@@ -101,6 +106,11 @@ export function ContextMenu({
   onUngroup,
   canGroup,
   canUngroup,
+  isLocked,
+  onLock,
+  onUnlock,
+  canLockShape,
+  canUnlockShape,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   const [showAllColors, setShowAllColors] = useState(false)
@@ -132,19 +142,40 @@ export function ContextMenu({
         zIndex: 200,
       }}
     >
-      <MenuItem
-        onClick={() => { onDuplicate(); onClose() }}
-        label="Duplicate"
-        shortcut="Ctrl+D"
-      />
-      <MenuItem
-        onClick={() => { onDelete(); onClose() }}
-        label="Delete"
-        shortcut="Del"
-        variant="danger"
-      />
+      {/* Lock/Unlock */}
+      {canLockShape && !isLocked && onLock && (
+        <MenuItem
+          onClick={() => { onLock(); }}
+          label="Lock"
+        />
+      )}
+      {canUnlockShape && isLocked && onUnlock && (
+        <MenuItem
+          onClick={() => { onUnlock(); }}
+          label="Unlock"
+        />
+      )}
+      {isLocked && !canUnlockShape && (
+        <div className="px-3 py-2 text-sm text-slate-400">Shape locked</div>
+      )}
 
-      {(onBringToFront || onSendToBack) && (
+      {!isLocked && (
+        <>
+          <MenuItem
+            onClick={() => { onDuplicate(); onClose() }}
+            label="Duplicate"
+            shortcut="Ctrl+D"
+          />
+          <MenuItem
+            onClick={() => { onDelete(); onClose() }}
+            label="Delete"
+            shortcut="Del"
+            variant="danger"
+          />
+        </>
+      )}
+
+      {!isLocked && (onBringToFront || onSendToBack) && (
         <>
           <div className="my-1 h-px bg-slate-200" />
           <div className="px-3 py-1 text-xs font-medium text-slate-500">Layer</div>
@@ -163,7 +194,7 @@ export function ContextMenu({
         </>
       )}
 
-      {(canGroup || canUngroup) && (
+      {!isLocked && (canGroup || canUngroup) && (
         <>
           <div className="my-1 h-px bg-slate-200" />
           {canGroup && onGroup && (
@@ -176,7 +207,7 @@ export function ContextMenu({
       )}
 
       {/* Line-specific stroke presets */}
-      {isLine && onStrokeStyleChange && (
+      {!isLocked && isLine && onStrokeStyleChange && (
         <>
           <div className="my-1 h-px bg-slate-200" />
           <div className="px-3 py-2">
@@ -205,7 +236,7 @@ export function ContextMenu({
       )}
 
       {/* Outline (stroke color) for all shapes */}
-      {onStrokeStyleChange && (
+      {!isLocked && onStrokeStyleChange && (
         <>
           <div className="my-1 h-px bg-slate-200" />
           <div className="px-3 py-2">
@@ -239,7 +270,7 @@ export function ContextMenu({
       )}
 
       {/* Opacity presets */}
-      {onOpacityChange && (
+      {!isLocked && onOpacityChange && (
         <>
           <div className="my-1 h-px bg-slate-200" />
           <div className="px-3 py-2">
@@ -264,6 +295,8 @@ export function ContextMenu({
         </>
       )}
 
+      {!isLocked && (
+      <>
       <div className="my-1 h-px bg-slate-200" />
       <div className="px-3 py-2">
         <div className="mb-1.5 text-xs font-medium text-slate-500">Color</div>
@@ -307,6 +340,8 @@ export function ContextMenu({
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   )
 }

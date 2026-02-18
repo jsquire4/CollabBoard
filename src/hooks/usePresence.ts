@@ -40,7 +40,8 @@ export function usePresence(
   useEffect(() => {
     if (!channel) return
 
-    channel.on('presence', { event: 'sync' }, () => {
+    // sync fires after presenceState is updated — full reconciliation
+    const syncState = () => {
       const state = channel.presenceState<OnlineUser>()
       const deduped = new Map<string, OnlineUser>()
       for (const key of Object.keys(state)) {
@@ -51,9 +52,37 @@ export function usePresence(
         }
       }
       setOnlineUsers(Array.from(deduped.values()))
-    })
+    }
+
+    // join/leave fire BEFORE presenceState is updated, so use the
+    // callback payload directly for immediate incremental updates.
+    const handleJoin = ({ newPresences }: { key: string; newPresences: OnlineUser[]; currentPresences: OnlineUser[] }) => {
+      setOnlineUsers(prev => {
+        const map = new Map(prev.map(u => [u.user_id, u]))
+        for (const p of newPresences) {
+          if (p.user_id !== userId) map.set(p.user_id, p)
+        }
+        return Array.from(map.values())
+      })
+    }
+
+    const handleLeave = ({ leftPresences }: { key: string; leftPresences: OnlineUser[]; currentPresences: OnlineUser[] }) => {
+      const leftIds = new Set(leftPresences.map(p => p.user_id))
+      setOnlineUsers(prev => prev.filter(u => !leftIds.has(u.user_id)))
+    }
+
+    channel.on('presence', { event: 'sync' }, syncState)
+    channel.on('presence', { event: 'join' }, handleJoin)
+    channel.on('presence', { event: 'leave' }, handleLeave)
+
+    // Untrack immediately on tab close/refresh so other users see the leave instantly
+    const handleBeforeUnload = () => {
+      channel.untrack()
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
 
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
       trackedRef.current = false
     }
   }, [channel, userId])

@@ -45,6 +45,7 @@ interface LeftToolbarProps {
   canUngroup: boolean
   selectedStrokeColor?: string | null
   onStrokeColorChange: (color: string | null) => void
+  anySelectedLocked?: boolean
 }
 
 export function LeftToolbar({
@@ -71,6 +72,7 @@ export function LeftToolbar({
   canUngroup,
   selectedStrokeColor,
   onStrokeColorChange,
+  anySelectedLocked,
 }: LeftToolbarProps) {
   const canEdit = userRole !== 'viewer'
 
@@ -80,7 +82,9 @@ export function LeftToolbar({
         <>
           {isEditingText ? (
             /* ── Text editing tools ── */
-            <>
+            /* onMouseDown preventDefault keeps focus on the textarea so clicking
+               font/style controls doesn't close the text editor */
+            <div onMouseDown={e => e.preventDefault()}>
               <div className="mb-1 w-full px-1.5">
                 <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 text-center">
                   Text
@@ -98,7 +102,7 @@ export function LeftToolbar({
                 onTextStyleChange={onTextStyleChange}
                 compact
               />
-            </>
+            </div>
           ) : (
             /* ── Shape palette ── */
             <>
@@ -150,7 +154,7 @@ export function LeftToolbar({
 
           {/* ── Selection tools (always visible when shape selected) ── */}
           {hasSelection && (
-            <>
+            <div className={anySelectedLocked ? 'opacity-50 pointer-events-none' : ''}>
               <div className="my-1 h-px w-8 bg-slate-200" />
 
               {/* Fill color */}
@@ -215,7 +219,7 @@ export function LeftToolbar({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
               </button>
-            </>
+            </div>
           )}
         </>
       )}

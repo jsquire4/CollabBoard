@@ -232,6 +232,7 @@ export function FontSelector({
             aria-label="Font options"
             className="fixed z-[200] rounded-xl border border-slate-200 bg-white shadow-xl"
             style={{ top: popoverPos.top, left: popoverPos.left }}
+            onMouseDown={e => e.preventDefault()}
           >
             {content}
           </div>

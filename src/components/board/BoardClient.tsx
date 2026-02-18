@@ -53,6 +53,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     remoteSelections,
     reconcileOnReconnect,
     deleteObject, getZOrderSet, addObjectWithId,
+    isObjectLocked, lockObject, unlockObject,
   } = useBoardState(userId, boardId, userRole, channel, onlineUsers)
   const [shareOpen, setShareOpen] = useState(false)
   const [isEditingText, setIsEditingText] = useState(false)
@@ -535,6 +536,60 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     return false
   }, [selectedIds, objects])
 
+  // --- Lock/unlock permission checks ---
+  const canLockObject = useCallback((id: string): boolean => {
+    const obj = objects.get(id)
+    if (!obj) return false
+    if (userRole === 'owner') return true
+    if (userRole === 'manager') return true
+    return false
+  }, [objects, userRole])
+
+  const canUnlockObject = useCallback((id: string): boolean => {
+    const obj = objects.get(id)
+    if (!obj) return false
+    if (userRole === 'owner') return true
+    if (userRole === 'manager') return obj.locked_by === userId
+    return false
+  }, [objects, userRole, userId])
+
+  const handleLockSelected = useCallback(() => {
+    for (const id of selectedIds) {
+      if (canLockObject(id) && !isObjectLocked(id)) {
+        lockObject(id)
+      }
+    }
+  }, [selectedIds, canLockObject, isObjectLocked, lockObject])
+
+  const handleUnlockSelected = useCallback(() => {
+    for (const id of selectedIds) {
+      if (canUnlockObject(id) && isObjectLocked(id)) {
+        unlockObject(id)
+      }
+    }
+  }, [selectedIds, canUnlockObject, isObjectLocked, unlockObject])
+
+  const anySelectedLocked = useMemo(() => {
+    for (const id of selectedIds) {
+      if (isObjectLocked(id)) return true
+    }
+    return false
+  }, [selectedIds, isObjectLocked])
+
+  const selectedCanLock = useMemo(() => {
+    for (const id of selectedIds) {
+      if (canLockObject(id) && !isObjectLocked(id)) return true
+    }
+    return false
+  }, [selectedIds, canLockObject, isObjectLocked])
+
+  const selectedCanUnlock = useMemo(() => {
+    for (const id of selectedIds) {
+      if (canUnlockObject(id) && isObjectLocked(id)) return true
+    }
+    return false
+  }, [selectedIds, canUnlockObject, isObjectLocked])
+
   const selectedColor = useMemo(() => {
     const firstId = selectedIds.values().next().value
     if (!firstId) return undefined
@@ -627,6 +682,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
           canUngroup={canUngroup}
           selectedStrokeColor={selectedStyleInfo.strokeColor}
           onStrokeColorChange={handleBorderColorChange}
+          anySelectedLocked={anySelectedLocked}
         />
         <div className="relative flex-1 overflow-hidden">
           <CanvasErrorBoundary>
@@ -680,6 +736,12 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
               onCursorUpdate={onCursorUpdate}
               remoteSelections={remoteSelections}
               onEditingChange={setIsEditingText}
+              isObjectLocked={isObjectLocked}
+              anySelectedLocked={anySelectedLocked}
+              onLock={handleLockSelected}
+              onUnlock={handleUnlockSelected}
+              canLock={selectedCanLock}
+              canUnlock={selectedCanUnlock}
             />
           </CanvasErrorBoundary>
         </div>

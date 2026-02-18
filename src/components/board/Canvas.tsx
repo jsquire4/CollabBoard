@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useRef, useState, useCallback, useEffect, useMemo, memo } from 'react'
-import { Stage, Layer, Transformer, Rect as KonvaRect, Text as KonvaText, Group as KonvaGroup } from 'react-konva'
+import { Stage, Layer, Transformer, Rect as KonvaRect, Text as KonvaText, Group as KonvaGroup, Line as KonvaLine } from 'react-konva'
 import Konva from 'konva'
 import { useCanvas } from '@/hooks/useCanvas'
 import { useModifierKeys } from '@/hooks/useShiftKey'
@@ -261,6 +261,12 @@ interface CanvasProps {
   onCursorUpdate?: (fn: (cursors: Map<string, RemoteCursorData>) => void) => void
   remoteSelections?: Map<string, Set<string>>
   onEditingChange?: (isEditing: boolean) => void
+  isObjectLocked?: (id: string) => boolean
+  anySelectedLocked?: boolean
+  onLock?: () => void
+  onUnlock?: () => void
+  canLock?: boolean
+  canUnlock?: boolean
 }
 
 export function Canvas({
@@ -281,6 +287,8 @@ export function Canvas({
   onEndpointDragMove, onEndpointDragEnd,
   onlineUsers, onCursorMove, onCursorUpdate, remoteSelections,
   onEditingChange,
+  isObjectLocked, anySelectedLocked,
+  onLock, onUnlock, canLock, canUnlock,
 }: CanvasProps) {
   const canEdit = userRole !== 'viewer'
   const { stagePos, setStagePos, stageScale, handleWheel, zoomIn, zoomOut, resetZoom } = useCanvas()
@@ -392,6 +400,8 @@ export function Canvas({
     const ids = new Set<string>()
     for (const id of selectedIds) {
       const obj = objects.get(id)
+      // Skip locked shapes — they should not be part of the Transformer
+      if (isObjectLocked?.(id)) continue
       if (obj?.type === 'group') {
         for (const d of getDescendants(id)) {
           if (d.type !== 'group' && !isVectorType(d.type)) ids.add(d.id)
@@ -401,7 +411,7 @@ export function Canvas({
       }
     }
     return ids
-  }, [selectedIds, objects, getDescendants])
+  }, [selectedIds, objects, getDescendants, isObjectLocked])
 
   // Textarea overlay state for editing sticky notes / frame titles
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -438,10 +448,10 @@ export function Canvas({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (editingId) return
 
-      if (canEdit && (e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size > 0) {
+      if (canEdit && (e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size > 0 && !anySelectedLocked) {
         e.preventDefault()
         onDelete()
-      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.key === 'd' && selectedIds.size > 0) {
+      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.key === 'd' && selectedIds.size > 0 && !anySelectedLocked) {
         e.preventDefault()
         onDuplicate()
       } else if (canEdit && (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'g') {
@@ -473,7 +483,7 @@ export function Canvas({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editingId, selectedIds, activeGroupId, activeTool, onDelete, onDuplicate, onGroup, onUngroup, onClearSelection, onExitGroup, onCancelTool, canEdit, onUndo, onRedo])
+  }, [editingId, selectedIds, activeGroupId, activeTool, onDelete, onDuplicate, onGroup, onUngroup, onClearSelection, onExitGroup, onCancelTool, canEdit, onUndo, onRedo, anySelectedLocked])
 
   // Attach/detach Transformer to effective selected shapes (groups expanded to children)
   useEffect(() => {
@@ -559,6 +569,12 @@ export function Canvas({
     setEditText(initialText)
 
     const fontSize = field === 'title' ? 14 : obj.font_size
+    const fontFamily = obj.font_family || 'sans-serif'
+    const fontStyle = obj.font_style || 'normal'
+    const isBold = fontStyle === 'bold' || fontStyle === 'bold italic'
+    const isItalic = fontStyle === 'italic' || fontStyle === 'bold italic'
+    const textColor = field === 'title' ? (obj.text_color ?? '#374151') : (obj.text_color ?? '#000000')
+    const textAlign = (obj.text_align ?? (obj.type === 'sticky_note' ? 'left' : 'center')) as React.CSSProperties['textAlign']
     setTextareaStyle({
       position: 'absolute',
       top: `${textRect.y}px`,
@@ -566,15 +582,17 @@ export function Canvas({
       width: `${textRect.width}px`,
       height: `${textRect.height}px`,
       fontSize: `${fontSize * stageScale}px`,
-      fontFamily: 'sans-serif',
-      fontWeight: field === 'title' ? 'bold' : 'normal',
+      fontFamily,
+      fontWeight: isBold || field === 'title' ? 'bold' : 'normal',
+      fontStyle: isItalic ? 'italic' : 'normal',
+      textAlign,
       padding: '0px',
       margin: '0px',
       border: 'none',
       outline: 'none',
       resize: 'none',
       background: 'transparent',
-      color: '#333',
+      color: textColor,
       overflow: 'hidden',
       lineHeight: field === 'title' ? '1.3' : '1.2',
       zIndex: 100,
@@ -627,6 +645,29 @@ export function Canvas({
       textareaRef.current.focus()
     }
   }, [editingId])
+
+  // Sync textarea style live when font/text properties change during editing
+  useEffect(() => {
+    if (!editingId) return
+    const obj = objects.get(editingId)
+    if (!obj) return
+    const fontFamily = obj.font_family || 'sans-serif'
+    const fontStyle = obj.font_style || 'normal'
+    const isBold = fontStyle === 'bold' || fontStyle === 'bold italic'
+    const isItalic = fontStyle === 'italic' || fontStyle === 'bold italic'
+    const textColor = editingField === 'title' ? (obj.text_color ?? '#374151') : (obj.text_color ?? '#000000')
+    const textAlign = (obj.text_align ?? (obj.type === 'sticky_note' ? 'left' : 'center')) as React.CSSProperties['textAlign']
+    const fontSize = editingField === 'title' ? 14 : obj.font_size
+    setTextareaStyle(prev => ({
+      ...prev,
+      fontFamily,
+      fontWeight: isBold || editingField === 'title' ? 'bold' : 'normal',
+      fontStyle: isItalic ? 'italic' : 'normal',
+      color: textColor,
+      textAlign,
+      fontSize: `${fontSize * stageScale}px`,
+    }))
+  }, [editingId, editingField, objects, stageScale])
 
   useEffect(() => {
     onEditingChange?.(!!editingId)
@@ -1030,6 +1071,8 @@ export function Canvas({
   // Render a shape by type
   const renderShape = (obj: BoardObject) => {
     const isSelected = selectedIds.has(obj.id)
+    const shapeLocked = isObjectLocked?.(obj.id) ?? false
+    const shapeEditable = canEdit && !shapeLocked
 
     switch (obj.type) {
       case 'sticky_note':
@@ -1046,7 +1089,7 @@ export function Canvas({
             shapeRef={handleShapeRef}
             onTransformEnd={onTransformEnd}
             onContextMenu={handleContextMenu}
-            editable={canEdit}
+            editable={shapeEditable}
             isEditing={editingId === obj.id}
             editingField={editingId === obj.id ? editingField : undefined}
           />
@@ -1066,7 +1109,7 @@ export function Canvas({
             onContextMenu={handleContextMenu}
             onDoubleClick={handleShapeDoubleClick}
             isEditing={editingId === obj.id}
-            editable={canEdit}
+            editable={shapeEditable}
           />
         )
       case 'circle':
@@ -1084,7 +1127,7 @@ export function Canvas({
             onContextMenu={handleContextMenu}
             onDoubleClick={handleShapeDoubleClick}
             isEditing={editingId === obj.id}
-            editable={canEdit}
+            editable={shapeEditable}
           />
         )
       case 'frame':
@@ -1101,7 +1144,7 @@ export function Canvas({
             shapeRef={handleShapeRef}
             onTransformEnd={onTransformEnd}
             onContextMenu={handleContextMenu}
-            editable={canEdit}
+            editable={shapeEditable}
             isEditing={editingId === obj.id}
           />
         )
@@ -1118,7 +1161,7 @@ export function Canvas({
             shapeRef={handleShapeRef}
             onTransformEnd={onTransformEnd}
             onContextMenu={handleContextMenu}
-            editable={canEdit}
+            editable={shapeEditable}
             onEndpointDragMove={onEndpointDragMove}
             onEndpointDragEnd={onEndpointDragEnd}
           />
@@ -1138,7 +1181,7 @@ export function Canvas({
             onContextMenu={handleContextMenu}
             onDoubleClick={handleShapeDoubleClick}
             isEditing={editingId === obj.id}
-            editable={canEdit}
+            editable={shapeEditable}
           />
         )
       case 'chevron':
@@ -1156,7 +1199,7 @@ export function Canvas({
             onContextMenu={handleContextMenu}
             onDoubleClick={handleShapeDoubleClick}
             isEditing={editingId === obj.id}
-            editable={canEdit}
+            editable={shapeEditable}
           />
         )
       case 'arrow':
@@ -1172,7 +1215,7 @@ export function Canvas({
             shapeRef={handleShapeRef}
             onTransformEnd={onTransformEnd}
             onContextMenu={handleContextMenu}
-            editable={canEdit}
+            editable={shapeEditable}
             onEndpointDragMove={onEndpointDragMove}
             onEndpointDragEnd={onEndpointDragEnd}
           />
@@ -1192,7 +1235,7 @@ export function Canvas({
             onContextMenu={handleContextMenu}
             onDoubleClick={handleShapeDoubleClick}
             isEditing={editingId === obj.id}
-            editable={canEdit}
+            editable={shapeEditable}
           />
         )
       case 'group':
@@ -1293,6 +1336,49 @@ export function Canvas({
           {/* Render all objects sorted by z_index */}
           {sortedObjects.map(obj => renderShape(obj))}
 
+          {/* Lock icon overlays for locked shapes */}
+          {sortedObjects.map(obj => {
+            if (obj.type === 'group') return null
+            if (!(isObjectLocked?.(obj.id))) return null
+            let iconX: number, iconY: number
+            if (isVectorType(obj.type)) {
+              const ex2 = obj.x2 ?? obj.x + obj.width
+              const ey2 = obj.y2 ?? obj.y + obj.height
+              iconX = (obj.x + ex2) / 2 + 8
+              iconY = (obj.y + ey2) / 2 - 20
+            } else {
+              iconX = obj.x + obj.width - 6
+              iconY = obj.y - 6
+            }
+            return (
+              <KonvaGroup key={`lock-${obj.id}`} x={iconX} y={iconY} listening={false}>
+                {/* Lock body */}
+                <KonvaRect
+                  x={-6} y={-3}
+                  width={12} height={9}
+                  fill="#9CA3AF"
+                  cornerRadius={2}
+                />
+                {/* Lock shackle (arc drawn as line) */}
+                <KonvaLine
+                  points={[-3, -3, -3, -6, 0, -9, 3, -6, 3, -3]}
+                  stroke="#9CA3AF"
+                  strokeWidth={2.5}
+                  lineCap="round"
+                  lineJoin="round"
+                  tension={0.4}
+                />
+                {/* Keyhole */}
+                <KonvaRect
+                  x={-1.5} y={0}
+                  width={3} height={3}
+                  fill="#F3F4F6"
+                  cornerRadius={1}
+                />
+              </KonvaGroup>
+            )
+          })}
+
           {/* Marquee selection rectangle */}
           {marquee && (
             <KonvaRect
@@ -1352,15 +1438,14 @@ export function Canvas({
                 for (const node of tr.nodes()) {
                   const id = Array.from(shapeRefs.current.entries()).find(([, n]) => n === node)?.[0]
                   if (!id) continue
-                  const origin = transformOriginRef.current.get(id)
-                  if (!origin) continue
-                  const scaleX = node.scaleX()
-                  const scaleY = node.scaleY()
+                  // During transform, only broadcast position/rotation for
+                  // remote viewers. Do NOT update width/height — that would
+                  // trigger text re-wrap on every frame. Konva's native scale
+                  // handles the visual resize; final dimensions are computed
+                  // in onTransformEnd (via handleShapeTransformEnd).
                   onTransformMove(id, {
                     x: node.x(),
                     y: node.y(),
-                    width: Math.max(5, origin.width * scaleX),
-                    height: Math.max(5, origin.height * scaleY),
                     rotation: node.rotation(),
                   })
                 }
@@ -1444,6 +1529,11 @@ export function Canvas({
           onUngroup={onUngroup}
           canGroup={canGroup}
           canUngroup={canUngroup}
+          isLocked={isObjectLocked?.(contextMenu.objectId) ?? false}
+          onLock={() => { onLock?.(); setContextMenu(null) }}
+          onUnlock={() => { onUnlock?.(); setContextMenu(null) }}
+          canLockShape={canLock}
+          canUnlockShape={canUnlock}
         />
         )
       })()}

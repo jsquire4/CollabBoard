@@ -55,6 +55,7 @@ export interface BoardObject {
   text_color?: string | null
   corner_radius?: number | null
   title?: string | null
+  locked_by?: string | null
   field_clocks?: Record<string, { ts: number; c: number; n: string }>
   deleted_at?: string | null
 }

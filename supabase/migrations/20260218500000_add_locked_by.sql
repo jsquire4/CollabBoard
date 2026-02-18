@@ -1,0 +1,1 @@
+ALTER TABLE board_objects ADD COLUMN locked_by UUID DEFAULT NULL;

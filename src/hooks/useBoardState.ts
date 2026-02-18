@@ -551,6 +551,20 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
   const updateObject = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
 
+    // Lock guard: block mutations on locked objects (except lock/unlock itself)
+    if (!('locked_by' in updates)) {
+      const obj = objectsRef.current.get(id)
+      if (obj) {
+        // Walk parent chain to check inherited locks
+        let cur: BoardObject | undefined = obj
+        while (cur) {
+          if (cur.locked_by) return
+          if (!cur.parent_id) break
+          cur = objectsRef.current.get(cur.parent_id)
+        }
+      }
+    }
+
     // Capture previous state for rollback
     const previousObj = objectsRef.current.get(id)
 
@@ -591,6 +605,17 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
 
   const deleteObject = useCallback(async (id: string) => {
     if (!canEdit) return
+
+    // Lock guard: block deletion of locked objects
+    const obj = objectsRef.current.get(id)
+    if (obj) {
+      let cur: BoardObject | undefined = obj
+      while (cur) {
+        if (cur.locked_by) return
+        if (!cur.parent_id) break
+        cur = objectsRef.current.get(cur.parent_id)
+      }
+    }
 
     // Also delete all descendants
     const descendants = getDescendants(id)
@@ -1249,6 +1274,17 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
   const updateObjectDrag = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
 
+    // Lock guard
+    const obj = objectsRef.current.get(id)
+    if (obj) {
+      let cur: BoardObject | undefined = obj
+      while (cur) {
+        if (cur.locked_by) return
+        if (!cur.parent_id) break
+        cur = objectsRef.current.get(cur.parent_id)
+      }
+    }
+
     setObjects(prev => {
       const existing = prev.get(id)
       if (!existing) return prev
@@ -1265,6 +1301,17 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
   // Drag end: local state + DB write + broadcast
   const updateObjectDragEnd = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
+
+    // Lock guard
+    const lockObj = objectsRef.current.get(id)
+    if (lockObj) {
+      let cur: BoardObject | undefined = lockObj
+      while (cur) {
+        if (cur.locked_by) return
+        if (!cur.parent_id) break
+        cur = objectsRef.current.get(cur.parent_id)
+      }
+    }
 
     const now = new Date().toISOString()
     setObjects(prev => {
@@ -1334,6 +1381,27 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       }
     }
   }, [objects, updateObject])
+
+  // Lock helpers: check if an object is locked (directly or via ancestor inheritance)
+  const isObjectLocked = useCallback((id: string): boolean => {
+    let current = objectsRef.current.get(id)
+    while (current) {
+      if (current.locked_by) return true
+      if (!current.parent_id) break
+      current = objectsRef.current.get(current.parent_id)
+    }
+    return false
+  }, [])
+
+  const lockObject = useCallback((id: string) => {
+    if (!canEdit) return
+    updateObject(id, { locked_by: userId })
+  }, [canEdit, userId, updateObject])
+
+  const unlockObject = useCallback((id: string) => {
+    if (!canEdit) return
+    updateObject(id, { locked_by: null })
+  }, [canEdit, updateObject])
 
   // Broadcast local selection changes to remote users (debounced)
   const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1429,5 +1497,8 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     deleteObject,
     getZOrderSet,
     addObjectWithId,
+    isObjectLocked,
+    lockObject,
+    unlockObject,
   }
 }

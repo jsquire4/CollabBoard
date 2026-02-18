@@ -22,6 +22,7 @@ export function useRealtimeChannel(boardId: string): RealtimeChannel | null {
     setChannel(ch)
 
     return () => {
+      ch.untrack()
       supabase.removeChannel(ch)
       setChannel(null)
     }

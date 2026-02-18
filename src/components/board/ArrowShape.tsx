@@ -1,8 +1,9 @@
+import { memo } from 'react'
 import { Group, Arrow, Circle } from 'react-konva'
 import Konva from 'konva'
-import { ShapeProps, getShadowProps } from './shapeUtils'
+import { ShapeProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
 
-export function ArrowShape({
+export const ArrowShape = memo(function ArrowShape({
   object,
   onDragEnd,
   isSelected,
@@ -154,4 +155,4 @@ export function ArrowShape({
       )}
     </Group>
   )
-}
+}, areShapePropsEqual)

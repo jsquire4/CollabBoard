@@ -52,7 +52,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     getChildren, getDescendants,
     remoteSelections,
     reconcileOnReconnect,
-    deleteObject, getZOrderSet, addObjectWithId,
+    deleteObject, getZOrderSet, addObjectWithId, duplicateObject,
     isObjectLocked, lockObject, unlockObject,
   } = useBoardState(userId, boardId, userRole, channel, onlineUsers)
   const [shareOpen, setShareOpen] = useState(false)
@@ -324,6 +324,26 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
       undoStack.push({ type: 'duplicate', ids: newIds })
     }
   }, [canEdit, duplicateSelected, undoStack])
+
+  // Copy/paste clipboard (stores IDs of copied objects)
+  const clipboardRef = useRef<string[]>([])
+
+  const handleCopy = useCallback(() => {
+    if (selectedIds.size === 0) return
+    clipboardRef.current = Array.from(selectedIds)
+  }, [selectedIds])
+
+  const handlePaste = useCallback(() => {
+    if (!canEdit || clipboardRef.current.length === 0) return
+    const newIds: string[] = []
+    for (const id of clipboardRef.current) {
+      const newObj = duplicateObject(id)
+      if (newObj) newIds.push(newObj.id)
+    }
+    if (newIds.length > 0) {
+      undoStack.push({ type: 'duplicate', ids: newIds })
+    }
+  }, [canEdit, duplicateObject, undoStack])
 
   const handleColorChange = useCallback((color: string) => {
     if (!canEdit) return
@@ -708,6 +728,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
               onTransformMove={handleTransformMove}
               onDelete={handleDelete}
               onDuplicate={handleDuplicate}
+              onCopy={handleCopy}
+              onPaste={handlePaste}
               onColorChange={handleColorChange}
               onBringToFront={handleBringToFront}
               onBringForward={handleBringForward}

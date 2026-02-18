@@ -399,30 +399,43 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     return min === Infinity ? 0 : min
   }, [objects])
 
-  // Helper: get children of a group/frame
-  const getChildren = useCallback((parentId: string): BoardObject[] => {
-    const children: BoardObject[] = []
+  // Children index: parent_id -> direct children (O(N) build once, O(1) lookup)
+  const childrenIndex = useMemo(() => {
+    const index = new Map<string, BoardObject[]>()
     for (const obj of objects.values()) {
-      if (obj.parent_id === parentId) children.push(obj)
+      if (obj.parent_id) {
+        const siblings = index.get(obj.parent_id)
+        if (siblings) {
+          siblings.push(obj)
+        } else {
+          index.set(obj.parent_id, [obj])
+        }
+      }
     }
-    return children
+    return index
   }, [objects])
 
-  // Helper: get all descendants recursively
+  // Helper: get children of a group/frame (O(1) lookup)
+  const getChildren = useCallback((parentId: string): BoardObject[] => {
+    return childrenIndex.get(parentId) ?? []
+  }, [childrenIndex])
+
+  // Helper: get all descendants recursively (O(descendants) instead of O(N * depth))
   const getDescendants = useCallback((parentId: string): BoardObject[] => {
     const result: BoardObject[] = []
     const stack = [parentId]
     while (stack.length > 0) {
       const pid = stack.pop()!
-      for (const obj of objects.values()) {
-        if (obj.parent_id === pid) {
-          result.push(obj)
-          stack.push(obj.id)
+      const children = childrenIndex.get(pid)
+      if (children) {
+        for (const child of children) {
+          result.push(child)
+          stack.push(child.id)
         }
       }
     }
     return result
-  }, [objects])
+  }, [childrenIndex])
 
   // Helper: find the top-level ancestor (group/frame) that contains this object
   const getTopLevelAncestor = useCallback((id: string): string => {
@@ -790,16 +803,9 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       return newObjects[0]
     }
 
-    // Simple object duplication
-    const dupOverrides: Partial<BoardObject> = {
-      color: original.color,
-      width: original.width,
-      height: original.height,
-      rotation: original.rotation,
-      text: original.text,
-      font_size: original.font_size,
-      parent_id: original.parent_id,
-    }
+    // Simple object duplication — clone all visual properties
+    const { id: _oid, board_id: _obid, created_by: _ocb, created_at: _oca, updated_at: _oua, field_clocks: _ofc, deleted_at: _oda, type: _otype, x: _ox, y: _oy, z_index: _oz, ...visualProps } = original
+    const dupOverrides: Partial<BoardObject> = { ...visualProps }
     // Copy endpoints for vector types with +20 offset
     if (original.x2 != null) dupOverrides.x2 = original.x2 + 20
     if (original.y2 != null) dupOverrides.y2 = original.y2 + 20
@@ -1423,25 +1429,47 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     }
   }, [selectedIds, channel, userId])
 
-  // Listen for incoming remote selection broadcasts
+  // Batched remote selection updates (10ms window to coalesce rapid changes)
+  const pendingSelectionsRef = useRef<Map<string, string[]>>(new Map())
+  const selectionFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const flushSelections = useCallback(() => {
+    const pending = pendingSelectionsRef.current
+    if (pending.size === 0) return
+    setRemoteSelections(prev => {
+      const next = new Map(prev)
+      for (const [uid, ids] of pending) {
+        if (ids.length === 0) {
+          next.delete(uid)
+        } else {
+          next.set(uid, new Set(ids))
+        }
+      }
+      return next
+    })
+    pendingSelectionsRef.current = new Map()
+    selectionFlushTimerRef.current = null
+  }, [])
+
   useEffect(() => {
     if (!channel) return
 
     const handler = ({ payload }: { payload: { user_id: string; selected_ids: string[] } }) => {
       if (payload.user_id === userId) return
-      setRemoteSelections(prev => {
-        const next = new Map(prev)
-        if (payload.selected_ids.length === 0) {
-          next.delete(payload.user_id)
-        } else {
-          next.set(payload.user_id, new Set(payload.selected_ids))
-        }
-        return next
-      })
+      pendingSelectionsRef.current.set(payload.user_id, payload.selected_ids)
+      if (!selectionFlushTimerRef.current) {
+        selectionFlushTimerRef.current = setTimeout(flushSelections, 10)
+      }
     }
 
     channel.on('broadcast', { event: 'selection' }, handler)
-  }, [channel, userId])
+    return () => {
+      if (selectionFlushTimerRef.current) {
+        clearTimeout(selectionFlushTimerRef.current)
+        selectionFlushTimerRef.current = null
+      }
+    }
+  }, [channel, userId, flushSelections])
 
   // Clean up remote selections when a user leaves (no longer in onlineUsers)
   useEffect(() => {
@@ -1497,6 +1525,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     deleteObject,
     getZOrderSet,
     addObjectWithId,
+    duplicateObject,
     isObjectLocked,
     lockObject,
     unlockObject,

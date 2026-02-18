@@ -1,8 +1,9 @@
+import { memo } from 'react'
 import { Group, Line, Circle } from 'react-konva'
 import Konva from 'konva'
-import { ShapeProps, getShadowProps } from './shapeUtils'
+import { ShapeProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
 
-export function LineShape({
+export const LineShape = memo(function LineShape({
   object,
   onDragEnd,
   isSelected,
@@ -164,4 +165,4 @@ export function LineShape({
       )}
     </Group>
   )
-}
+}, areShapePropsEqual)

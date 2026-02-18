@@ -1,13 +1,14 @@
+import { memo } from 'react'
 import { Group, Rect, Text } from 'react-konva'
 import Konva from 'konva'
-import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps } from './shapeUtils'
+import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
 
 interface RectangleShapeProps extends ShapeProps {
   onStartEdit?: (id: string, node: Konva.Text) => void
   isEditing?: boolean
 }
 
-export function RectangleShape({
+export const RectangleShape = memo(function RectangleShape({
   object,
   onDragEnd,
   isSelected,
@@ -142,4 +143,4 @@ export function RectangleShape({
       )}
     </Group>
   )
-}
+}, areShapePropsEqual)

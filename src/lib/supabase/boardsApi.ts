@@ -51,11 +51,11 @@ export async function fetchBoardsGrouped(): Promise<{
 async function acceptPendingInvites(userId: string, email: string) {
   const supabase = await createClient()
 
-  // Find pending invites for this email (case-insensitive)
+  // Find pending invites for this email (normalized to lowercase)
   const { data: invites } = await supabase
     .from('board_invites')
     .select('*')
-    .ilike('email', email)
+    .eq('email', email.toLowerCase())
 
   if (!invites || invites.length === 0) return
 

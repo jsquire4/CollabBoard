@@ -232,6 +232,8 @@ interface CanvasProps {
   onTransformMove?: (id: string, updates: Partial<BoardObject>) => void
   onDelete: () => void
   onDuplicate: () => void
+  onCopy?: () => void
+  onPaste?: () => void
   onColorChange: (color: string) => void
   onBringToFront: (id: string) => void
   onBringForward: (id: string) => void
@@ -274,7 +276,7 @@ export function Canvas({
   activeTool, onDrawShape, onCancelTool,
   onSelect, onSelectObjects, onClearSelection, onEnterGroup, onExitGroup,
   onDragEnd, onDragMove, onUpdateText, onUpdateTitle, onTransformEnd, onTransformMove,
-  onDelete, onDuplicate, onColorChange,
+  onDelete, onDuplicate, onCopy, onPaste, onColorChange,
   onBringToFront, onBringForward, onSendBackward, onSendToBack,
   onGroup, onUngroup, canGroup, canUngroup,
   onStrokeStyleChange,
@@ -454,6 +456,12 @@ export function Canvas({
       } else if (canEdit && (e.ctrlKey || e.metaKey) && e.key === 'd' && selectedIds.size > 0 && !anySelectedLocked) {
         e.preventDefault()
         onDuplicate()
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedIds.size > 0) {
+        e.preventDefault()
+        onCopy?.()
+      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.key === 'v') {
+        e.preventDefault()
+        onPaste?.()
       } else if (canEdit && (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'g') {
         e.preventDefault()
         onUngroup()
@@ -483,7 +491,7 @@ export function Canvas({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editingId, selectedIds, activeGroupId, activeTool, onDelete, onDuplicate, onGroup, onUngroup, onClearSelection, onExitGroup, onCancelTool, canEdit, onUndo, onRedo, anySelectedLocked])
+  }, [editingId, selectedIds, activeGroupId, activeTool, onDelete, onDuplicate, onCopy, onPaste, onGroup, onUngroup, onClearSelection, onExitGroup, onCancelTool, canEdit, onUndo, onRedo, anySelectedLocked])
 
   // Attach/detach Transformer to effective selected shapes (groups expanded to children)
   useEffect(() => {
@@ -646,27 +654,31 @@ export function Canvas({
     }
   }, [editingId])
 
-  // Sync textarea style live when font/text properties change during editing
+  // Sync textarea style live when font/text properties change during editing.
+  // Debounced (50ms) to avoid recalc on every zoom tick.
   useEffect(() => {
     if (!editingId) return
     const obj = objects.get(editingId)
     if (!obj) return
-    const fontFamily = obj.font_family || 'sans-serif'
-    const fontStyle = obj.font_style || 'normal'
-    const isBold = fontStyle === 'bold' || fontStyle === 'bold italic'
-    const isItalic = fontStyle === 'italic' || fontStyle === 'bold italic'
-    const textColor = editingField === 'title' ? (obj.text_color ?? '#374151') : (obj.text_color ?? '#000000')
-    const textAlign = (obj.text_align ?? (obj.type === 'sticky_note' ? 'left' : 'center')) as React.CSSProperties['textAlign']
-    const fontSize = editingField === 'title' ? 14 : obj.font_size
-    setTextareaStyle(prev => ({
-      ...prev,
-      fontFamily,
-      fontWeight: isBold || editingField === 'title' ? 'bold' : 'normal',
-      fontStyle: isItalic ? 'italic' : 'normal',
-      color: textColor,
-      textAlign,
-      fontSize: `${fontSize * stageScale}px`,
-    }))
+    const timer = setTimeout(() => {
+      const fontFamily = obj.font_family || 'sans-serif'
+      const fontStyle = obj.font_style || 'normal'
+      const isBold = fontStyle === 'bold' || fontStyle === 'bold italic'
+      const isItalic = fontStyle === 'italic' || fontStyle === 'bold italic'
+      const textColor = editingField === 'title' ? (obj.text_color ?? '#374151') : (obj.text_color ?? '#000000')
+      const textAlign = (obj.text_align ?? (obj.type === 'sticky_note' ? 'left' : 'center')) as React.CSSProperties['textAlign']
+      const fontSize = editingField === 'title' ? 14 : obj.font_size
+      setTextareaStyle(prev => ({
+        ...prev,
+        fontFamily,
+        fontWeight: isBold || editingField === 'title' ? 'bold' : 'normal',
+        fontStyle: isItalic ? 'italic' : 'normal',
+        color: textColor,
+        textAlign,
+        fontSize: `${fontSize * stageScale}px`,
+      }))
+    }, 50)
+    return () => clearTimeout(timer)
   }, [editingId, editingField, objects, stageScale])
 
   useEffect(() => {
@@ -1007,6 +1019,30 @@ export function Canvas({
     return () => ro.disconnect()
   }, [])
 
+  // Viewport culling: only render objects within the visible canvas area (+ margin)
+  const visibleObjects = useMemo(() => {
+    const margin = 200 // extra canvas-space pixels to avoid pop-in at edges
+    const left = -stagePos.x / stageScale - margin
+    const top = -stagePos.y / stageScale - margin
+    const right = (-stagePos.x + dimensions.width) / stageScale + margin
+    const bottom = (-stagePos.y + dimensions.height) / stageScale + margin
+
+    return sortedObjects.filter(obj => {
+      if (obj.type === 'group') return false // groups render nothing
+      if (isVectorType(obj.type)) {
+        const ex2 = obj.x2 ?? obj.x + obj.width
+        const ey2 = obj.y2 ?? obj.y + obj.height
+        const objLeft = Math.min(obj.x, ex2)
+        const objTop = Math.min(obj.y, ey2)
+        const objRight = Math.max(obj.x, ex2)
+        const objBottom = Math.max(obj.y, ey2)
+        return objRight >= left && objLeft <= right && objBottom >= top && objTop <= bottom
+      }
+      return (obj.x + obj.width) >= left && obj.x <= right &&
+             (obj.y + obj.height) >= top && obj.y <= bottom
+    })
+  }, [sortedObjects, stagePos, stageScale, dimensions])
+
   // Compute group bounding boxes for visual treatment
   const getGroupBoundingBox = useCallback((groupId: string) => {
     const children = getDescendants(groupId).filter(c => c.type !== 'group')
@@ -1333,11 +1369,11 @@ export function Canvas({
             />
           )}
 
-          {/* Render all objects sorted by z_index */}
-          {sortedObjects.map(obj => renderShape(obj))}
+          {/* Render visible objects sorted by z_index (viewport culled) */}
+          {visibleObjects.map(obj => renderShape(obj))}
 
           {/* Lock icon overlays for locked shapes */}
-          {sortedObjects.map(obj => {
+          {visibleObjects.map(obj => {
             if (obj.type === 'group') return null
             if (!(isObjectLocked?.(obj.id))) return null
             let iconX: number, iconY: number

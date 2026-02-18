@@ -1,6 +1,7 @@
+import { memo } from 'react'
 import { Group, Rect, Text, Line } from 'react-konva'
 import Konva from 'konva'
-import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps } from './shapeUtils'
+import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
 
 interface StickyNoteProps extends ShapeProps {
   onStartEdit: (id: string, node: Konva.Text, field?: 'text' | 'title') => void
@@ -14,7 +15,7 @@ const TITLE_FONT_SIZE = 14
 const TITLE_LINE_HEIGHT = 1.3
 const DIVIDER_PAD = 6
 
-export function StickyNote({
+export const StickyNote = memo(function StickyNote({
   object,
   onDragEnd,
   isSelected,
@@ -161,4 +162,4 @@ export function StickyNote({
       )}
     </Group>
   )
-}
+}, areShapePropsEqual)

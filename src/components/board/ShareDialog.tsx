@@ -71,6 +71,13 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
     if (!email) return
     setInviteStatus(null)
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      setInviteStatus('Error: Please enter a valid email address')
+      return
+    }
+
     // Try to look up the user by email (board-scoped — requires manager/owner)
     const { data: userId } = await supabase.rpc('lookup_user_by_email', { p_board_id: boardId, p_email: email })
 

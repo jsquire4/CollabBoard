@@ -1,14 +1,15 @@
+import { memo } from 'react'
 import { Group, Circle, Text } from 'react-konva'
 import Konva from 'konva'
 import { KonvaEventObject } from 'konva/lib/Node'
-import { ShapeProps, getOutlineProps, getShadowProps } from './shapeUtils'
+import { ShapeProps, getOutlineProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
 
 interface CircleShapeProps extends ShapeProps {
   onStartEdit?: (id: string, node: Konva.Text) => void
   isEditing?: boolean
 }
 
-export function CircleShape({
+export const CircleShape = memo(function CircleShape({
   object,
   onDragEnd,
   isSelected,
@@ -191,4 +192,4 @@ export function CircleShape({
       )}
     </Group>
   )
-}
+}, areShapePropsEqual)

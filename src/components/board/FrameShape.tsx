@@ -1,6 +1,7 @@
+import { memo } from 'react'
 import { Group, Rect, Text } from 'react-konva'
 import Konva from 'konva'
-import { ShapeProps, handleShapeTransformEnd, getShadowProps } from './shapeUtils'
+import { ShapeProps, handleShapeTransformEnd, getShadowProps, areShapePropsEqual } from './shapeUtils'
 
 interface FrameShapeProps extends ShapeProps {
   onStartEdit: (id: string, node: Konva.Text) => void
@@ -32,7 +33,7 @@ function measureWrappedHeight(
   return lines * fontSize * lineHeight
 }
 
-export function FrameShape({
+export const FrameShape = memo(function FrameShape({
   object,
   onDragEnd,
   isSelected,
@@ -151,4 +152,4 @@ export function FrameShape({
       )}
     </Group>
   )
-}
+}, areShapePropsEqual)

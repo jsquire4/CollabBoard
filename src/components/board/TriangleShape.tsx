@@ -1,13 +1,14 @@
+import { memo } from 'react'
 import { Group, Line, Text } from 'react-konva'
 import Konva from 'konva'
-import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps } from './shapeUtils'
+import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
 
 interface TriangleShapeProps extends ShapeProps {
   onStartEdit?: (id: string, node: Konva.Text) => void
   isEditing?: boolean
 }
 
-export function TriangleShape({
+export const TriangleShape = memo(function TriangleShape({
   object,
   onDragEnd,
   isSelected,
@@ -145,4 +146,4 @@ export function TriangleShape({
       )}
     </Group>
   )
-}
+}, areShapePropsEqual)

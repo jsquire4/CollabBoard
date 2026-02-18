@@ -1,13 +1,14 @@
+import { memo } from 'react'
 import { Group, Line, Text } from 'react-konva'
 import Konva from 'konva'
-import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps } from './shapeUtils'
+import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
 
 interface HexagonShapeProps extends ShapeProps {
   onStartEdit?: (id: string, node: Konva.Text) => void
   isEditing?: boolean
 }
 
-export function HexagonShape({
+export const HexagonShape = memo(function HexagonShape({
   object,
   onDragEnd,
   isSelected,
@@ -144,4 +145,4 @@ export function HexagonShape({
       )}
     </Group>
   )
-}
+}, areShapePropsEqual)

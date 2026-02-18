@@ -1,13 +1,14 @@
+import { memo } from 'react'
 import { Group, Line, Text } from 'react-konva'
 import Konva from 'konva'
-import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps } from './shapeUtils'
+import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
 
 interface ParallelogramShapeProps extends ShapeProps {
   onStartEdit?: (id: string, node: Konva.Text) => void
   isEditing?: boolean
 }
 
-export function ParallelogramShape({
+export const ParallelogramShape = memo(function ParallelogramShape({
   object,
   onDragEnd,
   isSelected,
@@ -142,4 +143,4 @@ export function ParallelogramShape({
       )}
     </Group>
   )
-}
+}, areShapePropsEqual)

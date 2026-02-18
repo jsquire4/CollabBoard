@@ -67,6 +67,24 @@ export function getShadowProps(obj: BoardObject) {
 }
 
 /**
+ * React.memo comparator for shape components.
+ * Compares only the props that affect visual output — skips callback props
+ * (they may change identity but are functionally equivalent).
+ */
+export function areShapePropsEqual(
+  prev: { object: BoardObject; isSelected: boolean; editable?: boolean; isEditing?: boolean; editingField?: string },
+  next: { object: BoardObject; isSelected: boolean; editable?: boolean; isEditing?: boolean; editingField?: string },
+): boolean {
+  return (
+    prev.object === next.object &&
+    prev.isSelected === next.isSelected &&
+    prev.editable === next.editable &&
+    prev.isEditing === next.isEditing &&
+    prev.editingField === next.editingField
+  )
+}
+
+/**
  * Creates a standard transform-end handler that resets scale and
  * reports the final dimensions back via the callback.
  */

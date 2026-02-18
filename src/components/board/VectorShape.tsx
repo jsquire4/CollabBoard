@@ -1,24 +1,29 @@
 import { memo } from 'react'
-import { Group, Line, Circle } from 'react-konva'
+import { Group, Line, Arrow, Circle } from 'react-konva'
 import Konva from 'konva'
-import { ShapeProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
+import { ShapeProps, getShadowProps } from './shapeUtils'
 
-export const LineShape = memo(function LineShape({
+interface VectorShapeProps extends ShapeProps {
+  variant: 'line' | 'arrow'
+}
+
+export const VectorShape = memo(function VectorShape({
   object,
-  onDragEnd,
   isSelected,
   onSelect,
   shapeRef,
   onContextMenu,
-  onDragMove,
   onDragStart,
   editable = true,
   onEndpointDragMove,
   onEndpointDragEnd,
-}: ShapeProps) {
+  variant,
+}: VectorShapeProps) {
   const strokeWidth = object.stroke_width ?? 2
+
+  // Parse dash pattern (line only)
   let dash: number[] | undefined
-  if (object.stroke_dash) {
+  if (variant === 'line' && object.stroke_dash) {
     try {
       const parsed = JSON.parse(object.stroke_dash)
       dash = Array.isArray(parsed) ? parsed : undefined
@@ -27,15 +32,13 @@ export const LineShape = memo(function LineShape({
     }
   }
 
-  // Compute endpoint: use x2/y2 if available, fallback to x+width/y+height
+  // Compute endpoint
   const x2 = object.x2 ?? object.x + object.width
   const y2 = object.y2 ?? object.y + object.height
   const dx = x2 - object.x
   const dy = y2 - object.y
 
   const handleClick = () => onSelect(object.id)
-
-  // Whole-line drag: compute delta and shift both endpoints
   const handleLineDragStart = () => onDragStart?.(object.id)
 
   const handleLineDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -72,9 +75,7 @@ export const LineShape = memo(function LineShape({
   const handleStartAnchorDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!onEndpointDragMove) return
     const node = e.target
-    const newX = object.x + node.x()
-    const newY = object.y + node.y()
-    onEndpointDragMove(object.id, { x: newX, y: newY })
+    onEndpointDragMove(object.id, { x: object.x + node.x(), y: object.y + node.y() })
   }
 
   const handleStartAnchorDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -91,9 +92,7 @@ export const LineShape = memo(function LineShape({
   const handleEndAnchorDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!onEndpointDragMove) return
     const node = e.target
-    const newX2 = object.x + node.x()
-    const newY2 = object.y + node.y()
-    onEndpointDragMove(object.id, { x2: newX2, y2: newY2 })
+    onEndpointDragMove(object.id, { x2: object.x + node.x(), y2: object.y + node.y() })
   }
 
   const handleEndAnchorDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -105,6 +104,19 @@ export const LineShape = memo(function LineShape({
     node.y(dy)
     onEndpointDragEnd(object.id, { x2: newX2, y2: newY2 })
   }
+
+  const strokeColor = object.stroke_color ?? object.color
+  const shadowProps = getShadowProps(object)
+
+  // Line-specific: selection stroke boost + custom shadow when selected
+  const lineShadow = variant === 'line'
+    ? {
+        shadowColor: isSelected ? '#0EA5E9' : shadowProps.shadowColor,
+        shadowBlur: isSelected ? 8 : shadowProps.shadowBlur,
+        shadowOffsetX: isSelected ? 0 : shadowProps.shadowOffsetX,
+        shadowOffsetY: isSelected ? 0 : shadowProps.shadowOffsetY,
+      }
+    : shadowProps
 
   return (
     <Group
@@ -119,23 +131,39 @@ export const LineShape = memo(function LineShape({
       }}
       opacity={object.opacity ?? 1}
     >
-      <Line
-        points={[0, 0, dx, dy]}
-        stroke={object.stroke_color ?? object.color}
-        strokeWidth={isSelected ? Math.max(strokeWidth + 2, 4) : strokeWidth}
-        dash={dash}
-        lineCap="round"
-        lineJoin="round"
-        draggable={editable}
-        onDragStart={handleLineDragStart}
-        onDragMove={handleLineDragMove}
-        onDragEnd={handleLineDragEnd}
-        shadowColor={isSelected ? '#0EA5E9' : getShadowProps(object).shadowColor}
-        shadowBlur={isSelected ? 8 : getShadowProps(object).shadowBlur}
-        shadowOffsetX={isSelected ? 0 : getShadowProps(object).shadowOffsetX}
-        shadowOffsetY={isSelected ? 0 : getShadowProps(object).shadowOffsetY}
-        hitStrokeWidth={40}
-      />
+      {variant === 'line' ? (
+        <Line
+          points={[0, 0, dx, dy]}
+          stroke={strokeColor}
+          strokeWidth={isSelected ? Math.max(strokeWidth + 2, 4) : strokeWidth}
+          dash={dash}
+          lineCap="round"
+          lineJoin="round"
+          draggable={editable}
+          onDragStart={handleLineDragStart}
+          onDragMove={handleLineDragMove}
+          onDragEnd={handleLineDragEnd}
+          {...lineShadow}
+          hitStrokeWidth={40}
+        />
+      ) : (
+        <Arrow
+          points={[0, 0, dx, dy]}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          fill={strokeColor}
+          pointerLength={12}
+          pointerWidth={12}
+          lineCap="round"
+          lineJoin="round"
+          draggable={editable}
+          onDragStart={handleLineDragStart}
+          onDragMove={handleLineDragMove}
+          onDragEnd={handleLineDragEnd}
+          {...lineShadow}
+          hitStrokeWidth={40}
+        />
+      )}
       {/* Endpoint anchors — only visible when selected and editable */}
       {isSelected && editable && (
         <>
@@ -165,4 +193,9 @@ export const LineShape = memo(function LineShape({
       )}
     </Group>
   )
-}, areShapePropsEqual)
+}, (prev: VectorShapeProps, next: VectorShapeProps) => (
+  prev.object === next.object &&
+  prev.isSelected === next.isSelected &&
+  prev.editable === next.editable &&
+  prev.variant === next.variant
+))

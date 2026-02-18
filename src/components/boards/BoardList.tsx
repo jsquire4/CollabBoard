@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation'
 import { BoardWithRole } from '@/types/sharing'
 import { createClient } from '@/lib/supabase/client'
 import { BoardCard } from './BoardCard'
-import { CreateBoardDialog } from './CreateBoardDialog'
-import { EmptyState } from './EmptyState'
+import { NewBoardCard } from './NewBoardCard'
 
 interface BoardListProps {
   initialMyBoards: BoardWithRole[]
@@ -25,11 +24,6 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
   const router = useRouter()
   const supabaseRef = useRef(createClient())
   const supabase = supabaseRef.current
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/')
-  }
 
   const handleCreate = async () => {
     const name = newName.trim() || 'Untitled Board'
@@ -144,56 +138,26 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
     }
   }
 
-  const hasNoBoards = myBoards.length === 0 && sharedBoards.length === 0
-
   return (
     <div className="space-y-8">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-          My Boards
-        </h1>
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-        >
-          Logout
-        </button>
-      </header>
-
-      {showNameInput ? (
-        <CreateBoardDialog
-          newName={newName}
-          onNameChange={setNewName}
-          onCreate={handleCreate}
-          onCancel={() => { setShowNameInput(false); setNewName('') }}
-          creating={creating}
-        />
-      ) : (
-        <button
-          type="button"
-          onClick={() => setShowNameInput(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          New Board
-        </button>
-      )}
-
       {error && (
         <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
       )}
 
-      {hasNoBoards ? (
-        <EmptyState />
-      ) : (
-        <>
-          {myBoards.length > 0 && (
-            <section>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {myBoards.map((board) => (
+      <section>
+        <h2 className="mb-4 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+          My Boards
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <NewBoardCard
+                isCreating={showNameInput}
+                newName={newName}
+                onNameChange={setNewName}
+                onCreate={handleCreate}
+                onCancel={() => { setShowNameInput(false); setNewName('') }}
+                onClick={() => setShowNameInput(true)}
+              />
+              {myBoards.map((board) => (
                   <BoardCard
                     key={board.id}
                     board={board}
@@ -209,14 +173,15 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
                     onNavigate={(id) => router.push(`/board/${id}`)}
                   />
                 ))}
-              </div>
-            </section>
-          )}
+        </div>
+      </section>
 
-          {sharedBoards.length > 0 && (
-            <section>
-              <h2 className="mb-4 text-lg font-semibold text-slate-900">Shared with Me</h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {sharedBoards.length > 0 && (
+        <section className="mt-16 border-t border-slate-200 pt-12">
+          <h2 className="mb-4 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            Boards Shared with Me
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {sharedBoards.map((board) => (
                   <BoardCard
                     key={board.id}
@@ -233,10 +198,8 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
                     onNavigate={(id) => router.push(`/board/${id}`)}
                   />
                 ))}
-              </div>
-            </section>
-          )}
-        </>
+          </div>
+        </section>
       )}
     </div>
   )

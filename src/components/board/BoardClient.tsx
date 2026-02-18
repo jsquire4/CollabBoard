@@ -15,6 +15,11 @@ import { EXPANDED_PALETTE } from './ColorPicker'
 import { ShareDialog } from './ShareDialog'
 import { CanvasErrorBoundary } from './CanvasErrorBoundary'
 import { GroupBreadcrumb } from './GroupBreadcrumb'
+import { getInitialVertexPoints, isVectorType } from './shapeUtils'
+import { shapeRegistry } from './shapeRegistry'
+import { getShapeAnchors, findNearestAnchor, AnchorPoint } from './anchorPoints'
+import type { ShapePreset } from './shapePresets'
+import { scaleCustomPoints } from './shapePresets'
 
 // Konva is client-only — must disable SSR
 const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canvas })), {
@@ -36,9 +41,39 @@ interface BoardClientProps {
 
 export function BoardClient({ userId, boardId, boardName, userRole, displayName }: BoardClientProps) {
   const channel = useRealtimeChannel(boardId)
-  const { onlineUsers, trackPresence } = usePresence(channel, userId, userRole, displayName)
+  const { onlineUsers, trackPresence, updatePresence } = usePresence(channel, userId, userRole, displayName)
   const userCount = onlineUsers.length + 1 // include self
   const { sendCursor, onCursorUpdate } = useCursors(channel, userId, userCount)
+  const lastActivityRef = useRef(Date.now())
+  const idleCheckRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Mark activity for idle detection — resets timer and sets presence to active
+  const markActivity = useCallback(() => {
+    lastActivityRef.current = Date.now()
+    updatePresence('active')
+  }, [updatePresence])
+
+  // Wrap sendCursor to mark presence as active and reset idle timer
+  const sendCursorWithActivity = useCallback(
+    (x: number, y: number) => {
+      sendCursor(x, y)
+      markActivity()
+    },
+    [sendCursor, markActivity]
+  )
+
+  // Idle check: set presence to 'idle' after 30s of no cursor activity
+  useEffect(() => {
+    if (!updatePresence) return
+    idleCheckRef.current = setInterval(() => {
+      if (Date.now() - lastActivityRef.current > 30_000) {
+        updatePresence('idle')
+      }
+    }, 10_000)
+    return () => {
+      if (idleCheckRef.current) clearInterval(idleCheckRef.current)
+    }
+  }, [updatePresence])
 
   const {
     objects, selectedIds, activeGroupId, sortedObjects,
@@ -58,6 +93,10 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
   const [shareOpen, setShareOpen] = useState(false)
   const [isEditingText, setIsEditingText] = useState(false)
   const [activeTool, setActiveTool] = useState<BoardObjectType | null>(null)
+  const [activePreset, setActivePreset] = useState<ShapePreset | null>(null)
+  const [vertexEditId, setVertexEditId] = useState<string | null>(null)
+  const [pendingEditId, setPendingEditId] = useState<string | null>(null)
+  const [snapIndicator, setSnapIndicator] = useState<{ x: number; y: number } | null>(null)
   const undoStack = useUndoStack()
   const MAX_RECENT_COLORS = 6
   const [recentColors, setRecentColors] = useState<string[]>(() => EXPANDED_PALETTE.slice(0, MAX_RECENT_COLORS))
@@ -75,7 +114,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     if (!channel) return
     channel.subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        console.log(`Realtime channel subscribed for board ${boardId}`)
         trackPresence()
         if (hasConnectedRef.current) {
           reconcileOnReconnect()
@@ -188,34 +226,68 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
   }, [undoStack, executeUndo])
 
   // --- Handlers with undo capture ---
-  const handleToolSelect = useCallback((type: BoardObjectType) => {
+  const handlePresetSelect = useCallback((preset: ShapePreset) => {
     if (!canEdit) return
-    setActiveTool(prev => prev === type ? null : type)
+    markActivity()
+    setActivePreset(prev => {
+      const toggling = prev?.id === preset.id
+      if (toggling) {
+        setActiveTool(null)
+        return null
+      }
+      setActiveTool(preset.dbType)
+      return preset
+    })
     clearSelection()
-  }, [canEdit, clearSelection])
+  }, [canEdit, clearSelection, markActivity])
 
   const handleCancelTool = useCallback(() => {
     setActiveTool(null)
+    setActivePreset(null)
   }, [])
 
   const handleDrawShape = useCallback((type: BoardObjectType, x: number, y: number, width: number, height: number) => {
     if (!canEdit) return
+    markActivity()
     const overrides: Partial<BoardObject> = {}
+    // Merge preset overrides first
+    if (activePreset) {
+      Object.assign(overrides, activePreset.overrides)
+      // Use preset default size when no draw size
+      if (!(width > 0 && height > 0)) {
+        overrides.width = activePreset.defaultWidth
+        overrides.height = activePreset.defaultHeight
+      }
+    }
     if (width > 0 && height > 0) {
       overrides.width = width
       overrides.height = height
+      // Scale custom_points for draw-to-create
+      if (activePreset?.scalablePoints) {
+        const scaled = scaleCustomPoints(activePreset, width, height)
+        if (scaled) overrides.custom_points = scaled
+      }
     }
     if (type === 'line' || type === 'arrow') {
       overrides.x2 = x + (width || 120)
       overrides.y2 = y + (height || 40)
     }
+    const shouldAutoEdit = activePreset?.autoEdit
     const obj = addObject(type, x, y, overrides)
-    if (obj) undoStack.push({ type: 'add', ids: [obj.id] })
+    if (obj) {
+      undoStack.push({ type: 'add', ids: [obj.id] })
+      if (shouldAutoEdit) {
+        selectObject(obj.id)
+        setPendingEditId(obj.id)
+      }
+    }
     setActiveTool(null)
-  }, [canEdit, addObject, undoStack])
+    setActivePreset(null)
+  }, [canEdit, addObject, undoStack, activePreset, markActivity, selectObject])
 
   const handleDragStart = useCallback((id: string) => {
     if (!canEdit) return
+    markActivity()
     const obj = objects.get(id)
     if (!obj) return
     const map = new Map<string, { x: number; y: number; x2?: number | null; y2?: number | null; parent_id: string | null }>()
@@ -226,32 +298,199 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
       }
     }
     preDragRef.current = map
-  }, [canEdit, objects, getDescendants])
+  }, [canEdit, objects, getDescendants, markActivity])
 
-  const handleDragMove = (id: string, x: number, y: number) => {
+  // --- Connection index: maps shapeId → connectors attached to it ---
+  const connectionIndex = useMemo(() => {
+    const index = new Map<string, Array<{ connectorId: string; endpoint: 'start' | 'end' }>>()
+    for (const [id, obj] of objects) {
+      if (!isVectorType(obj.type)) continue
+      if (obj.connect_start_id) {
+        const list = index.get(obj.connect_start_id) ?? []
+        list.push({ connectorId: id, endpoint: 'start' })
+        index.set(obj.connect_start_id, list)
+      }
+      if (obj.connect_end_id) {
+        const list = index.get(obj.connect_end_id) ?? []
+        list.push({ connectorId: id, endpoint: 'end' })
+        index.set(obj.connect_end_id, list)
+      }
+    }
+    return index
+  }, [objects])
+
+  const handleDragMove = useCallback((id: string, x: number, y: number) => {
     if (!canEdit) return
+    markActivity()
     updateObjectDrag(id, { x, y })
-  }
+    // Auto-follow: update connectors attached to this shape
+    const obj = objects.get(id)
+    if (obj && !isVectorType(obj.type)) {
+      // Compute anchors with the *new* position
+      const movedObj = { ...obj, x, y }
+      const anchors = getShapeAnchors(movedObj)
+      const anchorMap = new Map(anchors.map(a => [a.id, a]))
+      const connections = connectionIndex.get(id)
+      if (connections) {
+        for (const { connectorId, endpoint } of connections) {
+          const connector = objects.get(connectorId)
+          if (!connector) continue
+          const anchorId = endpoint === 'start' ? connector.connect_start_anchor : connector.connect_end_anchor
+          if (!anchorId) continue
+          const anchor = anchorMap.get(anchorId)
+          if (!anchor) continue
+          if (endpoint === 'start') {
+            updateObjectDrag(connectorId, { x: anchor.x, y: anchor.y })
+          } else {
+            updateObjectDrag(connectorId, { x2: anchor.x, y2: anchor.y })
+          }
+        }
+      }
+    }
+  }, [canEdit, updateObjectDrag, objects, connectionIndex, markActivity])
 
   const handleDragEnd = useCallback((id: string, x: number, y: number) => {
     if (!canEdit) return
+    markActivity()
     updateObjectDragEnd(id, { x, y })
+    // Auto-follow connectors on drag end
+    const obj = objects.get(id)
+    if (obj && !isVectorType(obj.type)) {
+      const movedObj = { ...obj, x, y }
+      const anchors = getShapeAnchors(movedObj)
+      const anchorMap = new Map(anchors.map(a => [a.id, a]))
+      const connections = connectionIndex.get(id)
+      if (connections) {
+        for (const { connectorId, endpoint } of connections) {
+          const connector = objects.get(connectorId)
+          if (!connector) continue
+          const anchorId = endpoint === 'start' ? connector.connect_start_anchor : connector.connect_end_anchor
+          if (!anchorId) continue
+          const anchor = anchorMap.get(anchorId)
+          if (!anchor) continue
+          if (endpoint === 'start') {
+            updateObjectDragEnd(connectorId, { x: anchor.x, y: anchor.y })
+          } else {
+            updateObjectDragEnd(connectorId, { x2: anchor.x, y2: anchor.y })
+          }
+        }
+      }
+    }
 
     if (preDragRef.current.size > 0) {
       const patches = Array.from(preDragRef.current.entries()).map(([pid, before]) => ({ id: pid, before }))
       undoStack.push({ type: 'move', patches })
       preDragRef.current = new Map()
     }
-  }, [canEdit, updateObjectDragEnd, undoStack])
+  }, [canEdit, updateObjectDragEnd, undoStack, objects, connectionIndex, markActivity])
+
+  // Compute all anchor points for snap-to-anchor (excludes given connector id)
+  const computeAllAnchors = useCallback((excludeId: string): { anchors: AnchorPoint[]; shapeMap: Map<string, { anchors: AnchorPoint[]; obj: BoardObject }> } => {
+    const allAnchors: AnchorPoint[] = []
+    const shapeMap = new Map<string, { anchors: AnchorPoint[]; obj: BoardObject }>()
+    for (const [objId, obj] of objects) {
+      if (objId === excludeId) continue
+      if (isVectorType(obj.type) || obj.type === 'group') continue
+      if (obj.deleted_at) continue
+      const anchors = getShapeAnchors(obj)
+      if (anchors.length > 0) {
+        allAnchors.push(...anchors)
+        shapeMap.set(objId, { anchors, obj })
+      }
+    }
+    return { anchors: allAnchors, shapeMap }
+  }, [objects])
+
+  const SNAP_DISTANCE = 20
 
   const handleEndpointDragMove = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
+    markActivity()
+
+    const { anchors } = computeAllAnchors(id)
+    // Determine which endpoint(s) moved
+    const hasStart = updates.x !== undefined && updates.y !== undefined
+    const hasEnd = updates.x2 != null && updates.y2 != null
+    const isWholeDrag = hasStart && hasEnd
+    let snap: AnchorPoint | null = null
+
+    if (hasStart && !isWholeDrag) {
+      // Single start endpoint drag — snap start only
+      snap = findNearestAnchor(anchors, updates.x!, updates.y!, SNAP_DISTANCE)
+      if (snap) {
+        updates = { ...updates, x: snap.x, y: snap.y }
+      }
+    } else if (hasEnd && !isWholeDrag) {
+      // Single end endpoint drag — snap end only
+      snap = findNearestAnchor(anchors, updates.x2!, updates.y2!, SNAP_DISTANCE)
+      if (snap) {
+        updates = { ...updates, x2: snap.x, y2: snap.y }
+      }
+    }
+    // Whole-connector drag: no snapping during move (both endpoints move together)
+
+    setSnapIndicator(snap ? { x: snap.x, y: snap.y } : null)
     updateObjectDrag(id, updates)
-  }, [canEdit, updateObjectDrag])
+  }, [canEdit, updateObjectDrag, computeAllAnchors, markActivity])
+
+  // Helper to resolve snap for a single endpoint and find the owning shape
+  const resolveSnap = useCallback((
+    anchors: AnchorPoint[],
+    shapeMap: Map<string, { anchors: AnchorPoint[]; obj: BoardObject }>,
+    px: number, py: number
+  ): { snap: AnchorPoint | null; shapeId: string | null } => {
+    const snap = findNearestAnchor(anchors, px, py, SNAP_DISTANCE)
+    if (!snap) return { snap: null, shapeId: null }
+    for (const [shapeId, entry] of shapeMap) {
+      if (entry.anchors.some(a => a.id === snap.id && a.x === snap.x && a.y === snap.y)) {
+        return { snap, shapeId }
+      }
+    }
+    return { snap, shapeId: null }
+  }, [])
 
   const handleEndpointDragEnd = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
-    updateObjectDragEnd(id, updates)
+    markActivity()
+
+    const { anchors, shapeMap } = computeAllAnchors(id)
+    const hasStart = updates.x !== undefined && updates.y !== undefined
+    const hasEnd = updates.x2 != null && updates.y2 != null
+    const isWholeDrag = hasStart && hasEnd
+    const connUpdates: Partial<BoardObject> = {}
+
+    if (isWholeDrag) {
+      // Whole-connector drag: clear both connections (connector was repositioned)
+      connUpdates.connect_start_id = null
+      connUpdates.connect_start_anchor = null
+      connUpdates.connect_end_id = null
+      connUpdates.connect_end_anchor = null
+    } else if (hasStart) {
+      // Single start endpoint drag
+      const { snap, shapeId } = resolveSnap(anchors, shapeMap, updates.x!, updates.y!)
+      if (snap) {
+        updates = { ...updates, x: snap.x, y: snap.y }
+        connUpdates.connect_start_id = shapeId
+        connUpdates.connect_start_anchor = snap.id
+      } else {
+        connUpdates.connect_start_id = null
+        connUpdates.connect_start_anchor = null
+      }
+    } else if (hasEnd) {
+      // Single end endpoint drag
+      const { snap, shapeId } = resolveSnap(anchors, shapeMap, updates.x2!, updates.y2!)
+      if (snap) {
+        updates = { ...updates, x2: snap.x, y2: snap.y }
+        connUpdates.connect_end_id = shapeId
+        connUpdates.connect_end_anchor = snap.id
+      } else {
+        connUpdates.connect_end_id = null
+        connUpdates.connect_end_anchor = null
+      }
+    }
+
+    setSnapIndicator(null)
+    updateObjectDragEnd(id, { ...updates, ...connUpdates })
 
     if (preDragRef.current.size > 0) {
       const patches = Array.from(preDragRef.current.entries()).map(([pid, before]) => ({ id: pid, before }))
@@ -261,10 +500,11 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
 
     // Check frame containment for lines/arrows after drag
     setTimeout(() => checkFrameContainment(id), 0)
-  }, [canEdit, updateObjectDragEnd, undoStack, checkFrameContainment])
+  }, [canEdit, updateObjectDragEnd, undoStack, checkFrameContainment, computeAllAnchors, resolveSnap, markActivity])
 
   const handleUpdateText = useCallback((id: string, text: string) => {
     if (!canEdit) return
+    markActivity()
     const obj = objects.get(id)
     if (!obj) return
     // Enforce character limits: sticky notes unlimited, all other shapes 256
@@ -275,20 +515,23 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
       limited = text.slice(0, max)
     }
     updateObject(id, { text: limited })
-  }, [canEdit, objects, updateObject])
+  }, [canEdit, objects, updateObject, markActivity])
 
   const handleUpdateTitle = useCallback((id: string, title: string) => {
     if (!canEdit) return
+    markActivity()
     updateObject(id, { title: title.slice(0, 256) })
-  }, [canEdit, updateObject])
+  }, [canEdit, updateObject, markActivity])
 
   const handleTransformMove = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
+    markActivity()
     updateObjectDrag(id, updates)
-  }, [canEdit, updateObjectDrag])
+  }, [canEdit, updateObjectDrag, markActivity])
 
   const handleTransformEnd = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
+    markActivity()
     const obj = objects.get(id)
     if (obj) {
       const before: Partial<BoardObject> = {}
@@ -298,10 +541,33 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
       undoStack.push({ type: 'update', patches: [{ id, before }] })
     }
     updateObject(id, updates)
-  }, [canEdit, objects, updateObject, undoStack])
+    // Auto-follow connectors after transform
+    if (!isVectorType(obj?.type ?? '')) {
+      const transformedObj = { ...obj!, ...updates }
+      const anchors = getShapeAnchors(transformedObj)
+      const anchorMap = new Map(anchors.map(a => [a.id, a]))
+      const connections = connectionIndex.get(id)
+      if (connections) {
+        for (const { connectorId, endpoint } of connections) {
+          const connector = objects.get(connectorId)
+          if (!connector) continue
+          const anchorId = endpoint === 'start' ? connector.connect_start_anchor : connector.connect_end_anchor
+          if (!anchorId) continue
+          const anchor = anchorMap.get(anchorId)
+          if (!anchor) continue
+          if (endpoint === 'start') {
+            updateObject(connectorId, { x: anchor.x, y: anchor.y })
+          } else {
+            updateObject(connectorId, { x2: anchor.x, y2: anchor.y })
+          }
+        }
+      }
+    }
+  }, [canEdit, objects, updateObject, undoStack, connectionIndex, markActivity])
 
   const handleDelete = useCallback(() => {
     if (!canEdit) return
+    markActivity()
     const snapshots: BoardObject[] = []
     for (const id of selectedIds) {
       const obj = objects.get(id)
@@ -315,26 +581,29 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
       undoStack.push({ type: 'delete', objects: snapshots })
     }
     deleteSelected()
-  }, [canEdit, selectedIds, objects, getDescendants, deleteSelected, undoStack])
+  }, [canEdit, selectedIds, objects, getDescendants, deleteSelected, undoStack, markActivity])
 
   const handleDuplicate = useCallback(() => {
     if (!canEdit) return
+    markActivity()
     const newIds = duplicateSelected()
     if (newIds.length > 0) {
       undoStack.push({ type: 'duplicate', ids: newIds })
     }
-  }, [canEdit, duplicateSelected, undoStack])
+  }, [canEdit, duplicateSelected, undoStack, markActivity])
 
   // Copy/paste clipboard (stores IDs of copied objects)
   const clipboardRef = useRef<string[]>([])
 
   const handleCopy = useCallback(() => {
     if (selectedIds.size === 0) return
+    markActivity()
     clipboardRef.current = Array.from(selectedIds)
-  }, [selectedIds])
+  }, [selectedIds, markActivity])
 
   const handlePaste = useCallback(() => {
     if (!canEdit || clipboardRef.current.length === 0) return
+    markActivity()
     const newIds: string[] = []
     for (const id of clipboardRef.current) {
       const newObj = duplicateObject(id)
@@ -343,12 +612,37 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     if (newIds.length > 0) {
       undoStack.push({ type: 'duplicate', ids: newIds })
     }
-  }, [canEdit, duplicateObject, undoStack])
+  }, [canEdit, duplicateObject, undoStack, markActivity])
+
+  /**
+   * Check if objects become invisible after a style change and auto-delete them.
+   * Takes the pending updates so it checks the *intended* result, not stale state.
+   * Returns the original snapshots of deleted objects (for consolidated undo).
+   */
+  const checkAndDeleteInvisible = useCallback((pendingChanges: Map<string, Partial<BoardObject>>): BoardObject[] => {
+    const deleted: BoardObject[] = []
+    for (const [id, changes] of pendingChanges) {
+      const obj = objects.get(id)
+      if (!obj || obj.type === 'group') continue
+      // Overlay pending changes to get the effective state
+      const fill = changes.color ?? obj.color
+      const stroke = changes.stroke_color !== undefined ? changes.stroke_color : obj.stroke_color
+      const isTransparent = !fill || fill === 'transparent' || fill === 'rgba(0,0,0,0)'
+      const hasStroke = !!stroke
+      const hasText = !!(obj.text?.trim()) || !!(obj.title?.trim())
+      if (isTransparent && !hasStroke && !hasText) {
+        deleted.push({ ...obj })
+        deleteObject(id)
+      }
+    }
+    return deleted
+  }, [objects, deleteObject])
 
   const handleColorChange = useCallback((color: string) => {
     if (!canEdit) return
     pushRecentColor(color)
     const patches: { id: string; before: Partial<BoardObject> }[] = []
+    const pendingChanges = new Map<string, Partial<BoardObject>>()
     for (const id of selectedIds) {
       const obj = objects.get(id)
       if (obj?.type === 'group') {
@@ -356,15 +650,24 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
           if (child.type !== 'group') {
             patches.push({ id: child.id, before: { color: child.color } })
             updateObject(child.id, { color })
+            pendingChanges.set(child.id, { color })
           }
         }
       } else if (obj) {
         patches.push({ id, before: { color: obj.color } })
         updateObject(id, { color })
+        pendingChanges.set(id, { color })
       }
     }
-    if (patches.length > 0) undoStack.push({ type: 'update', patches })
-  }, [canEdit, selectedIds, objects, getDescendants, updateObject, undoStack, pushRecentColor])
+    // Check for invisible objects and delete them — single consolidated undo
+    const deleted = checkAndDeleteInvisible(pendingChanges)
+    if (deleted.length > 0) {
+      // Undo restores the deleted objects with their pre-change state (captured in snapshots)
+      undoStack.push({ type: 'delete', objects: deleted })
+    } else if (patches.length > 0) {
+      undoStack.push({ type: 'update', patches })
+    }
+  }, [canEdit, selectedIds, objects, getDescendants, updateObject, undoStack, pushRecentColor, checkAndDeleteInvisible])
 
   const handleFontChange = useCallback((updates: { font_family?: string; font_size?: number; font_style?: 'normal' | 'bold' | 'italic' | 'bold italic' }) => {
     if (!canEdit) return
@@ -390,6 +693,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
   const handleStrokeStyleChange = useCallback((updates: { stroke_color?: string | null; stroke_width?: number; stroke_dash?: string }) => {
     if (!canEdit) return
     const patches: { id: string; before: Partial<BoardObject> }[] = []
+    const pendingChanges = new Map<string, Partial<BoardObject>>()
     for (const id of selectedIds) {
       const obj = objects.get(id)
       if (!obj) continue
@@ -399,9 +703,15 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
       }
       patches.push({ id, before })
       updateObject(id, updates as Partial<BoardObject>)
+      pendingChanges.set(id, updates as Partial<BoardObject>)
     }
-    if (patches.length > 0) undoStack.push({ type: 'update', patches })
-  }, [canEdit, selectedIds, objects, updateObject, undoStack])
+    const deleted = checkAndDeleteInvisible(pendingChanges)
+    if (deleted.length > 0) {
+      undoStack.push({ type: 'delete', objects: deleted })
+    } else if (patches.length > 0) {
+      undoStack.push({ type: 'update', patches })
+    }
+  }, [canEdit, selectedIds, objects, updateObject, undoStack, checkAndDeleteInvisible])
 
   const handleBorderColorChange = useCallback((color: string | null) => {
     handleStrokeStyleChange({ stroke_color: color })
@@ -523,6 +833,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
   // Group/ungroup wrappers with undo capture
   const handleGroup = useCallback(async () => {
     if (!canEdit || selectedIds.size < 2) return
+    markActivity()
     const previousParentIds = new Map<string, string | null>()
     const childIds = Array.from(selectedIds)
     for (const id of childIds) {
@@ -533,10 +844,11 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     if (groupObj) {
       undoStack.push({ type: 'group', groupId: groupObj.id, childIds, previousParentIds })
     }
-  }, [canEdit, selectedIds, objects, groupSelected, undoStack])
+  }, [canEdit, selectedIds, objects, groupSelected, undoStack, markActivity])
 
   const handleUngroup = useCallback(() => {
     if (!canEdit) return
+    markActivity()
     for (const id of selectedIds) {
       const obj = objects.get(id)
       if (!obj || obj.type !== 'group') continue
@@ -544,7 +856,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
       undoStack.push({ type: 'ungroup', groupSnapshot: { ...obj }, childIds })
     }
     ungroupSelected()
-  }, [canEdit, selectedIds, objects, getChildren, ungroupSelected, undoStack])
+  }, [canEdit, selectedIds, objects, getChildren, ungroupSelected, undoStack, markActivity])
 
   // Determine if group/ungroup are available
   const canGroup = selectedIds.size > 1
@@ -610,6 +922,80 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     return false
   }, [selectedIds, canUnlockObject, isObjectLocked])
 
+  // --- Vertex editing ---
+  const handleEditVertices = useCallback(() => {
+    if (!canEdit) return
+    // Use first selected registry shape
+    const id = Array.from(selectedIds).find(sid => {
+      const obj = objects.get(sid)
+      return obj && shapeRegistry.has(obj.type)
+    })
+    if (!id) return
+    const obj = objects.get(id)!
+    // If shape doesn't have custom_points yet, compute and persist them
+    if (!obj.custom_points) {
+      const pts = getInitialVertexPoints(obj)
+      if (pts.length > 0) {
+        updateObject(id, { custom_points: JSON.stringify(pts) })
+      }
+    }
+    setVertexEditId(id)
+  }, [canEdit, selectedIds, objects, updateObject])
+
+  const handleVertexDragEnd = useCallback((id: string, index: number, x: number, y: number) => {
+    const obj = objects.get(id)
+    if (!obj?.custom_points) return
+    try {
+      const pts: number[] = JSON.parse(obj.custom_points)
+      const before = obj.custom_points
+      pts[index * 2] = x
+      pts[index * 2 + 1] = y
+      const after = JSON.stringify(pts)
+      undoStack.push({ type: 'update', patches: [{ id, before: { custom_points: before } }] })
+      updateObject(id, { custom_points: after })
+    } catch { /* ignore */ }
+  }, [objects, updateObject, undoStack])
+
+  const handleVertexInsert = useCallback((id: string, afterIndex: number) => {
+    const obj = objects.get(id)
+    if (!obj?.custom_points) return
+    try {
+      const pts: number[] = JSON.parse(obj.custom_points)
+      const numVerts = pts.length / 2
+      const nextIndex = (afterIndex + 1) % numVerts
+      // Insert midpoint between afterIndex and nextIndex
+      const mx = (pts[afterIndex * 2] + pts[nextIndex * 2]) / 2
+      const my = (pts[afterIndex * 2 + 1] + pts[nextIndex * 2 + 1]) / 2
+      // Splice the new point after afterIndex
+      const insertPos = (afterIndex + 1) * 2
+      pts.splice(insertPos, 0, mx, my)
+      const before = obj.custom_points
+      const after = JSON.stringify(pts)
+      undoStack.push({ type: 'update', patches: [{ id, before: { custom_points: before } }] })
+      updateObject(id, { custom_points: after })
+    } catch { /* ignore */ }
+  }, [objects, updateObject, undoStack])
+
+  const handleExitVertexEdit = useCallback(() => {
+    setVertexEditId(null)
+  }, [])
+
+  // Exit vertex edit when selection changes
+  useEffect(() => {
+    if (vertexEditId && !selectedIds.has(vertexEditId)) {
+      setVertexEditId(null)
+    }
+  }, [selectedIds, vertexEditId])
+
+  // Check if vertex editing is available for the current selection
+  const canEditVertices = useMemo(() => {
+    if (selectedIds.size !== 1) return false
+    const id = selectedIds.values().next().value
+    if (!id) return false
+    const obj = objects.get(id)
+    return !!obj && shapeRegistry.has(obj.type)
+  }, [selectedIds, objects])
+
   const selectedColor = useMemo(() => {
     const firstId = selectedIds.values().next().value
     if (!firstId) return undefined
@@ -617,7 +1003,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
   }, [selectedIds, objects])
 
   // Determine if any text-capable shape is selected
-  const TEXT_TYPES = new Set(['sticky_note', 'rectangle', 'circle', 'triangle', 'chevron', 'parallelogram', 'frame'])
+  const TEXT_TYPES = new Set(['sticky_note', 'rectangle', 'circle', 'triangle', 'chevron', 'parallelogram', 'ngon', 'frame'])
 
   const hasTextShapeSelected = useMemo(() => {
     for (const id of selectedIds) {
@@ -625,7 +1011,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
       if (obj && TEXT_TYPES.has(obj.type)) return true
     }
     return false
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [selectedIds, objects])
 
   const selectedFontInfo = useMemo(() => {
@@ -643,7 +1029,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
       textVerticalAlign: obj?.text_vertical_align ?? 'middle',
       textColor: obj?.text_color ?? '#000000',
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [selectedIds, objects])
 
   // Style info for the first selected object
@@ -681,7 +1067,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
         <LeftToolbar
           userRole={userRole}
           activeTool={activeTool}
-          onToolSelect={handleToolSelect}
           hasSelection={selectedIds.size > 0}
           isEditingText={isEditingText}
           selectedColor={selectedColor}
@@ -703,6 +1088,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
           selectedStrokeColor={selectedStyleInfo.strokeColor}
           onStrokeColorChange={handleBorderColorChange}
           anySelectedLocked={anySelectedLocked}
+          activePreset={activePreset}
+          onPresetSelect={handlePresetSelect}
         />
         <div className="relative flex-1 overflow-hidden">
           <CanvasErrorBoundary>
@@ -754,8 +1141,9 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
               selectedColor={selectedColor}
               userRole={userRole}
               onlineUsers={onlineUsers}
-              onCursorMove={sendCursor}
+              onCursorMove={sendCursorWithActivity}
               onCursorUpdate={onCursorUpdate}
+              onActivity={markActivity}
               remoteSelections={remoteSelections}
               onEditingChange={setIsEditingText}
               isObjectLocked={isObjectLocked}
@@ -764,6 +1152,15 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
               onUnlock={handleUnlockSelected}
               canLock={selectedCanLock}
               canUnlock={selectedCanUnlock}
+              vertexEditId={vertexEditId}
+              onEditVertices={handleEditVertices}
+              onExitVertexEdit={handleExitVertexEdit}
+              onVertexDragEnd={handleVertexDragEnd}
+              onVertexInsert={handleVertexInsert}
+              canEditVertices={canEditVertices}
+              snapIndicator={snapIndicator}
+              pendingEditId={pendingEditId}
+              onPendingEditConsumed={() => setPendingEditId(null)}
             />
           </CanvasErrorBoundary>
         </div>

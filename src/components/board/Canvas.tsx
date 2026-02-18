@@ -1,29 +1,25 @@
 'use client'
 
 import React, { useRef, useState, useCallback, useEffect, useMemo, memo } from 'react'
-import { Stage, Layer, Transformer, Rect as KonvaRect, Text as KonvaText, Group as KonvaGroup, Line as KonvaLine } from 'react-konva'
+import { Stage, Layer, Transformer, Rect as KonvaRect, Text as KonvaText, Group as KonvaGroup, Line as KonvaLine, Circle as KonvaCircle } from 'react-konva'
 import Konva from 'konva'
 import { useCanvas } from '@/hooks/useCanvas'
 import { useModifierKeys } from '@/hooks/useShiftKey'
 import { BoardObject, BoardObjectType } from '@/types/board'
 import { BoardRole } from '@/types/sharing'
 import { StickyNote } from './StickyNote'
-import { RectangleShape } from './RectangleShape'
-import { CircleShape } from './CircleShape'
 import { FrameShape } from './FrameShape'
-import { LineShape } from './LineShape'
-import { TriangleShape } from './TriangleShape'
-import { HexagonShape } from './HexagonShape'
-import { ArrowShape } from './ArrowShape'
-import { ParallelogramShape } from './ParallelogramShape'
+import { GenericShape } from './GenericShape'
+import { VectorShape } from './VectorShape'
+import { shapeRegistry } from './shapeRegistry'
 import { isVectorType } from './shapeUtils'
 import { ContextMenu } from './ContextMenu'
 import { ZoomControls } from './ZoomControls'
 import { RemoteCursorData } from '@/hooks/useCursors'
 import { OnlineUser, getColorForUser } from '@/hooks/usePresence'
 
-// Shape types that support triple-click text editing
-const TRIPLE_CLICK_TEXT_TYPES = new Set(['rectangle', 'circle', 'triangle', 'chevron', 'parallelogram'])
+// Shape types that support triple-click text editing (all registry shapes)
+const TRIPLE_CLICK_TEXT_TYPES = new Set(shapeRegistry.keys())
 // Character limits by shape type (sticky notes are unlimited)
 const SHAPE_TEXT_CHAR_LIMIT = 256
 const FRAME_TITLE_CHAR_LIMIT = 256
@@ -269,6 +265,16 @@ interface CanvasProps {
   onUnlock?: () => void
   canLock?: boolean
   canUnlock?: boolean
+  vertexEditId?: string | null
+  onEditVertices?: () => void
+  onExitVertexEdit?: () => void
+  onVertexDragEnd?: (id: string, index: number, x: number, y: number) => void
+  onVertexInsert?: (id: string, afterIndex: number) => void
+  canEditVertices?: boolean
+  snapIndicator?: { x: number; y: number } | null
+  onActivity?: () => void
+  pendingEditId?: string | null
+  onPendingEditConsumed?: () => void
 }
 
 export function Canvas({
@@ -291,6 +297,12 @@ export function Canvas({
   onEditingChange,
   isObjectLocked, anySelectedLocked,
   onLock, onUnlock, canLock, canUnlock,
+  vertexEditId, onEditVertices, onExitVertexEdit, onVertexDragEnd, onVertexInsert,
+  canEditVertices,
+  snapIndicator,
+  onActivity,
+  pendingEditId,
+  onPendingEditConsumed,
 }: CanvasProps) {
   const canEdit = userRole !== 'viewer'
   const { stagePos, setStagePos, stageScale, handleWheel, zoomIn, zoomOut, resetZoom } = useCanvas()
@@ -308,6 +320,7 @@ export function Canvas({
 
   // Right-click pan state (manual, bypasses Konva drag system)
   const isPanningRef = useRef(false)
+  const [isPanning, setIsPanning] = useState(false)
   const panStartRef = useRef({ x: 0, y: 0 })
   const stagePosAtPanStartRef = useRef({ x: 0, y: 0 })
 
@@ -475,7 +488,9 @@ export function Canvas({
         e.preventDefault()
         onUndo?.()
       } else if (e.key === 'Escape') {
-        if (activeTool) {
+        if (vertexEditId) {
+          onExitVertexEdit?.()
+        } else if (activeTool) {
           onCancelTool?.()
           // Cancel in-progress draw
           isDrawing.current = false
@@ -491,7 +506,7 @@ export function Canvas({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editingId, selectedIds, activeGroupId, activeTool, onDelete, onDuplicate, onCopy, onPaste, onGroup, onUngroup, onClearSelection, onExitGroup, onCancelTool, canEdit, onUndo, onRedo, anySelectedLocked])
+  }, [editingId, selectedIds, activeGroupId, activeTool, onDelete, onDuplicate, onCopy, onPaste, onGroup, onUngroup, onClearSelection, onExitGroup, onCancelTool, canEdit, onUndo, onRedo, anySelectedLocked, vertexEditId, onExitVertexEdit])
 
   // Attach/detach Transformer to effective selected shapes (groups expanded to children)
   useEffect(() => {
@@ -553,6 +568,7 @@ export function Canvas({
 
   const handleStartEdit = useCallback((id: string, textNode: Konva.Text, field: 'text' | 'title' = 'text') => {
     if (!canEdit) return
+    onActivity?.()
     // If double-clicking a child of a selected group, enter the group instead
     if (tryEnterGroup(id)) return
 
@@ -605,7 +621,7 @@ export function Canvas({
       lineHeight: field === 'title' ? '1.3' : '1.2',
       zIndex: 100,
     })
-  }, [objects, stageScale, canEdit, tryEnterGroup])
+  }, [objects, stageScale, canEdit, tryEnterGroup, onActivity])
 
   // Track last double-click for triple-click detection on geometric shapes
   const lastDblClickRef = useRef<{ id: string; time: number } | null>(null)
@@ -685,6 +701,32 @@ export function Canvas({
     onEditingChange?.(!!editingId)
   }, [editingId, onEditingChange])
 
+  // Auto-enter text edit mode for newly created text boxes.
+  // Polls via rAF until the Konva node exists (up to 500ms), then triggers edit.
+  // onPendingEditConsumed is called only after the node is found, preventing
+  // the state from being cleared before polling completes.
+  useEffect(() => {
+    if (!pendingEditId) return
+    const id = pendingEditId
+    const startTime = performance.now()
+    let rafId: number
+    const poll = () => {
+      const node = shapeRefs.current.get(id)
+      if (node) {
+        onPendingEditConsumed?.()
+        startGeometricTextEdit(id)
+        return
+      }
+      if (performance.now() - startTime < 500) {
+        rafId = requestAnimationFrame(poll)
+      } else {
+        onPendingEditConsumed?.()
+      }
+    }
+    rafId = requestAnimationFrame(poll)
+    return () => cancelAnimationFrame(rafId)
+  }, [pendingEditId, onPendingEditConsumed, startGeometricTextEdit])
+
   // Track whether a marquee just completed, so the click handler doesn't
   // immediately clear the selection (click fires after mousedown+mouseup).
   const marqueeJustCompletedRef = useRef(false)
@@ -714,6 +756,7 @@ export function Canvas({
 
   // Handle shape click with modifier keys + triple-click detection
   const handleShapeSelect = useCallback((id: string) => {
+    onActivity?.()
     // Triple-click detection: a click shortly after a double-click on the same shape
     const prev = lastDblClickRef.current
     if (prev && prev.id === id && Date.now() - prev.time < 500) {
@@ -725,7 +768,7 @@ export function Canvas({
       }
     }
     onSelect(id, { shift: shiftHeld, ctrl: ctrlHeld })
-  }, [onSelect, shiftHeld, ctrlHeld, objects, startGeometricTextEdit])
+  }, [onSelect, shiftHeld, ctrlHeld, objects, startGeometricTextEdit, onActivity])
 
   // Handle double-click on group/frame to enter it
   const handleShapeDblClick = useCallback((id: string) => {
@@ -794,9 +837,10 @@ export function Canvas({
 
   const handleContextMenu = useCallback((id: string, clientX: number, clientY: number) => {
     if (!canEdit) return
+    onActivity?.()
     onSelect(id, { shift: shiftHeld, ctrl: ctrlHeld })
     setContextMenu({ x: clientX, y: clientY, objectId: id })
-  }, [onSelect, canEdit, shiftHeld, ctrlHeld])
+  }, [onSelect, canEdit, shiftHeld, ctrlHeld, onActivity])
 
   const handleStageContextMenu = useCallback((e: Konva.KonvaEventObject<PointerEvent>) => {
     e.evt.preventDefault()
@@ -806,6 +850,8 @@ export function Canvas({
   const handleStageMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     // Right-click is handled by the manual pan listener — ignore here
     if (e.evt.button === 2) return
+
+    onActivity?.()
 
     // Only left-click on empty area
     if (e.evt.button !== 0) return
@@ -832,7 +878,7 @@ export function Canvas({
     const rect = { x: canvasX, y: canvasY, width: 0, height: 0 }
     marqueeRef.current = rect
     setMarquee(rect)
-  }, [stagePos, stageScale, activeTool])
+  }, [stagePos, stageScale, activeTool, onActivity])
 
   const handleStageMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = stageRef.current
@@ -871,6 +917,7 @@ export function Canvas({
   }, [stagePos, stageScale, onCursorMove])
 
   const handleStageMouseUp = useCallback(() => {
+    onActivity?.()
     // Finalize draw-to-create
     if (isDrawing.current && drawStart.current && activeTool && onDrawShape) {
       const stage = stageRef.current
@@ -947,7 +994,7 @@ export function Canvas({
     marqueeStart.current = null
     marqueeRef.current = null
     setMarquee(null)
-  }, [sortedObjects, activeGroupId, onSelectObjects, activeTool, onDrawShape, stagePos, stageScale])
+  }, [sortedObjects, activeGroupId, onSelectObjects, activeTool, onDrawShape, stagePos, stageScale, onActivity])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
@@ -970,6 +1017,7 @@ export function Canvas({
       if (hit) return
 
       isPanningRef.current = true
+      setIsPanning(true)
       panStartRef.current = { x: e.clientX, y: e.clientY }
       stagePosAtPanStartRef.current = { x: stage.x(), y: stage.y() }
       container.setPointerCapture(e.pointerId)
@@ -985,11 +1033,17 @@ export function Canvas({
       const newY = stagePosAtPanStartRef.current.y + dy
       stage.position({ x: newX, y: newY })
       stage.batchDraw()
+      // Update grid background position live during pan
+      const bgEl = containerRef.current
+      if (bgEl) {
+        bgEl.style.backgroundPosition = `${newX}px ${newY}px`
+      }
     }
 
     const onPointerUp = (e: PointerEvent) => {
       if (!isPanningRef.current) return
       isPanningRef.current = false
+      setIsPanning(false)
       container.releasePointerCapture(e.pointerId)
       const stage = stageRef.current
       if (stage) {
@@ -1110,6 +1164,27 @@ export function Canvas({
     const shapeLocked = isObjectLocked?.(obj.id) ?? false
     const shapeEditable = canEdit && !shapeLocked
 
+    // Registry shapes (rectangle, circle, triangle, chevron, parallelogram)
+    if (shapeRegistry.has(obj.type)) {
+      return (
+        <GenericShape
+          key={obj.id}
+          object={obj}
+          onDragEnd={handleShapeDragEnd}
+          onDragMove={handleShapeDragMove}
+          onDragStart={handleShapeDragStart}
+          isSelected={isSelected}
+          onSelect={handleShapeSelect}
+          shapeRef={handleShapeRef}
+          onTransformEnd={onTransformEnd}
+          onContextMenu={handleContextMenu}
+          onDoubleClick={handleShapeDoubleClick}
+          isEditing={editingId === obj.id}
+          editable={shapeEditable}
+        />
+      )
+    }
+
     switch (obj.type) {
       case 'sticky_note':
         return (
@@ -1128,42 +1203,6 @@ export function Canvas({
             editable={shapeEditable}
             isEditing={editingId === obj.id}
             editingField={editingId === obj.id ? editingField : undefined}
-          />
-        )
-      case 'rectangle':
-        return (
-          <RectangleShape
-            key={obj.id}
-            object={obj}
-            onDragEnd={handleShapeDragEnd}
-            onDragMove={handleShapeDragMove}
-            onDragStart={handleShapeDragStart}
-            isSelected={isSelected}
-            onSelect={handleShapeSelect}
-            shapeRef={handleShapeRef}
-            onTransformEnd={onTransformEnd}
-            onContextMenu={handleContextMenu}
-            onDoubleClick={handleShapeDoubleClick}
-            isEditing={editingId === obj.id}
-            editable={shapeEditable}
-          />
-        )
-      case 'circle':
-        return (
-          <CircleShape
-            key={obj.id}
-            object={obj}
-            onDragEnd={handleShapeDragEnd}
-            onDragMove={handleShapeDragMove}
-            onDragStart={handleShapeDragStart}
-            isSelected={isSelected}
-            onSelect={handleShapeSelect}
-            shapeRef={handleShapeRef}
-            onTransformEnd={onTransformEnd}
-            onContextMenu={handleContextMenu}
-            onDoubleClick={handleShapeDoubleClick}
-            isEditing={editingId === obj.id}
-            editable={shapeEditable}
           />
         )
       case 'frame':
@@ -1186,8 +1225,9 @@ export function Canvas({
         )
       case 'line':
         return (
-          <LineShape
+          <VectorShape
             key={obj.id}
+            variant="line"
             object={obj}
             onDragEnd={handleShapeDragEnd}
             onDragMove={handleShapeDragMove}
@@ -1200,48 +1240,13 @@ export function Canvas({
             editable={shapeEditable}
             onEndpointDragMove={onEndpointDragMove}
             onEndpointDragEnd={onEndpointDragEnd}
-          />
-        )
-      case 'triangle':
-        return (
-          <TriangleShape
-            key={obj.id}
-            object={obj}
-            onDragEnd={handleShapeDragEnd}
-            onDragMove={handleShapeDragMove}
-            onDragStart={handleShapeDragStart}
-            isSelected={isSelected}
-            onSelect={handleShapeSelect}
-            shapeRef={handleShapeRef}
-            onTransformEnd={onTransformEnd}
-            onContextMenu={handleContextMenu}
-            onDoubleClick={handleShapeDoubleClick}
-            isEditing={editingId === obj.id}
-            editable={shapeEditable}
-          />
-        )
-      case 'chevron':
-        return (
-          <HexagonShape
-            key={obj.id}
-            object={obj}
-            onDragEnd={handleShapeDragEnd}
-            onDragMove={handleShapeDragMove}
-            onDragStart={handleShapeDragStart}
-            isSelected={isSelected}
-            onSelect={handleShapeSelect}
-            shapeRef={handleShapeRef}
-            onTransformEnd={onTransformEnd}
-            onContextMenu={handleContextMenu}
-            onDoubleClick={handleShapeDoubleClick}
-            isEditing={editingId === obj.id}
-            editable={shapeEditable}
           />
         )
       case 'arrow':
         return (
-          <ArrowShape
+          <VectorShape
             key={obj.id}
+            variant="arrow"
             object={obj}
             onDragEnd={handleShapeDragEnd}
             onDragMove={handleShapeDragMove}
@@ -1254,24 +1259,6 @@ export function Canvas({
             editable={shapeEditable}
             onEndpointDragMove={onEndpointDragMove}
             onEndpointDragEnd={onEndpointDragEnd}
-          />
-        )
-      case 'parallelogram':
-        return (
-          <ParallelogramShape
-            key={obj.id}
-            object={obj}
-            onDragEnd={handleShapeDragEnd}
-            onDragMove={handleShapeDragMove}
-            onDragStart={handleShapeDragStart}
-            isSelected={isSelected}
-            onSelect={handleShapeSelect}
-            shapeRef={handleShapeRef}
-            onTransformEnd={onTransformEnd}
-            onContextMenu={handleContextMenu}
-            onDoubleClick={handleShapeDoubleClick}
-            isEditing={editingId === obj.id}
-            editable={shapeEditable}
           />
         )
       case 'group':
@@ -1286,13 +1273,14 @@ export function Canvas({
       ref={containerRef}
       className="relative h-full w-full overflow-hidden"
       style={{
-        backgroundColor: '#cbd5e1',
+        backgroundColor: '#e8ecf1',
         backgroundImage: `
-          linear-gradient(rgba(148, 163, 184, 0.5) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(148, 163, 184, 0.5) 1px, transparent 1px)
+          linear-gradient(rgba(180, 190, 205, 0.4) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(180, 190, 205, 0.4) 1px, transparent 1px)
         `,
-        backgroundSize: '40px 40px',
-        cursor: activeTool ? 'crosshair' : undefined,
+        backgroundSize: `${40 * stageScale}px ${40 * stageScale}px`,
+        backgroundPosition: `${stagePos.x}px ${stagePos.y}px`,
+        cursor: isPanning ? 'grabbing' : activeTool ? 'crosshair' : undefined,
       }}
     >
       <Stage
@@ -1430,6 +1418,19 @@ export function Canvas({
             />
           )}
 
+          {/* Connector snap indicator dot */}
+          {snapIndicator && (
+            <KonvaCircle
+              x={snapIndicator.x}
+              y={snapIndicator.y}
+              radius={8 / stageScale}
+              fill="rgba(59, 130, 246, 0.4)"
+              stroke="#3B82F6"
+              strokeWidth={2 / stageScale}
+              listening={false}
+            />
+          )}
+
           {/* Draw-to-create preview rectangle */}
           {drawPreview && drawPreview.width > 0 && drawPreview.height > 0 && (
             <KonvaRect
@@ -1474,6 +1475,56 @@ export function Canvas({
               // committed in onTransformEnd (via handleShapeTransformEnd).}
             />
           )}
+
+          {/* Vertex edit handles — rendered AFTER Transformer so they sit on top of resize anchors */}
+          {vertexEditId && (() => {
+            const vObj = objects.get(vertexEditId)
+            if (!vObj) return null
+            const pts = vObj.custom_points ? (() => { try { return JSON.parse(vObj.custom_points!) as number[] } catch { return null } })() : null
+            if (!pts || pts.length < 4) return null
+            const numVerts = pts.length / 2
+            return (
+              <KonvaGroup x={vObj.x} y={vObj.y} rotation={vObj.rotation}>
+                {/* Midpoint "add vertex" handles — click to insert a new vertex on this edge */}
+                {Array.from({ length: numVerts }, (_, i) => {
+                  const j = (i + 1) % numVerts
+                  const mx = (pts[i * 2] + pts[j * 2]) / 2
+                  const my = (pts[i * 2 + 1] + pts[j * 2 + 1]) / 2
+                  return (
+                    <KonvaCircle
+                      key={`mid-${i}`}
+                      x={mx}
+                      y={my}
+                      radius={4 / stageScale}
+                      fill="#E0E7FF"
+                      stroke="#818CF8"
+                      strokeWidth={1.5 / stageScale}
+                      hitStrokeWidth={12 / stageScale}
+                      onClick={() => onVertexInsert?.(vertexEditId, i)}
+                      onTap={() => onVertexInsert?.(vertexEditId, i)}
+                    />
+                  )
+                })}
+                {/* Vertex handles — draggable */}
+                {Array.from({ length: numVerts }, (_, i) => (
+                  <KonvaCircle
+                    key={`vtx-${i}`}
+                    x={pts[i * 2]}
+                    y={pts[i * 2 + 1]}
+                    radius={6 / stageScale}
+                    fill="white"
+                    stroke="#6366F1"
+                    strokeWidth={2 / stageScale}
+                    draggable
+                    onDragEnd={(e) => {
+                      const node = e.target
+                      onVertexDragEnd?.(vertexEditId, i, node.x(), node.y())
+                    }}
+                  />
+                ))}
+              </KonvaGroup>
+            )
+          })()}
         </Layer>
         {/* Remote cursors layer — updated imperatively via rAF, no React re-renders */}
         <Layer ref={cursorLayerRef} listening={false} />
@@ -1556,6 +1607,8 @@ export function Canvas({
           onUnlock={() => { onUnlock?.(); setContextMenu(null) }}
           canLockShape={canLock}
           canUnlockShape={canUnlock}
+          onEditVertices={onEditVertices}
+          canEditVertices={canEditVertices}
         />
         )
       })()}

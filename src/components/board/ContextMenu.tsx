@@ -32,6 +32,8 @@ interface ContextMenuProps {
   onUnlock?: () => void
   canLockShape?: boolean
   canUnlockShape?: boolean
+  onEditVertices?: () => void
+  canEditVertices?: boolean
 }
 
 function MenuItem({
@@ -111,6 +113,8 @@ export function ContextMenu({
   onUnlock,
   canLockShape,
   canUnlockShape,
+  onEditVertices,
+  canEditVertices,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   const [showAllColors, setShowAllColors] = useState(false)
@@ -171,6 +175,16 @@ export function ContextMenu({
             label="Delete"
             shortcut="Del"
             variant="danger"
+          />
+        </>
+      )}
+
+      {!isLocked && canEditVertices && onEditVertices && (
+        <>
+          <div className="my-1 h-px bg-slate-200" />
+          <MenuItem
+            onClick={() => { onEditVertices(); onClose() }}
+            label="Edit Vertices"
           />
         </>
       )}

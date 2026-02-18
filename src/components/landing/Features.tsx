@@ -33,7 +33,10 @@ const features = [
 export function Features() {
   return (
     <section className="relative px-6 py-24">
-      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-transparent via-slate-50/50 to-slate-100/30" />
+      {/* Soft recessed feel — slightly darker band */}
+      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-transparent via-slate-100/40 to-slate-200/50" />
+      {/* Inner glow at top of section */}
+      <div className="absolute inset-x-0 top-0 -z-10 h-32 bg-gradient-to-b from-white/30 to-transparent" />
       <div className="mx-auto max-w-6xl">
         <h2 className="text-center text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
           Built for teamwork

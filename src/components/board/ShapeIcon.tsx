@@ -67,6 +67,12 @@ export function ShapeIcon({ type, className = 'h-4 w-4' }: ShapeIconProps) {
           <path d="M5 4h14l-4 16H1L5 4z" />
         </svg>
       )
+    case 'ngon':
+      return (
+        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2L22.5 9.6 18.5 21.4H5.5L1.5 9.6Z" />
+        </svg>
+      )
     case 'group':
       return null
     default:

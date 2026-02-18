@@ -16,6 +16,7 @@ export interface OnlineUser {
   display_name: string
   color: string
   role: BoardRole
+  status?: 'active' | 'idle'
 }
 
 /** Hash the full userId string to distribute colors evenly across the palette. */
@@ -89,21 +90,35 @@ export function usePresence(
     }
   }, [channel, userId])
 
+  const presencePayloadRef = useRef<OnlineUser | null>(null)
+
   // trackPresence — called by BoardClient once the channel is confirmed SUBSCRIBED
   const trackPresence = useCallback(() => {
     if (!channel || trackedRef.current) return
     trackedRef.current = true
 
     const color = getColorForUser(userId)
-
-    if ((channel as unknown as { state: string }).state !== 'joined') return
-    channel.track({
+    const payload: OnlineUser = {
       user_id: userId,
       display_name: displayName,
       color,
       role: userRole,
-    })
+      status: 'active',
+    }
+    presencePayloadRef.current = payload
+
+    if ((channel as unknown as { state: string }).state !== 'joined') return
+    channel.track(payload)
   }, [channel, userId, displayName, userRole])
 
-  return { onlineUsers, trackPresence }
+  // updatePresence — update status (active/idle) for activity indicator on board cards
+  const updatePresence = useCallback((status: 'active' | 'idle') => {
+    if (!channel || !presencePayloadRef.current) return
+    if ((channel as unknown as { state: string }).state !== 'joined') return
+    const next = { ...presencePayloadRef.current, status }
+    presencePayloadRef.current = next
+    channel.track(next)
+  }, [channel])
+
+  return { onlineUsers, trackPresence, updatePresence }
 }

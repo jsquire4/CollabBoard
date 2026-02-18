@@ -38,3 +38,18 @@ export interface BoardWithRole {
   updated_at: string
   role: BoardRole
 }
+
+export interface BoardCardSummaryMember {
+  user_id: string
+  role: string
+  display_name: string
+  is_anonymous: boolean
+}
+
+export interface BoardCardSummary {
+  members: BoardCardSummaryMember[]
+  viewers_count: number
+  anonymous_count: number
+  invite_count: number
+  share_link: { role: 'editor' | 'viewer' } | null
+}

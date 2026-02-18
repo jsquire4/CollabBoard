@@ -17,6 +17,7 @@ export type BoardObjectType =
   | 'chevron'
   | 'arrow'
   | 'parallelogram'
+  | 'ngon'
 
 export type FontStyle = 'normal' | 'bold' | 'italic' | 'bold italic'
 
@@ -56,6 +57,12 @@ export interface BoardObject {
   corner_radius?: number | null
   title?: string | null
   locked_by?: string | null
+  sides?: number | null
+  custom_points?: string | null
+  connect_start_id?: string | null
+  connect_start_anchor?: string | null
+  connect_end_id?: string | null
+  connect_end_anchor?: string | null
   field_clocks?: Record<string, { ts: number; c: number; n: string }>
   deleted_at?: string | null
 }

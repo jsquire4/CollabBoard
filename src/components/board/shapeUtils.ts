@@ -1,5 +1,6 @@
 import Konva from 'konva'
 import { BoardObject, BoardObjectType } from '@/types/board'
+import { shapeRegistry } from './shapeRegistry'
 
 /** Returns true for shape types that use endpoint-based (vector) rendering instead of width/height. */
 export function isVectorType(type: BoardObjectType | string): boolean {
@@ -98,11 +99,65 @@ export function handleShapeTransformEnd(
   const scaleY = node.scaleY()
   node.scaleX(1)
   node.scaleY(1)
-  onTransformEnd(object.id, {
+  const updates: Partial<BoardObject> = {
     x: node.x(),
     y: node.y(),
     width: Math.max(5, object.width * scaleX),
     height: Math.max(5, object.height * scaleY),
     rotation: node.rotation(),
-  })
+  }
+  // Scale custom_points proportionally when shape is resized
+  if (object.custom_points && (scaleX !== 1 || scaleY !== 1)) {
+    try {
+      const pts: number[] = JSON.parse(object.custom_points)
+      const scaled: number[] = []
+      for (let i = 0; i < pts.length; i += 2) {
+        scaled.push(pts[i] * scaleX, pts[i + 1] * scaleY)
+      }
+      updates.custom_points = JSON.stringify(scaled)
+    } catch { /* keep existing */ }
+  }
+  onTransformEnd(object.id, updates)
+}
+
+/**
+ * Compute initial vertex points for a shape entering vertex edit mode.
+ * Returns flat [x1,y1,x2,y2,...] relative to the shape's (0,0) origin.
+ */
+export function getInitialVertexPoints(obj: BoardObject): number[] {
+  // If already has custom points, parse them
+  if (obj.custom_points) {
+    try { return JSON.parse(obj.custom_points) } catch { /* fall through */ }
+  }
+
+  const w = obj.width
+  const h = obj.height
+  const def = shapeRegistry.get(obj.type)
+
+  // Polygon shapes: use registry getPoints
+  if (def?.strategy === 'polygon' && def.getPoints) {
+    return def.getPoints(w, h, obj)
+  }
+
+  // Rectangle: 4 corners
+  if (def?.strategy === 'rect') {
+    return [0, 0, w, 0, w, h, 0, h]
+  }
+
+  // Circle: 24-point approximation on the ellipse
+  if (def?.strategy === 'circle') {
+    const n = 24
+    const pts: number[] = []
+    const cx = w / 2
+    const cy = h / 2
+    const rx = w / 2
+    const ry = h / 2
+    for (let i = 0; i < n; i++) {
+      const angle = (2 * Math.PI * i) / n - Math.PI / 2
+      pts.push(cx + rx * Math.cos(angle), cy + ry * Math.sin(angle))
+    }
+    return pts
+  }
+
+  return []
 }

@@ -1431,25 +1431,11 @@ export function Canvas({
                 }
                 transformOriginRef.current = origins
               }}
-              onTransform={() => {
-                if (!onTransformMove) return
-                const tr = trRef.current
-                if (!tr) return
-                for (const node of tr.nodes()) {
-                  const id = Array.from(shapeRefs.current.entries()).find(([, n]) => n === node)?.[0]
-                  if (!id) continue
-                  // During transform, only broadcast position/rotation for
-                  // remote viewers. Do NOT update width/height — that would
-                  // trigger text re-wrap on every frame. Konva's native scale
-                  // handles the visual resize; final dimensions are computed
-                  // in onTransformEnd (via handleShapeTransformEnd).
-                  onTransformMove(id, {
-                    x: node.x(),
-                    y: node.y(),
-                    rotation: node.rotation(),
-                  })
-                }
-              }}
+              // No onTransform handler — Konva's Transformer handles the
+              // visual resize natively via scale. Updating React state mid-
+              // transform causes re-renders that fight with the Transformer
+              // on plain nodes (shapes without text). Final dimensions are
+              // committed in onTransformEnd (via handleShapeTransformEnd).}
             />
           )}
         </Layer>

@@ -277,7 +277,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                           <select
                             value={member.role}
                             onChange={e => handleRoleChange(member.id, member.user_id, e.target.value as BoardRole)}
-                            className="rounded-md border border-slate-300 px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             {getRoleOptions(member.role).map(opt => (
                               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -339,7 +339,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                   <select
                     value={inviteRole}
                     onChange={e => setInviteRole(e.target.value as BoardRole)}
-                    className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
                   >
                     {ROLE_OPTIONS.map(opt => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -399,7 +399,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                       <select
                         value={linkRole}
                         onChange={e => setLinkRole(e.target.value as 'editor' | 'viewer')}
-                        className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
                       >
                         <option value="editor">Editor</option>
                         <option value="viewer">Viewer</option>

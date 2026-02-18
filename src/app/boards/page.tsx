@@ -5,8 +5,10 @@ export default async function BoardsPage() {
   const { myBoards, sharedWithMe } = await fetchBoardsGrouped()
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-12 sm:px-8">
-      <BoardList initialMyBoards={myBoards} initialSharedBoards={sharedWithMe} />
+    <div className="min-h-screen bg-slate-50">
+      <div className="mx-auto max-w-5xl px-6 py-12 sm:px-8">
+        <BoardList initialMyBoards={myBoards} initialSharedBoards={sharedWithMe} />
+      </div>
     </div>
   )
 }

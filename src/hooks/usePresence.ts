@@ -42,15 +42,15 @@ export function usePresence(
 
     channel.on('presence', { event: 'sync' }, () => {
       const state = channel.presenceState<OnlineUser>()
-      const users: OnlineUser[] = []
+      const deduped = new Map<string, OnlineUser>()
       for (const key of Object.keys(state)) {
         for (const presence of state[key]) {
           if (presence.user_id !== userId) {
-            users.push(presence)
+            deduped.set(presence.user_id, presence)
           }
         }
       }
-      setOnlineUsers(users)
+      setOnlineUsers(Array.from(deduped.values()))
     })
 
     return () => {

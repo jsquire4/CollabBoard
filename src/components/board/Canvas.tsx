@@ -138,7 +138,7 @@ export function Canvas({
   onlineUsers, onCursorMove, onCursorUpdate, remoteSelections,
 }: CanvasProps) {
   const canEdit = userRole !== 'viewer'
-  const { stagePos, stageScale, handleWheel, handleDragEnd: handleStageDragEnd, zoomIn, zoomOut, resetZoom } = useCanvas()
+  const { stagePos, setStagePos, stageScale, handleWheel, zoomIn, zoomOut, resetZoom } = useCanvas()
   const stageRef = useRef<Konva.Stage>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const cursorLayerRef = useRef<Konva.Layer>(null)
@@ -147,6 +147,11 @@ export function Canvas({
   const onlineUsersRef = useRef(onlineUsers)
   onlineUsersRef.current = onlineUsers
   const { shiftHeld, ctrlHeld } = useModifierKeys()
+
+  // Right-click pan state (manual, bypasses Konva drag system)
+  const isPanningRef = useRef(false)
+  const panStartRef = useRef({ x: 0, y: 0 })
+  const stagePosAtPanStartRef = useRef({ x: 0, y: 0 })
 
   // Imperatively update Konva cursor nodes — no React re-renders.
   // Positions are snapped directly (same as remote shape updates) to avoid
@@ -236,6 +241,7 @@ export function Canvas({
 
   // Marquee selection state
   const [marquee, setMarquee] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+  const marqueeRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null)
   const marqueeStart = useRef<{ x: number; y: number } | null>(null)
   const isMarqueeActive = useRef(false)
 
@@ -396,7 +402,15 @@ export function Canvas({
     }
   }, [editingId])
 
+  // Track whether a marquee just completed, so the click handler doesn't
+  // immediately clear the selection (click fires after mousedown+mouseup).
+  const marqueeJustCompletedRef = useRef(false)
+
   const handleStageClick = useCallback((e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+    if (marqueeJustCompletedRef.current) {
+      marqueeJustCompletedRef.current = false
+      return
+    }
     if (e.target === e.target.getStage()) {
       if (activeGroupId) {
         onExitGroup()
@@ -486,29 +500,29 @@ export function Canvas({
     e.evt.preventDefault()
   }, [])
 
-  // Marquee selection handlers
+  // Marquee selection (left-click on empty area)
   const handleStageMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-    // Only start marquee if clicking on empty area with shift held
-    if (!shiftHeld) return
-    if (e.target !== e.target.getStage()) return
+    // Right-click is handled by the manual pan listener — ignore here
+    if (e.evt.button === 2) return
 
+    // Only left-click on empty area starts marquee
+    if (e.evt.button !== 0) return
     const stage = stageRef.current
     if (!stage) return
+    if (e.target !== e.target.getStage()) return
 
     const pos = stage.getPointerPosition()
     if (!pos) return
 
-    // Convert screen position to canvas coordinates
     const canvasX = (pos.x - stagePos.x) / stageScale
     const canvasY = (pos.y - stagePos.y) / stageScale
 
     marqueeStart.current = { x: canvasX, y: canvasY }
     isMarqueeActive.current = true
-    setMarquee({ x: canvasX, y: canvasY, width: 0, height: 0 })
-
-    // Disable stage dragging during marquee
-    stage.draggable(false)
-  }, [shiftHeld, stagePos, stageScale])
+    const rect = { x: canvasX, y: canvasY, width: 0, height: 0 }
+    marqueeRef.current = rect
+    setMarquee(rect)
+  }, [stagePos, stageScale])
 
   const handleStageMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = stageRef.current
@@ -531,36 +545,32 @@ export function Canvas({
     const width = Math.abs(canvasX - marqueeStart.current.x)
     const height = Math.abs(canvasY - marqueeStart.current.y)
 
-    setMarquee({ x, y, width, height })
+    const rect = { x, y, width, height }
+    marqueeRef.current = rect
+    setMarquee(rect)
   }, [stagePos, stageScale, onCursorMove])
 
   const handleStageMouseUp = useCallback(() => {
-    if (!isMarqueeActive.current || !marquee) {
-      return
-    }
+    if (!isMarqueeActive.current) return
 
-    const stage = stageRef.current
-    if (stage) stage.draggable(true)
-
-    // Find all objects intersecting the marquee
-    if (marquee.width > 2 && marquee.height > 2) {
+    // Read from ref (always current) instead of React state (may be stale)
+    const m = marqueeRef.current
+    if (m && m.width > 2 && m.height > 2) {
       const selected: string[] = []
       for (const obj of sortedObjects) {
-        // Skip group objects (they're virtual containers)
         if (obj.type === 'group') continue
-        // If in active group mode, only select children of the active group
         if (activeGroupId && obj.parent_id !== activeGroupId) continue
 
         const objRight = obj.x + obj.width
         const objBottom = obj.y + obj.height
-        const marqRight = marquee.x + marquee.width
-        const marqBottom = marquee.y + marquee.height
+        const marqRight = m.x + m.width
+        const marqBottom = m.y + m.height
 
         const intersects =
           obj.x < marqRight &&
-          objRight > marquee.x &&
+          objRight > m.x &&
           obj.y < marqBottom &&
-          objBottom > marquee.y
+          objBottom > m.y
 
         if (intersects) {
           selected.push(obj.id)
@@ -568,15 +578,73 @@ export function Canvas({
       }
       if (selected.length > 0) {
         onSelectObjects(selected)
+        // Prevent the subsequent click event from clearing the selection
+        marqueeJustCompletedRef.current = true
       }
     }
 
     isMarqueeActive.current = false
     marqueeStart.current = null
+    marqueeRef.current = null
     setMarquee(null)
-  }, [marquee, sortedObjects, activeGroupId, onSelectObjects])
+  }, [sortedObjects, activeGroupId, onSelectObjects])
 
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
+
+  // Manual right-click pan using native pointer events.
+  // Bypasses Konva's drag system entirely — Konva's drag is unreliable for
+  // non-primary button drags due to internal dragButton/timing issues.
+  useEffect(() => {
+    const container = stageRef.current?.container()
+    if (!container) return
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.button !== 2) return
+      const stage = stageRef.current
+      if (!stage) return
+
+      // Check if right-click hit a shape — if so, let context menu handle it
+      const rect = container.getBoundingClientRect()
+      const hit = stage.getIntersection({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+      if (hit) return
+
+      isPanningRef.current = true
+      panStartRef.current = { x: e.clientX, y: e.clientY }
+      stagePosAtPanStartRef.current = { x: stage.x(), y: stage.y() }
+      container.setPointerCapture(e.pointerId)
+    }
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!isPanningRef.current) return
+      const stage = stageRef.current
+      if (!stage) return
+      const dx = e.clientX - panStartRef.current.x
+      const dy = e.clientY - panStartRef.current.y
+      const newX = stagePosAtPanStartRef.current.x + dx
+      const newY = stagePosAtPanStartRef.current.y + dy
+      stage.position({ x: newX, y: newY })
+      stage.batchDraw()
+    }
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (!isPanningRef.current) return
+      isPanningRef.current = false
+      container.releasePointerCapture(e.pointerId)
+      const stage = stageRef.current
+      if (stage) {
+        setStagePos({ x: stage.x(), y: stage.y() })
+      }
+    }
+
+    container.addEventListener('pointerdown', onPointerDown)
+    container.addEventListener('pointermove', onPointerMove)
+    container.addEventListener('pointerup', onPointerUp)
+    return () => {
+      container.removeEventListener('pointerdown', onPointerDown)
+      container.removeEventListener('pointermove', onPointerMove)
+      container.removeEventListener('pointerup', onPointerUp)
+    }
+  }, [setStagePos])
 
   useEffect(() => {
     const updateSize = () => {
@@ -825,9 +893,8 @@ export function Canvas({
         scaleY={stageScale}
         x={stagePos.x}
         y={stagePos.y}
-        draggable={!isMarqueeActive.current}
+        draggable={false}
         onWheel={handleWheel}
-        onDragEnd={handleStageDragEnd}
         onClick={handleStageClick}
         onTap={handleStageClick}
         onContextMenu={handleStageContextMenu}

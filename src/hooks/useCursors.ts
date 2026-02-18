@@ -177,9 +177,12 @@ export function useCursors(
     }
   }, [channel, userId])
 
-  // Send cursor position (adaptive throttle)
+  // Send cursor position (adaptive throttle).
+  // Only send when the WebSocket channel is joined — otherwise channel.send()
+  // falls back to REST API, flooding the server with HTTP requests.
   const sendCursor = useCallback((x: number, y: number) => {
     if (!channel) return
+    if ((channel as unknown as { state: string }).state !== 'joined') return
 
     const now = Date.now()
     if (now - lastSendRef.current < throttleMsRef.current) return

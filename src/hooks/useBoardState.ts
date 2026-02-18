@@ -198,9 +198,11 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     await loadObjects()
   }, [boardId, loadObjects])
 
-  // Broadcast helper — sends changes to other clients
+  // Broadcast helper — sends changes to other clients.
+  // Only send when the WebSocket is connected to avoid the REST fallback.
   const broadcastChanges = useCallback((changes: BoardChange[]) => {
     if (!channel) return
+    if ((channel as unknown as { state: string }).state !== 'joined') return
     channel.send({
       type: 'broadcast',
       event: 'board:sync',
@@ -869,18 +871,22 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     return [obj]
   }, [objects, getDescendants])
 
-  // Z-ordering — batched: single setObjects + single queueBroadcast + single DB upsert
+  // Z-ordering — batched: single setObjects + single queueBroadcast + parallel DB updates.
+  // Uses .update() instead of .upsert() because these objects already exist and the
+  // INSERT RLS policy requires board_id/created_by which aren't in the z-index patch.
   const persistZIndexBatch = useCallback((updates: { id: string; z_index: number }[], now: string) => {
-    const rows = updates.map(u => {
-      const row: Record<string, unknown> = { id: u.id, z_index: u.z_index, updated_at: now }
+    Promise.all(updates.map(u => {
+      const patch: Record<string, unknown> = { z_index: u.z_index, updated_at: now }
       if (CRDT_ENABLED) {
-        row.field_clocks = fieldClocksRef.current.get(u.id) ?? {}
-        row.deleted_at = null
+        patch.field_clocks = fieldClocksRef.current.get(u.id) ?? {}
+        patch.deleted_at = null
       }
-      return row
+      return supabase.from('board_objects').update(patch).eq('id', u.id)
+    })).then(results => {
+      for (const { error } of results) {
+        if (error) console.error('Failed to update z_index:', error.message)
+      }
     })
-    supabase.from('board_objects').upsert(rows, { onConflict: 'id' })
-      .then(({ error }) => { if (error) console.error('Failed to batch update z_index:', error.message) })
   }, [])
 
   const bringToFront = useCallback((id: string) => {
@@ -1201,17 +1207,21 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     queueBroadcast(changes)
 
     if (!skipDb) {
-      // Persist all descendant position updates in a single batched upsert
-      const rows = descendants.map(d => {
-        const row: Record<string, unknown> = { id: d.id, x: d.x + dx, y: d.y + dy, updated_at: now }
+      // Persist all descendant position updates with parallel individual updates.
+      // Uses .update() instead of .upsert() — the INSERT RLS policy requires
+      // board_id/created_by which aren't in position-only patches.
+      Promise.all(descendants.map(d => {
+        const patch: Record<string, unknown> = { x: d.x + dx, y: d.y + dy, updated_at: now }
         if (CRDT_ENABLED) {
-          row.field_clocks = fieldClocksRef.current.get(d.id) ?? {}
-          row.deleted_at = null
+          patch.field_clocks = fieldClocksRef.current.get(d.id) ?? {}
+          patch.deleted_at = null
         }
-        return row
+        return supabase.from('board_objects').update(patch).eq('id', d.id)
+      })).then(results => {
+        for (const { error } of results) {
+          if (error) console.error('Failed to update child position:', error.message)
+        }
       })
-      supabase.from('board_objects').upsert(rows, { onConflict: 'id' })
-        .then(({ error }) => { if (error) console.error('Failed to batch update child positions:', error.message) })
     }
   }, [canEdit, getDescendants, queueBroadcast, stampChange])
 
@@ -1305,6 +1315,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
 
     if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current)
     selectionTimerRef.current = setTimeout(() => {
+      if ((channel as unknown as { state: string }).state !== 'joined') return
       channel.send({
         type: 'broadcast',
         event: 'selection',

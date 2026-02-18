@@ -74,6 +74,7 @@ export function useCanvas() {
 
   return {
     stagePos,
+    setStagePos,
     stageScale,
     handleWheel,
     handleDragEnd,

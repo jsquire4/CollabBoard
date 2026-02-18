@@ -16,12 +16,15 @@ interface ColorPickerProps {
   disabled?: boolean
   /** When true, renders as a compact button that opens a popover (for narrow sidebars) */
   compact?: boolean
+  /** Optional label for the compact button tooltip */
+  label?: string
 }
 
-export function ColorPicker({ selectedColor, onColorChange, disabled, compact }: ColorPickerProps) {
+export function ColorPicker({ selectedColor, onColorChange, disabled, compact, label = 'Color' }: ColorPickerProps) {
   const [showPopover, setShowPopover] = useState(false)
   const [customColor, setCustomColor] = useState(selectedColor || '#6366f1')
   const popoverRef = useRef<HTMLDivElement>(null)
+  const popoverPanelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (selectedColor && !EXPANDED_PALETTE.includes(selectedColor)) {
@@ -29,7 +32,7 @@ export function ColorPicker({ selectedColor, onColorChange, disabled, compact }:
     }
   }, [selectedColor])
 
-  useClickOutside(popoverRef, showPopover, () => setShowPopover(false))
+  useClickOutside([popoverRef, popoverPanelRef], showPopover, () => setShowPopover(false))
 
   const handleCustomChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const color = e.target.value
@@ -81,28 +84,42 @@ export function ColorPicker({ selectedColor, onColorChange, disabled, compact }:
   )
 
   if (compact) {
+    const buttonRef = useRef<HTMLButtonElement>(null)
+    const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null)
+
+    const handleToggle = () => {
+      if (!showPopover && buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect()
+        setPopoverPos({ top: rect.top, left: rect.right + 8 })
+      }
+      setShowPopover(!showPopover)
+    }
+
     return (
-      <div className="relative" ref={popoverRef}>
+      <div ref={popoverRef}>
         <button
+          ref={buttonRef}
           type="button"
-          onClick={() => setShowPopover(!showPopover)}
+          onClick={handleToggle}
           disabled={disabled}
-          aria-label="Choose color"
+          aria-label={label}
           aria-expanded={showPopover}
           aria-haspopup="dialog"
-          className="flex h-10 w-10 flex-col items-center justify-center rounded-lg transition hover:bg-slate-100 disabled:opacity-50"
-          title="Color"
+          className="flex h-9 w-9 flex-col items-center justify-center rounded-lg transition hover:bg-slate-100 disabled:opacity-50"
+          title={label}
         >
           <span
             className="h-5 w-5 rounded border-2 border-slate-300"
             style={{ backgroundColor: selectedColor || '#94a3b8' }}
           />
         </button>
-        {showPopover && (
+        {showPopover && popoverPos && (
           <div
+            ref={popoverPanelRef}
             role="dialog"
             aria-label="Color picker"
-            className="absolute left-full top-0 z-50 ml-2 w-48 rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
+            className="fixed z-[200] w-48 rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
+            style={{ top: popoverPos.top, left: popoverPos.left }}
           >
             {pickerContent}
           </div>

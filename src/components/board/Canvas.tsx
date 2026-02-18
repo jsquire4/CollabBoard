@@ -5,7 +5,7 @@ import { Stage, Layer, Transformer, Rect as KonvaRect, Text as KonvaText, Group 
 import Konva from 'konva'
 import { useCanvas } from '@/hooks/useCanvas'
 import { useModifierKeys } from '@/hooks/useShiftKey'
-import { BoardObject } from '@/types/board'
+import { BoardObject, BoardObjectType } from '@/types/board'
 import { BoardRole } from '@/types/sharing'
 import { StickyNote } from './StickyNote'
 import { RectangleShape } from './RectangleShape'
@@ -25,7 +25,7 @@ import { OnlineUser, getColorForUser } from '@/hooks/usePresence'
 // Shape types that support triple-click text editing
 const TRIPLE_CLICK_TEXT_TYPES = new Set(['rectangle', 'circle', 'triangle', 'chevron', 'parallelogram'])
 // Character limits by shape type (sticky notes are unlimited)
-const SHAPE_TEXT_CHAR_LIMIT = 1024
+const SHAPE_TEXT_CHAR_LIMIT = 256
 const FRAME_TITLE_CHAR_LIMIT = 256
 const STICKY_TITLE_CHAR_LIMIT = 256
 const UNLIMITED_TEXT_TYPES = new Set(['sticky_note'])
@@ -216,6 +216,9 @@ interface CanvasProps {
   sortedObjects: BoardObject[]
   selectedIds: Set<string>
   activeGroupId: string | null
+  activeTool?: BoardObjectType | null
+  onDrawShape?: (type: BoardObjectType, x: number, y: number, width: number, height: number) => void
+  onCancelTool?: () => void
   onSelect: (id: string | null, opts?: { shift?: boolean; ctrl?: boolean }) => void
   onSelectObjects: (ids: string[]) => void
   onClearSelection: () => void
@@ -257,10 +260,12 @@ interface CanvasProps {
   onCursorMove?: (x: number, y: number) => void
   onCursorUpdate?: (fn: (cursors: Map<string, RemoteCursorData>) => void) => void
   remoteSelections?: Map<string, Set<string>>
+  onEditingChange?: (isEditing: boolean) => void
 }
 
 export function Canvas({
   objects, sortedObjects, selectedIds, activeGroupId,
+  activeTool, onDrawShape, onCancelTool,
   onSelect, onSelectObjects, onClearSelection, onEnterGroup, onExitGroup,
   onDragEnd, onDragMove, onUpdateText, onUpdateTitle, onTransformEnd, onTransformMove,
   onDelete, onDuplicate, onColorChange,
@@ -275,6 +280,7 @@ export function Canvas({
   recentColors, colors, selectedColor, userRole,
   onEndpointDragMove, onEndpointDragEnd,
   onlineUsers, onCursorMove, onCursorUpdate, remoteSelections,
+  onEditingChange,
 }: CanvasProps) {
   const canEdit = userRole !== 'viewer'
   const { stagePos, setStagePos, stageScale, handleWheel, zoomIn, zoomOut, resetZoom } = useCanvas()
@@ -413,6 +419,11 @@ export function Canvas({
   const marqueeStart = useRef<{ x: number; y: number } | null>(null)
   const isMarqueeActive = useRef(false)
 
+  // Draw-to-create state
+  const drawStart = useRef<{ x: number; y: number } | null>(null)
+  const isDrawing = useRef(false)
+  const [drawPreview, setDrawPreview] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+
   // Ref callback for shape registration
   const handleShapeRef = useCallback((id: string, node: Konva.Node | null) => {
     if (node) {
@@ -446,7 +457,13 @@ export function Canvas({
         e.preventDefault()
         onUndo?.()
       } else if (e.key === 'Escape') {
-        if (activeGroupId) {
+        if (activeTool) {
+          onCancelTool?.()
+          // Cancel in-progress draw
+          isDrawing.current = false
+          drawStart.current = null
+          setDrawPreview(null)
+        } else if (activeGroupId) {
           onExitGroup()
         } else {
           onClearSelection()
@@ -456,7 +473,7 @@ export function Canvas({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editingId, selectedIds, activeGroupId, onDelete, onDuplicate, onGroup, onUngroup, onClearSelection, onExitGroup, canEdit, onUndo, onRedo])
+  }, [editingId, selectedIds, activeGroupId, activeTool, onDelete, onDuplicate, onGroup, onUngroup, onClearSelection, onExitGroup, onCancelTool, canEdit, onUndo, onRedo])
 
   // Attach/detach Transformer to effective selected shapes (groups expanded to children)
   useEffect(() => {
@@ -611,15 +628,28 @@ export function Canvas({
     }
   }, [editingId])
 
+  useEffect(() => {
+    onEditingChange?.(!!editingId)
+  }, [editingId, onEditingChange])
+
   // Track whether a marquee just completed, so the click handler doesn't
   // immediately clear the selection (click fires after mousedown+mouseup).
   const marqueeJustCompletedRef = useRef(false)
+
+  // Track whether a draw just completed, so the click handler doesn't
+  // immediately clear the selection or tool.
+  const drawJustCompletedRef = useRef(false)
 
   const handleStageClick = useCallback((e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (marqueeJustCompletedRef.current) {
       marqueeJustCompletedRef.current = false
       return
     }
+    if (drawJustCompletedRef.current) {
+      drawJustCompletedRef.current = false
+      return
+    }
+    if (activeTool) return
     if (e.target === e.target.getStage()) {
       if (activeGroupId) {
         onExitGroup()
@@ -627,7 +657,7 @@ export function Canvas({
         onClearSelection()
       }
     }
-  }, [onClearSelection, onExitGroup, activeGroupId])
+  }, [onClearSelection, onExitGroup, activeGroupId, activeTool])
 
   // Handle shape click with modifier keys + triple-click detection
   const handleShapeSelect = useCallback((id: string) => {
@@ -724,7 +754,7 @@ export function Canvas({
     // Right-click is handled by the manual pan listener — ignore here
     if (e.evt.button === 2) return
 
-    // Only left-click on empty area starts marquee
+    // Only left-click on empty area
     if (e.evt.button !== 0) return
     const stage = stageRef.current
     if (!stage) return
@@ -736,12 +766,20 @@ export function Canvas({
     const canvasX = (pos.x - stagePos.x) / stageScale
     const canvasY = (pos.y - stagePos.y) / stageScale
 
+    // Draw mode takes priority over marquee
+    if (activeTool) {
+      drawStart.current = { x: canvasX, y: canvasY }
+      isDrawing.current = true
+      setDrawPreview({ x: canvasX, y: canvasY, width: 0, height: 0 })
+      return
+    }
+
     marqueeStart.current = { x: canvasX, y: canvasY }
     isMarqueeActive.current = true
     const rect = { x: canvasX, y: canvasY, width: 0, height: 0 }
     marqueeRef.current = rect
     setMarquee(rect)
-  }, [stagePos, stageScale])
+  }, [stagePos, stageScale, activeTool])
 
   const handleStageMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = stageRef.current
@@ -752,9 +790,19 @@ export function Canvas({
     const canvasX = (pos.x - stagePos.x) / stageScale
     const canvasY = (pos.y - stagePos.y) / stageScale
 
-    // Broadcast cursor position for remote users (skip during marquee)
-    if (onCursorMove && !isMarqueeActive.current) {
+    // Broadcast cursor position for remote users (skip during marquee/draw)
+    if (onCursorMove && !isMarqueeActive.current && !isDrawing.current) {
       onCursorMove(canvasX, canvasY)
+    }
+
+    // Draw preview update
+    if (isDrawing.current && drawStart.current) {
+      const x = Math.min(drawStart.current.x, canvasX)
+      const y = Math.min(drawStart.current.y, canvasY)
+      const width = Math.abs(canvasX - drawStart.current.x)
+      const height = Math.abs(canvasY - drawStart.current.y)
+      setDrawPreview({ x, y, width, height })
+      return
     }
 
     if (!isMarqueeActive.current || !marqueeStart.current) return
@@ -770,6 +818,33 @@ export function Canvas({
   }, [stagePos, stageScale, onCursorMove])
 
   const handleStageMouseUp = useCallback(() => {
+    // Finalize draw-to-create
+    if (isDrawing.current && drawStart.current && activeTool && onDrawShape) {
+      const stage = stageRef.current
+      const pos = stage?.getPointerPosition()
+      if (pos) {
+        const canvasX = (pos.x - stagePos.x) / stageScale
+        const canvasY = (pos.y - stagePos.y) / stageScale
+        const x = Math.min(drawStart.current.x, canvasX)
+        const y = Math.min(drawStart.current.y, canvasY)
+        const width = Math.abs(canvasX - drawStart.current.x)
+        const height = Math.abs(canvasY - drawStart.current.y)
+
+        if (width >= 5 && height >= 5) {
+          onDrawShape(activeTool, x, y, width, height)
+        } else {
+          // Click without drag — create at click point with default dimensions
+          onDrawShape(activeTool, drawStart.current.x, drawStart.current.y, 0, 0)
+        }
+      }
+
+      isDrawing.current = false
+      drawStart.current = null
+      setDrawPreview(null)
+      drawJustCompletedRef.current = true
+      return
+    }
+
     if (!isMarqueeActive.current) return
 
     // Read from ref (always current) instead of React state (may be stale)
@@ -819,7 +894,7 @@ export function Canvas({
     marqueeStart.current = null
     marqueeRef.current = null
     setMarquee(null)
-  }, [sortedObjects, activeGroupId, onSelectObjects])
+  }, [sortedObjects, activeGroupId, onSelectObjects, activeTool, onDrawShape, stagePos, stageScale])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
@@ -1138,6 +1213,7 @@ export function Canvas({
           linear-gradient(90deg, rgba(148, 163, 184, 0.5) 1px, transparent 1px)
         `,
         backgroundSize: '40px 40px',
+        cursor: activeTool ? 'crosshair' : undefined,
       }}
     >
       <Stage
@@ -1228,6 +1304,21 @@ export function Canvas({
               stroke="#0EA5E9"
               strokeWidth={1}
               dash={[4, 2]}
+              listening={false}
+            />
+          )}
+
+          {/* Draw-to-create preview rectangle */}
+          {drawPreview && drawPreview.width > 0 && drawPreview.height > 0 && (
+            <KonvaRect
+              x={drawPreview.x}
+              y={drawPreview.y}
+              width={drawPreview.width}
+              height={drawPreview.height}
+              fill="rgba(99, 102, 241, 0.08)"
+              stroke="#6366F1"
+              strokeWidth={1.5}
+              dash={[6, 3]}
               listening={false}
             />
           )}

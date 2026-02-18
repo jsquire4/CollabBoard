@@ -1,17 +1,32 @@
 'use client'
 
 import { BoardRole } from '@/types/sharing'
-import { ShapeSelector, type ShapeAddHandler } from './ShapeSelector'
 import { ColorPicker } from './ColorPicker'
 import { FontSelector } from './FontSelector'
-import { StylePanel } from './StylePanel'
-import type { FontStyle } from '@/types/board'
+import { ShapeIcon } from './ShapeIcon'
+import type { BoardObjectType, FontStyle } from '@/types/board'
+
+const ALL_SHAPES: { type: BoardObjectType; label: string }[] = [
+  { type: 'sticky_note', label: 'Note' },
+  { type: 'rectangle', label: 'Rect' },
+  { type: 'circle', label: 'Circle' },
+  { type: 'triangle', label: 'Triangle' },
+  { type: 'chevron', label: 'Hexagon' },
+  { type: 'parallelogram', label: 'Parallel' },
+  { type: 'frame', label: 'Frame' },
+]
+
+const LINE_TYPES: { type: BoardObjectType; label: string }[] = [
+  { type: 'line', label: 'Line' },
+  { type: 'arrow', label: 'Arrow' },
+]
 
 interface LeftToolbarProps {
   userRole: BoardRole
-  onAddShape: ShapeAddHandler
+  activeTool: BoardObjectType | null
+  onToolSelect: (type: BoardObjectType) => void
   hasSelection: boolean
-  hasTextShapeSelected: boolean
+  isEditingText: boolean
   selectedColor?: string
   selectedFontFamily?: string
   selectedFontSize?: number
@@ -28,25 +43,16 @@ interface LeftToolbarProps {
   onUngroup: () => void
   canGroup: boolean
   canUngroup: boolean
-  // Style panel props
   selectedStrokeColor?: string | null
-  selectedStrokeWidth?: number
-  selectedStrokeDash?: string
-  selectedOpacity?: number
-  selectedShadowBlur?: number
-  selectedCornerRadius?: number
-  showCornerRadius?: boolean
-  onStrokeStyleChange: (updates: { stroke_color?: string | null; stroke_width?: number; stroke_dash?: string }) => void
-  onOpacityChange: (opacity: number) => void
-  onShadowChange: (updates: { shadow_blur?: number; shadow_color?: string; shadow_offset_x?: number; shadow_offset_y?: number }) => void
-  onCornerRadiusChange: (corner_radius: number) => void
+  onStrokeColorChange: (color: string | null) => void
 }
 
 export function LeftToolbar({
   userRole,
-  onAddShape,
+  activeTool,
+  onToolSelect,
   hasSelection,
-  hasTextShapeSelected,
+  isEditingText,
   selectedColor,
   selectedFontFamily,
   selectedFontSize,
@@ -64,33 +70,22 @@ export function LeftToolbar({
   canGroup,
   canUngroup,
   selectedStrokeColor,
-  selectedStrokeWidth,
-  selectedStrokeDash,
-  selectedOpacity,
-  selectedShadowBlur,
-  selectedCornerRadius,
-  showCornerRadius,
-  onStrokeStyleChange,
-  onOpacityChange,
-  onShadowChange,
-  onCornerRadiusChange,
+  onStrokeColorChange,
 }: LeftToolbarProps) {
   const canEdit = userRole !== 'viewer'
 
   return (
-    <aside className="flex w-16 shrink-0 flex-col items-center gap-1 border-r border-slate-200 bg-white py-3">
+    <aside className="flex w-14 shrink-0 flex-col items-center gap-0.5 border-r border-slate-200 bg-white py-2 overflow-y-auto">
       {canEdit && (
         <>
-          <div className="mb-2 w-full px-2">
-            <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
-              Shapes
-            </div>
-          </div>
-          <ShapeSelector onAddShape={onAddShape} compact />
-
-          {hasTextShapeSelected && (
+          {isEditingText ? (
+            /* ── Text editing tools ── */
             <>
-              <div className="my-2 h-px w-8 bg-slate-200" />
+              <div className="mb-1 w-full px-1.5">
+                <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 text-center">
+                  Text
+                </div>
+              </div>
               <FontSelector
                 fontFamily={selectedFontFamily}
                 fontSize={selectedFontSize}
@@ -104,50 +99,96 @@ export function LeftToolbar({
                 compact
               />
             </>
+          ) : (
+            /* ── Shape palette ── */
+            <>
+              <div className="mb-1 w-full px-1.5">
+                <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 text-center">
+                  Shapes
+                </div>
+              </div>
+              {ALL_SHAPES.map(({ type, label }) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => onToolSelect(type)}
+                  className={`flex h-9 w-9 flex-col items-center justify-center rounded-lg transition ${
+                    activeTool === type
+                      ? 'bg-indigo-100 text-indigo-700'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                  title={label}
+                >
+                  <ShapeIcon type={type} className="h-4.5 w-4.5" />
+                </button>
+              ))}
+
+              <div className="my-1 h-px w-8 bg-slate-200" />
+
+              <div className="mb-1 w-full px-1.5">
+                <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 text-center">
+                  Lines
+                </div>
+              </div>
+              {LINE_TYPES.map(({ type, label }) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => onToolSelect(type)}
+                  className={`flex h-9 w-9 flex-col items-center justify-center rounded-lg transition ${
+                    activeTool === type
+                      ? 'bg-indigo-100 text-indigo-700'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                  title={label}
+                >
+                  <ShapeIcon type={type} className="h-4.5 w-4.5" />
+                </button>
+              ))}
+            </>
           )}
 
+          {/* ── Selection tools (always visible when shape selected) ── */}
           {hasSelection && (
             <>
-              <div className="my-2 h-px w-8 bg-slate-200" />
+              <div className="my-1 h-px w-8 bg-slate-200" />
+
+              {/* Fill color */}
               <ColorPicker
                 selectedColor={selectedColor}
                 onColorChange={onColorChange}
                 compact
+                label="Fill"
               />
-              <StylePanel
-                strokeColor={selectedStrokeColor}
-                strokeWidth={selectedStrokeWidth}
-                strokeDash={selectedStrokeDash}
-                opacity={selectedOpacity}
-                shadowBlur={selectedShadowBlur}
-                cornerRadius={selectedCornerRadius}
-                showCornerRadius={showCornerRadius}
-                onStrokeStyleChange={onStrokeStyleChange}
-                onOpacityChange={onOpacityChange}
-                onShadowChange={onShadowChange}
-                onCornerRadiusChange={onCornerRadiusChange}
-                compact
+
+              {/* Border color */}
+              <BorderColorButton
+                currentColor={selectedStrokeColor}
+                onColorChange={onStrokeColorChange}
               />
-              <div className="my-2 h-px w-8 bg-slate-200" />
+
+              <div className="my-1 h-px w-8 bg-slate-200" />
+
+              {/* Actions */}
               <button
                 type="button"
                 onClick={onDuplicate}
-                className="flex h-10 w-10 flex-col items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100"
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100"
                 title="Duplicate (Ctrl+D)"
               >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h2m0 10a2 2 0 002 2h2a2 2 0 002-2v-2m0 10V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2" />
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
               </button>
               {canGroup && (
                 <button
                   type="button"
                   onClick={onGroup}
-                  className="flex h-10 w-10 flex-col items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100"
                   title="Group (Ctrl+G)"
                 >
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h3l2 2h5a2 2 0 012 2v7a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" />
                   </svg>
                 </button>
               )}
@@ -155,21 +196,22 @@ export function LeftToolbar({
                 <button
                   type="button"
                   onClick={onUngroup}
-                  className="flex h-10 w-10 flex-col items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100"
                   title="Ungroup (Ctrl+Shift+G)"
                 >
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h3l2 2h5a2 2 0 012 2v7a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3" />
                   </svg>
                 </button>
               )}
               <button
                 type="button"
                 onClick={onDelete}
-                className="flex h-10 w-10 flex-col items-center justify-center rounded-lg text-red-600 transition hover:bg-red-50"
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-red-500 transition hover:bg-red-50"
                 title="Delete (Del)"
               >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
               </button>
@@ -178,5 +220,91 @@ export function LeftToolbar({
         </>
       )}
     </aside>
+  )
+}
+
+/* ── Border color compact button with popover ── */
+
+import { useState, useRef } from 'react'
+import { useClickOutside } from '@/hooks/useClickOutside'
+import { EXPANDED_PALETTE } from './ColorPicker'
+
+const BORDER_COLORS = EXPANDED_PALETTE.slice(0, 12)
+
+function BorderColorButton({
+  currentColor,
+  onColorChange,
+}: {
+  currentColor?: string | null
+  onColorChange: (color: string | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null)
+  useClickOutside([containerRef, panelRef], open, () => setOpen(false))
+
+  const hasBorder = !!currentColor
+
+  const handleToggle = () => {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setPopoverPos({ top: rect.top, left: rect.right + 8 })
+    }
+    setOpen(!open)
+  }
+
+  return (
+    <div ref={containerRef}>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={handleToggle}
+        className="flex h-9 w-9 flex-col items-center justify-center rounded-lg transition hover:bg-slate-100"
+        title="Border color"
+      >
+        <span
+          className="h-5 w-5 rounded border-2"
+          style={{
+            borderColor: hasBorder ? currentColor : '#94a3b8',
+            backgroundColor: 'transparent',
+          }}
+        />
+      </button>
+      {open && popoverPos && (
+        <div
+          ref={panelRef}
+          className="fixed z-[200] w-44 rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
+          style={{ top: popoverPos.top, left: popoverPos.left }}
+        >
+          <div className="text-xs font-medium text-slate-500 mb-2">Border</div>
+          <div className="grid grid-cols-6 gap-1">
+            <button
+              type="button"
+              onClick={() => { onColorChange(null); setOpen(false) }}
+              className={`h-6 w-6 rounded-full border-2 border-slate-300 flex items-center justify-center transition hover:scale-110 ${
+                !currentColor ? 'ring-2 ring-slate-700 ring-offset-1' : ''
+              }`}
+              title="No border"
+            >
+              <span className="text-xs text-red-400 font-bold">/</span>
+            </button>
+            {BORDER_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                onClick={() => { onColorChange(color); setOpen(false) }}
+                className={`h-6 w-6 rounded-full transition hover:scale-110 ${
+                  color === currentColor ? 'ring-2 ring-slate-700 ring-offset-1' : ''
+                }`}
+                style={{ backgroundColor: color }}
+                title={color}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

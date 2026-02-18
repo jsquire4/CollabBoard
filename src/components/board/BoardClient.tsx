@@ -3,12 +3,11 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useBoardState } from '@/hooks/useBoardState'
-import { useCanvas } from '@/hooks/useCanvas'
 import { useRealtimeChannel } from '@/hooks/useRealtimeChannel'
 import { usePresence } from '@/hooks/usePresence'
 import { useCursors } from '@/hooks/useCursors'
 import { useUndoStack, UndoEntry } from '@/hooks/useUndoStack'
-import { BoardObject } from '@/types/board'
+import { BoardObject, BoardObjectType } from '@/types/board'
 import { BoardRole } from '@/types/sharing'
 import { BoardTopBar } from './BoardTopBar'
 import { LeftToolbar } from './LeftToolbar'
@@ -55,8 +54,9 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     reconcileOnReconnect,
     deleteObject, getZOrderSet, addObjectWithId,
   } = useBoardState(userId, boardId, userRole, channel, onlineUsers)
-  const { getViewportCenter } = useCanvas()
   const [shareOpen, setShareOpen] = useState(false)
+  const [isEditingText, setIsEditingText] = useState(false)
+  const [activeTool, setActiveTool] = useState<BoardObjectType | null>(null)
   const undoStack = useUndoStack()
   const MAX_RECENT_COLORS = 6
   const [recentColors, setRecentColors] = useState<string[]>(() => EXPANDED_PALETTE.slice(0, MAX_RECENT_COLORS))
@@ -86,18 +86,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
   }, [channel, boardId, trackPresence, reconcileOnReconnect])
 
   const canEdit = userRole !== 'viewer'
-
-  const shapeOffsets: Record<string, { dx: number; dy: number }> = {
-    sticky_note: { dx: 75, dy: 75 },
-    rectangle: { dx: 100, dy: 70 },
-    circle: { dx: 60, dy: 60 },
-    frame: { dx: 200, dy: 150 },
-    line: { dx: 60, dy: 1 },
-    triangle: { dx: 50, dy: 45 },
-    chevron: { dx: 50, dy: 43 },
-    arrow: { dx: 60, dy: 20 },
-    parallelogram: { dx: 70, dy: 40 },
-  }
 
   // --- Undo/Redo execution ---
   const executeUndo = useCallback((entry: UndoEntry): UndoEntry | null => {
@@ -199,16 +187,31 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
   }, [undoStack, executeUndo])
 
   // --- Handlers with undo capture ---
-  const handleAddShape = (
-    type: Parameters<typeof addObject>[0],
-    overrides?: Partial<{ stroke_width: number; stroke_dash: string; color: string }>
-  ) => {
+  const handleToolSelect = useCallback((type: BoardObjectType) => {
     if (!canEdit) return
-    const center = getViewportCenter()
-    const { dx, dy } = shapeOffsets[type] ?? { dx: 75, dy: 75 }
-    const obj = addObject(type, center.x - dx, center.y - dy, overrides)
+    setActiveTool(prev => prev === type ? null : type)
+    clearSelection()
+  }, [canEdit, clearSelection])
+
+  const handleCancelTool = useCallback(() => {
+    setActiveTool(null)
+  }, [])
+
+  const handleDrawShape = useCallback((type: BoardObjectType, x: number, y: number, width: number, height: number) => {
+    if (!canEdit) return
+    const overrides: Partial<BoardObject> = {}
+    if (width > 0 && height > 0) {
+      overrides.width = width
+      overrides.height = height
+    }
+    if (type === 'line' || type === 'arrow') {
+      overrides.x2 = x + (width || 120)
+      overrides.y2 = y + (height || 40)
+    }
+    const obj = addObject(type, x, y, overrides)
     if (obj) undoStack.push({ type: 'add', ids: [obj.id] })
-  }
+    setActiveTool(null)
+  }, [canEdit, addObject, undoStack])
 
   const handleDragStart = useCallback((id: string) => {
     if (!canEdit) return
@@ -263,11 +266,11 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     if (!canEdit) return
     const obj = objects.get(id)
     if (!obj) return
-    // Enforce character limits: sticky notes unlimited, frames 256, geometric shapes 1024
+    // Enforce character limits: sticky notes unlimited, all other shapes 256
     const UNLIMITED = new Set(['sticky_note'])
     let limited = text
     if (!UNLIMITED.has(obj.type)) {
-      const max = obj.type === 'frame' ? 256 : 1024
+      const max = 256
       limited = text.slice(0, max)
     }
     updateObject(id, { text: limited })
@@ -378,6 +381,10 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     }
     if (patches.length > 0) undoStack.push({ type: 'update', patches })
   }, [canEdit, selectedIds, objects, updateObject, undoStack])
+
+  const handleBorderColorChange = useCallback((color: string | null) => {
+    handleStrokeStyleChange({ stroke_color: color })
+  }, [handleStrokeStyleChange])
 
   const handleOpacityChange = useCallback((opacity: number) => {
     if (!canEdit) return
@@ -595,12 +602,13 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
           <GroupBreadcrumb activeGroupId={activeGroupId} onExit={exitGroup} />
         </div>
       )}
-      <div className="relative flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1">
         <LeftToolbar
           userRole={userRole}
-          onAddShape={handleAddShape}
+          activeTool={activeTool}
+          onToolSelect={handleToolSelect}
           hasSelection={selectedIds.size > 0}
-          hasTextShapeSelected={hasTextShapeSelected}
+          isEditingText={isEditingText}
           selectedColor={selectedColor}
           selectedFontFamily={selectedFontInfo.fontFamily}
           selectedFontSize={selectedFontInfo.fontSize}
@@ -617,26 +625,19 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
           onUngroup={handleUngroup}
           canGroup={canGroup}
           canUngroup={canUngroup}
-          // Style panel props
           selectedStrokeColor={selectedStyleInfo.strokeColor}
-          selectedStrokeWidth={selectedStyleInfo.strokeWidth}
-          selectedStrokeDash={selectedStyleInfo.strokeDash}
-          selectedOpacity={selectedStyleInfo.opacity}
-          selectedShadowBlur={selectedStyleInfo.shadowBlur}
-          selectedCornerRadius={selectedStyleInfo.cornerRadius}
-          showCornerRadius={selectedStyleInfo.isRectangle}
-          onStrokeStyleChange={handleStrokeStyleChange}
-          onOpacityChange={handleOpacityChange}
-          onShadowChange={handleShadowChange}
-          onCornerRadiusChange={handleCornerRadiusChange}
+          onStrokeColorChange={handleBorderColorChange}
         />
-        <div className="relative flex-1">
+        <div className="relative flex-1 overflow-hidden">
           <CanvasErrorBoundary>
             <Canvas
               objects={objects}
               sortedObjects={sortedObjects}
               selectedIds={selectedIds}
               activeGroupId={activeGroupId}
+              activeTool={activeTool}
+              onDrawShape={handleDrawShape}
+              onCancelTool={handleCancelTool}
               onSelect={selectObject}
               onSelectObjects={selectObjects}
               onClearSelection={clearSelection}
@@ -678,6 +679,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
               onCursorMove={sendCursor}
               onCursorUpdate={onCursorUpdate}
               remoteSelections={remoteSelections}
+              onEditingChange={setIsEditingText}
             />
           </CanvasErrorBoundary>
         </div>

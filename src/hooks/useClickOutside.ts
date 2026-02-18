@@ -3,19 +3,24 @@
 import { useEffect, RefObject } from 'react'
 
 /**
- * Calls the callback when a mousedown occurs outside the given ref element.
+ * Calls the callback when a mousedown occurs outside the given ref element(s).
  * Useful for closing popovers, dropdowns, and modals.
+ * Accepts a single ref or an array of refs — clicking outside ALL of them triggers the callback.
  */
 export function useClickOutside(
-  ref: RefObject<HTMLElement | null>,
+  ref: RefObject<HTMLElement | null> | RefObject<HTMLElement | null>[],
   isActive: boolean,
   onOutsideClick: () => void
 ) {
   useEffect(() => {
     if (!isActive) return
 
+    const refs = Array.isArray(ref) ? ref : [ref]
+
     const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      const clickedInside = refs.some(r => r.current?.contains(target))
+      if (!clickedInside) {
         onOutsideClick()
       }
     }

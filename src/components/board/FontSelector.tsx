@@ -55,8 +55,9 @@ export function FontSelector({
 }: FontSelectorProps) {
   const [showPopover, setShowPopover] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
+  const popoverPanelRef = useRef<HTMLDivElement>(null)
 
-  useClickOutside(popoverRef, showPopover, () => setShowPopover(false))
+  useClickOutside([popoverRef, popoverPanelRef], showPopover, () => setShowPopover(false))
 
   const content = (
     <div className="w-56 space-y-3 p-3">
@@ -194,27 +195,43 @@ export function FontSelector({
   )
 
   if (compact) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const buttonRef = useRef<HTMLButtonElement>(null)
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null)
+
+    const handleToggle = () => {
+      if (!showPopover && buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect()
+        setPopoverPos({ top: rect.top, left: rect.right + 8 })
+      }
+      setShowPopover(!showPopover)
+    }
+
     return (
-      <div className="relative" ref={popoverRef}>
+      <div ref={popoverRef}>
         <button
+          ref={buttonRef}
           type="button"
-          onClick={() => setShowPopover(!showPopover)}
+          onClick={handleToggle}
           disabled={disabled}
           aria-label="Font options"
           aria-expanded={showPopover}
           aria-haspopup="dialog"
-          className="flex h-10 w-10 flex-col items-center justify-center rounded-lg transition hover:bg-slate-100 disabled:opacity-50"
+          className="flex h-9 w-9 flex-col items-center justify-center rounded-lg transition hover:bg-slate-100 disabled:opacity-50"
           title="Font options"
         >
           <svg className="h-5 w-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
           </svg>
         </button>
-        {showPopover && (
+        {showPopover && popoverPos && (
           <div
+            ref={popoverPanelRef}
             role="dialog"
             aria-label="Font options"
-            className="absolute left-full top-0 z-50 ml-2 rounded-xl border border-slate-200 bg-white shadow-xl"
+            className="fixed z-[200] rounded-xl border border-slate-200 bg-white shadow-xl"
+            style={{ top: popoverPos.top, left: popoverPos.left }}
           >
             {content}
           </div>

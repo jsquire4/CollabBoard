@@ -22,7 +22,9 @@ export function useRealtimeChannel(boardId: string): RealtimeChannel | null {
     setChannel(ch)
 
     return () => {
-      ch.untrack()
+      if ((ch as unknown as { state: string }).state === 'joined') {
+        ch.untrack()
+      }
       supabase.removeChannel(ch)
       setChannel(null)
     }

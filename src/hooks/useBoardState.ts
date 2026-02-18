@@ -21,9 +21,26 @@ interface BoardChange {
 
 const COLOR_PALETTE = ['#FFEB3B', '#FF9800', '#E91E63', '#9C27B0', '#2196F3', '#4CAF50']
 
+// Explicit column list for board_objects queries (avoids pulling large JSONB when not needed)
+const BOARD_OBJECT_COLUMNS = [
+  'id', 'board_id', 'type', 'x', 'y', 'x2', 'y2', 'width', 'height', 'rotation',
+  'text', 'color', 'font_size', 'font_family', 'font_style',
+  'stroke_width', 'stroke_dash', 'stroke_color',
+  'opacity', 'shadow_color', 'shadow_blur', 'shadow_offset_x', 'shadow_offset_y',
+  'text_align', 'text_vertical_align', 'text_padding', 'text_color',
+  'corner_radius', 'title', 'locked_by',
+  'z_index', 'parent_id', 'created_by', 'created_at', 'updated_at', 'deleted_at',
+].join(',')
+
+const BOARD_OBJECT_SELECT = CRDT_ENABLED
+  ? BOARD_OBJECT_COLUMNS + ',field_clocks'
+  : BOARD_OBJECT_COLUMNS
+
 const SELECTION_BROADCAST_DEBOUNCE_MS = 50
 const BROADCAST_IDLE_MS = 5    // flush quickly if no burst follows
 const BROADCAST_MAX_MS = 50    // ceiling for burst batching
+const BROADCAST_WARN_BYTES = 50 * 1024  // warn when payload exceeds 50KB
+const BROADCAST_MAX_BYTES = 64 * 1024   // Supabase Realtime limit ~64KB
 
 /**
  * Coalesces a queue of broadcast changes from a single user within a batch window.
@@ -93,9 +110,9 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
   const loadObjects = useCallback(async () => {
     const { data, error } = await supabase
       .from('board_objects')
-      .select('*')
+      .select(BOARD_OBJECT_SELECT)
       .eq('board_id', boardId)
-      .is('deleted_at', null)
+      .is('deleted_at', null) as unknown as { data: (BoardObject & { field_clocks?: FieldClocks })[] | null; error: { message: string } | null }
 
     if (error) {
       console.error('Failed to load board objects:', error.message)
@@ -200,14 +217,49 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
 
   // Broadcast helper — sends changes to other clients.
   // Only send when the WebSocket is connected to avoid the REST fallback.
+  // Monitors payload size and chunks if it exceeds the Supabase Realtime limit.
   const broadcastChanges = useCallback((changes: BoardChange[]) => {
     if (!channel) return
     if ((channel as unknown as { state: string }).state !== 'joined') return
-    channel.send({
-      type: 'broadcast',
-      event: 'board:sync',
-      payload: { changes, sender_id: userId },
-    })
+
+    const payload = { changes, sender_id: userId }
+    const serialized = JSON.stringify(payload)
+    const byteSize = new TextEncoder().encode(serialized).byteLength
+
+    if (byteSize <= BROADCAST_MAX_BYTES) {
+      if (byteSize > BROADCAST_WARN_BYTES) {
+        console.warn(`Broadcast payload near limit: ${(byteSize / 1024).toFixed(1)}KB`)
+      }
+      channel.send({ type: 'broadcast', event: 'board:sync', payload })
+    } else {
+      // Chunk: split changes into smaller payloads that fit under the limit
+      const chunks: BoardChange[][] = []
+      let current: BoardChange[] = []
+      let currentSize = 0
+      // Overhead for the wrapper: {"changes":[],"sender_id":"..."}
+      const overhead = new TextEncoder().encode(JSON.stringify({ changes: [], sender_id: userId })).byteLength
+
+      for (const change of changes) {
+        const changeSize = new TextEncoder().encode(JSON.stringify(change)).byteLength + 1 // +1 for comma
+        if (current.length > 0 && currentSize + changeSize + overhead > BROADCAST_MAX_BYTES) {
+          chunks.push(current)
+          current = []
+          currentSize = 0
+        }
+        current.push(change)
+        currentSize += changeSize
+      }
+      if (current.length > 0) chunks.push(current)
+
+      console.warn(`Broadcast payload ${(byteSize / 1024).toFixed(1)}KB exceeds limit, splitting into ${chunks.length} chunks`)
+      for (const chunk of chunks) {
+        channel.send({
+          type: 'broadcast',
+          event: 'board:sync',
+          payload: { changes: chunk, sender_id: userId },
+        })
+      }
+    }
   }, [channel, userId])
 
   // Broadcast batching: coalesce outbound changes with flush-on-idle strategy.
@@ -413,6 +465,16 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       }
     }
     return index
+  }, [objects])
+
+  // Cached frame list: only frames, sorted by z_index descending (highest first for hit-testing)
+  const framesDesc = useMemo(() => {
+    const frames: BoardObject[] = []
+    for (const obj of objects.values()) {
+      if (obj.type === 'frame') frames.push(obj)
+    }
+    frames.sort((a, b) => b.z_index - a.z_index)
+    return frames
   }, [objects])
 
   // Helper: get children of a group/frame (O(1) lookup)
@@ -1346,7 +1408,8 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       })
   }, [canEdit, queueBroadcast, stampChange])
 
-  // Frame containment: check if an object should be inside a frame after drag
+  // Frame containment: check if an object should be inside a frame after drag.
+  // Uses memoized framesDesc (sorted z_index desc) so we can short-circuit on first hit.
   const checkFrameContainment = useCallback((id: string) => {
     const obj = objects.get(id)
     if (!obj || obj.type === 'frame') return
@@ -1361,20 +1424,19 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       centerY = obj.y + obj.height / 2
     }
 
-    // Find frames that contain this object's center
+    // Find the highest-z frame containing this object's center.
+    // framesDesc is sorted by z_index descending, so the first match is the best.
     let bestFrame: BoardObject | null = null
-    let bestZIndex = -Infinity
-    for (const frame of objects.values()) {
-      if (frame.type !== 'frame' || frame.id === id) continue
+    for (const frame of framesDesc) {
+      if (frame.id === id) continue
       if (
         centerX >= frame.x &&
         centerX <= frame.x + frame.width &&
         centerY >= frame.y &&
-        centerY <= frame.y + frame.height &&
-        frame.z_index > bestZIndex
+        centerY <= frame.y + frame.height
       ) {
         bestFrame = frame
-        bestZIndex = frame.z_index
+        break
       }
     }
 
@@ -1386,7 +1448,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
         updateObject(id, { parent_id: newParentId })
       }
     }
-  }, [objects, updateObject])
+  }, [objects, framesDesc, updateObject])
 
   // Lock helpers: check if an object is locked (directly or via ancestor inheritance)
   const isObjectLocked = useCallback((id: string): boolean => {

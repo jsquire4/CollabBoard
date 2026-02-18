@@ -44,18 +44,13 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
   const loadData = useCallback(async () => {
     setLoading(true)
     const [membersRes, invitesRes, linksRes] = await Promise.all([
-      supabase.from('board_members').select('*').eq('board_id', boardId),
+      supabase.rpc('get_board_member_details', { p_board_id: boardId }),
       supabase.from('board_invites').select('*').eq('board_id', boardId),
       supabase.from('board_share_links').select('*').eq('board_id', boardId).eq('is_active', true).limit(1),
     ])
 
     if (membersRes.data) {
-      // We can't reverse-lookup email from user_id with the client SDK.
-      // Show truncated user_id as placeholder. A profiles table would be better.
-      const membersWithLabels = membersRes.data.map((m) => {
-        return { ...m, email: m.user_id.slice(0, 8) + '...' } as BoardMember
-      })
-      setMembers(membersWithLabels)
+      setMembers(membersRes.data as BoardMember[])
     }
     if (invitesRes.data) setInvites(invitesRes.data as BoardInvite[])
     if (linksRes.data && linksRes.data.length > 0) setShareLink(linksRes.data[0] as BoardShareLink)
@@ -273,7 +268,12 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                     key={member.id}
                     className="flex items-center justify-between border-b border-slate-100 py-2.5"
                   >
-                    <div className="text-sm text-slate-800">{member.email}</div>
+                    <div>
+                      {member.display_name && (
+                        <div className="text-sm font-medium text-slate-800">{member.display_name}</div>
+                      )}
+                      <div className="text-xs text-slate-500">{member.email ?? member.user_id.slice(0, 8) + '...'}</div>
+                    </div>
                     <div className="flex items-center gap-2">
                       {member.role === 'owner' && !isOwner ? (
                         <span className="text-sm font-medium text-slate-500">Owner</span>

@@ -77,7 +77,9 @@ export function usePresence(
 
     // Untrack immediately on tab close/refresh so other users see the leave instantly
     const handleBeforeUnload = () => {
-      channel.untrack()
+      if ((channel as unknown as { state: string }).state === 'joined') {
+        channel.untrack()
+      }
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
 
@@ -94,6 +96,7 @@ export function usePresence(
 
     const color = getColorForUser(userId)
 
+    if ((channel as unknown as { state: string }).state !== 'joined') return
     channel.track({
       user_id: userId,
       display_name: displayName,

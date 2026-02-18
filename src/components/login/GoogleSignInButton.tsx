@@ -6,7 +6,7 @@ interface GoogleSignInButtonProps {
 
 function GoogleLogo() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={24} height={24} className="h-6 w-6" role="img" aria-labelledby="google-logo-title">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={24} height={24} className="h-6 w-6 shrink-0" role="img" aria-labelledby="google-logo-title">
       <title id="google-logo-title">Google</title>
       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
       <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -21,10 +21,13 @@ export function GoogleSignInButton({ onClick }: GoogleSignInButtonProps) {
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-3 rounded-lg border border-slate-300 bg-white px-6 py-3 text-base font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 hover:shadow focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+      className="group flex w-full items-center justify-center gap-3 rounded-xl border-2 border-slate-200 bg-white px-6 py-4 text-base font-semibold text-slate-700 shadow-sm transition-all hover:border-indigo-200 hover:bg-slate-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
     >
       <GoogleLogo />
-      Sign in with Google
+      <span>Sign in with Google</span>
+      <svg className="h-5 w-5 shrink-0 text-slate-400 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+      </svg>
     </button>
   )
 }

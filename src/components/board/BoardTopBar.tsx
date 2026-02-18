@@ -26,6 +26,7 @@ export function BoardTopBar({
   const supabase = supabaseRef.current
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(boardName)
+  const [renameError, setRenameError] = useState<string | null>(null)
 
   const isOwner = userRole === 'owner'
   const canManage = userRole === 'owner' || userRole === 'manager'
@@ -42,7 +43,12 @@ export function BoardTopBar({
       setEditing(false)
       return
     }
-    await supabase.from('boards').update({ name: trimmed }).eq('id', boardId)
+    const { error } = await supabase.from('boards').update({ name: trimmed }).eq('id', boardId)
+    if (error) {
+      setName(boardName)
+      setRenameError('Failed to rename board')
+      setTimeout(() => setRenameError(null), 3000)
+    }
     setEditing(false)
   }
 
@@ -86,6 +92,9 @@ export function BoardTopBar({
           >
             {name}
           </button>
+        )}
+        {renameError && (
+          <span className="text-xs text-red-600">{renameError}</span>
         )}
         {canManage && (
           <>

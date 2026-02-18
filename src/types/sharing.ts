@@ -7,7 +7,8 @@ export interface BoardMember {
   role: BoardRole
   added_by: string | null
   added_at: string
-  email?: string // populated via lookup
+  email?: string // populated via RPC lookup
+  display_name?: string // populated via RPC lookup
 }
 
 export interface BoardInvite {

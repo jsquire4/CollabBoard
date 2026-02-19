@@ -103,15 +103,10 @@ export function useShapeDrag({
     const obj = objectsRef.current.get(id)
     if (!obj) return
 
-    const def = shapeRegistry.get(obj.type)
-    const rawX = snapToGridEnabled ? snapToGrid(x, gridSize, gridSubdivisions) : x
-    const rawY = snapToGridEnabled ? snapToGrid(y, gridSize, gridSubdivisions) : y
-
-    // centerOrigin shapes (e.g. circles) store top-left position but Konva
-    // reports the centre as the drag coordinate — subtract the offset to align
-    // with the stored coordinate system, matching the correction in handleShapeDragMove.
-    const finalX = def?.centerOrigin ? rawX - obj.width / 2 : rawX
-    const finalY = def?.centerOrigin ? rawY - obj.height / 2 : rawY
+    // GenericShape already converts center→top-left for centerOrigin shapes
+    // before calling this handler, so x/y are always in stored coordinate space.
+    const finalX = snapToGridEnabled ? snapToGrid(x, gridSize, gridSubdivisions) : x
+    const finalY = snapToGridEnabled ? snapToGrid(y, gridSize, gridSubdivisions) : y
 
     const dx = finalX - obj.x
     const dy = finalY - obj.y

@@ -190,6 +190,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
   }
 
   async function handleGenerateLink() {
+    if (userRole !== 'owner' && userRole !== 'manager') return
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
@@ -211,6 +212,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
   }
 
   async function handleDeactivateLink() {
+    if (userRole !== 'owner' && userRole !== 'manager') return
     if (!shareLink) return
 
     const { error } = await supabase
@@ -386,7 +388,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                   Send Invite
                 </button>
                 {inviteStatus && (
-                  <p className={`mt-3 text-sm ${inviteStatus.startsWith('Error') ? 'text-red-600' : 'text-green-600'}`}>
+                  <p className={`mt-3 text-sm ${inviteStatus.startsWith('Added') || inviteStatus.startsWith('Invite') ? 'text-green-600' : 'text-red-600'}`}>
                     {inviteStatus}
                   </p>
                 )}

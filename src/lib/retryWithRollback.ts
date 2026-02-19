@@ -29,7 +29,7 @@ export async function retryWithRollback({
       if (!result.error) return true
       lastError = result.error
     } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err))
+      lastError = { message: err instanceof Error ? err.message : String(err) }
     }
     logError?.(lastError!, attempt)
     if (attempt < maxRetries) {

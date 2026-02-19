@@ -25,7 +25,7 @@ function chain(resolveValue: { data?: unknown; error?: { message: string } | nul
   const c = {
     select: vi.fn(() => c),
     eq: vi.fn(() => c),
-    order: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve(resolveValue)) })),  // kept for generic chain
+    order: vi.fn(() => Promise.resolve(resolveValue)),
     single: vi.fn(() => Promise.resolve(resolveValue)),
     upsert: vi.fn(() => Promise.resolve({})),
     delete: vi.fn(() => c),

@@ -5,6 +5,7 @@ import { StickyNote } from './StickyNote'
 import { FrameShape } from './FrameShape'
 import { GenericShape } from './GenericShape'
 import { VectorShape } from './VectorShape'
+import { TableShape } from './TableShape'
 import { shapeRegistry } from './shapeRegistry'
 
 export interface ShapeCallbacks {
@@ -43,7 +44,7 @@ export function renderShape(
   state: ShapeState,
   callbacks: ShapeCallbacks,
 ): React.ReactNode {
-  const { selectedIds, isObjectLocked, canEdit, editingId, editingField } = state
+  const { selectedIds, isObjectLocked, canEdit, editingId, editingField, editingCellCoords } = state
   const {
     handleShapeDragEnd, handleShapeDragMove, handleShapeDragStart,
     handleShapeSelect, handleShapeRef, onTransformEnd, handleContextMenu,
@@ -51,6 +52,7 @@ export function renderShape(
     onEndpointDragMove, onEndpointDragEnd,
     onWaypointDragEnd, onWaypointInsert, onWaypointDelete,
     getAutoRoutePoints, autoRoutePointsRef,
+    handleStartCellEdit, handleTableDataChange,
   } = callbacks
 
   const isSelected = selectedIds.has(obj.id)
@@ -154,6 +156,27 @@ export function renderShape(
         />
       )
     }
+    case 'table':
+      return (
+        <TableShape
+          key={obj.id}
+          object={obj}
+          onDragEnd={handleShapeDragEnd}
+          onDragMove={handleShapeDragMove}
+          onDragStart={handleShapeDragStart}
+          isSelected={isSelected}
+          onSelect={handleShapeSelect}
+          shapeRef={handleShapeRef}
+          onTransformEnd={onTransformEnd}
+          onContextMenu={handleContextMenu}
+          editable={shapeEditable}
+          dragBoundFunc={shapeDragBoundFunc}
+          isEditing={editingId === obj.id}
+          editingCellCoords={editingId === obj.id ? editingCellCoords : null}
+          onStartCellEdit={handleStartCellEdit}
+          onTableDataChange={handleTableDataChange}
+        />
+      )
     case 'group':
       return null
     default:

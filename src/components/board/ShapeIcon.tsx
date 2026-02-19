@@ -73,6 +73,16 @@ export function ShapeIcon({ type, className = 'h-4 w-4' }: ShapeIconProps) {
           <path d="M12 2L22.5 9.6 18.5 21.4H5.5L1.5 9.6Z" />
         </svg>
       )
+    case 'table':
+      return (
+        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <line x1="3" y1="9" x2="21" y2="9" />
+          <line x1="3" y1="15" x2="21" y2="15" />
+          <line x1="9" y1="3" x2="9" y2="21" />
+          <line x1="15" y1="3" x2="15" y2="21" />
+        </svg>
+      )
     case 'group':
       return null
     default:

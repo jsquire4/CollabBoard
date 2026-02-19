@@ -512,6 +512,15 @@ export const FRAME_PRESET: ShapePreset = {
   iconPath: 'M3 3h4 M17 3h4v4 M21 17v4h-4 M7 21H3v-4 M3 3v4 M7 21h10 M21 7v10 M3 7v10',
 }
 
+export const TABLE_PRESET: ShapePreset = {
+  id: 'table',
+  label: 'Table',
+  dbType: 'table',
+  defaultWidth: 360,
+  defaultHeight: 128,
+  iconPath: 'M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18',
+}
+
 // ── All shape groups for the menu ────────────────────────────
 
 export const SHAPE_GROUPS: ShapeGroup[] = [

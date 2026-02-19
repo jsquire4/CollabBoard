@@ -91,6 +91,12 @@ interface CanvasProps {
   onWaypointDelete?: (id: string, waypointIndex: number) => void
   autoRoutePointsRef?: React.MutableRefObject<Map<string, number[]>>
   onDrawLineFromAnchor?: (type: BoardObjectType, startShapeId: string, startAnchor: string, startX: number, startY: number, endX: number, endY: number, screenEndX?: number, screenEndY?: number) => void
+  onUpdateTableCell?: (id: string, row: number, col: number, text: string) => void
+  onTableDataChange?: (id: string, tableData: string) => void
+  onAddRow?: () => void
+  onDeleteRow?: () => void
+  onAddColumn?: () => void
+  onDeleteColumn?: () => void
 }
 
 export function Canvas({
@@ -124,6 +130,12 @@ export function Canvas({
   onWaypointDelete,
   autoRoutePointsRef,
   onDrawLineFromAnchor,
+  onUpdateTableCell,
+  onTableDataChange,
+  onAddRow,
+  onDeleteRow,
+  onAddColumn,
+  onDeleteColumn,
 }: CanvasProps) {
   // ── Read shared state from context ──────────────────────────────
   const {
@@ -243,13 +255,14 @@ export function Canvas({
   }, [objects, selectedIds, activeGroupId, onEnterGroup])
 
   const {
-    editingId, editingField, editText, setEditText,
+    editingId, editingField, editingCellCoords, editText, setEditText,
     textareaStyle, textareaRef,
-    handleStartEdit, handleFinishEdit,
-    handleShapeDoubleClick, startGeometricTextEdit, lastDblClickRef,
+    handleStartEdit, handleStartCellEdit, handleFinishEdit,
+    handleShapeDoubleClick, handleCellKeyDown, startGeometricTextEdit, lastDblClickRef,
   } = useTextEditing({
     objects, stageScale, canEdit, stageRef, shapeRefs,
     onUpdateText, onUpdateTitle, onEditingChange, onActivity,
+    onUpdateTableCell,
     pendingEditId, onPendingEditConsumed, tryEnterGroup,
   })
 
@@ -431,8 +444,8 @@ export function Canvas({
 
   // Shape rendering state + callbacks (stable references for renderShape)
   const shapeState: ShapeState = useMemo(() => ({
-    selectedIds, isObjectLocked: isObjectLocked ?? (() => false), canEdit, editingId, editingField,
-  }), [selectedIds, isObjectLocked, canEdit, editingId, editingField])
+    selectedIds, isObjectLocked: isObjectLocked ?? (() => false), canEdit, editingId, editingField, editingCellCoords,
+  }), [selectedIds, isObjectLocked, canEdit, editingId, editingField, editingCellCoords])
 
   const shapeCallbacks: ShapeCallbacks = useMemo(() => ({
     handleShapeDragEnd, handleShapeDragMove, handleShapeDragStart,
@@ -441,6 +454,7 @@ export function Canvas({
     onEndpointDragMove, onEndpointDragEnd,
     onWaypointDragEnd, onWaypointInsert, onWaypointDelete,
     getAutoRoutePoints, autoRoutePointsRef,
+    handleStartCellEdit, handleTableDataChange: onTableDataChange,
   }), [
     handleShapeDragEnd, handleShapeDragMove, handleShapeDragStart,
     handleShapeSelect, handleShapeRef, onTransformEnd, handleContextMenu,
@@ -448,6 +462,7 @@ export function Canvas({
     onEndpointDragMove, onEndpointDragEnd,
     onWaypointDragEnd, onWaypointInsert, onWaypointDelete,
     getAutoRoutePoints, autoRoutePointsRef,
+    handleStartCellEdit, onTableDataChange,
   ])
 
   return (
@@ -728,6 +743,11 @@ export function Canvas({
         onEditVertices={onEditVertices}
         canEditVertices={canEditVertices}
         onMarkerChange={onMarkerChange}
+        onAddRow={onAddRow}
+        onDeleteRow={onDeleteRow}
+        onAddColumn={onAddColumn}
+        onDeleteColumn={onDeleteColumn}
+        onCellKeyDown={handleCellKeyDown}
       />
 
     </div>

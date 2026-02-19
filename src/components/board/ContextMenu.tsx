@@ -14,6 +14,11 @@ interface ContextMenuProps {
   currentColor?: string
   /** When true, show line-specific options like markers */
   isLine?: boolean
+  isTable?: boolean
+  onAddRow?: () => void
+  onDeleteRow?: () => void
+  onAddColumn?: () => void
+  onDeleteColumn?: () => void
   onStrokeStyleChange?: (updates: { stroke_color?: string | null; stroke_width?: number; stroke_dash?: string }) => void
   onOpacityChange?: (opacity: number) => void
   currentStrokeWidth?: number
@@ -98,6 +103,11 @@ export function ContextMenu({
   colors,
   currentColor,
   isLine,
+  isTable,
+  onAddRow,
+  onDeleteRow,
+  onAddColumn,
+  onDeleteColumn,
   onStrokeStyleChange,
   onOpacityChange,
   currentStrokeWidth,
@@ -280,6 +290,17 @@ export function ContextMenu({
           {canUngroup && onUngroup && (
             <MenuItem onClick={() => { onUngroup(); onClose() }} label="Ungroup" shortcut="Ctrl+Shift+G" />
           )}
+        </>
+      )}
+
+      {/* Table operations */}
+      {!isLocked && isTable && (
+        <>
+          <div className="my-1 h-px bg-slate-200" />
+          <MenuItem onClick={() => onAddRow?.()} label="Add Row" />
+          <MenuItem onClick={() => onDeleteRow?.()} label="Delete Row" />
+          <MenuItem onClick={() => onAddColumn?.()} label="Add Column" />
+          <MenuItem onClick={() => onDeleteColumn?.()} label="Delete Column" />
         </>
       )}
 

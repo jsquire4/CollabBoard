@@ -73,6 +73,11 @@ interface CanvasOverlaysProps {
   onEditVertices?: () => void
   canEditVertices?: boolean
   onMarkerChange?: (updates: { marker_start?: string; marker_end?: string }) => void
+  onAddRow?: () => void
+  onDeleteRow?: () => void
+  onAddColumn?: () => void
+  onDeleteColumn?: () => void
+  onCellKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
 }
 
 export function CanvasOverlays({
@@ -87,6 +92,8 @@ export function CanvasOverlays({
   onGroup, onUngroup, canGroup, canUngroup,
   isObjectLocked, onLock, onUnlock, canLock, canUnlock,
   onEditVertices, canEditVertices, onMarkerChange,
+  onAddRow, onDeleteRow, onAddColumn, onDeleteColumn,
+  onCellKeyDown,
 }: CanvasOverlaysProps) {
   return (
     <>
@@ -117,6 +124,7 @@ export function CanvasOverlays({
           }}
           onBlur={handleFinishEdit}
           onKeyDown={e => {
+            if (onCellKeyDown) onCellKeyDown(e)
             if (e.key === 'Escape') handleFinishEdit()
           }}
           style={textareaStyle}
@@ -191,6 +199,7 @@ export function CanvasOverlays({
       {contextMenu && (() => {
         const ctxObj = objects.get(contextMenu.objectId)
         const isLine = ctxObj?.type === 'line' || ctxObj?.type === 'arrow'
+        const isTableObj = ctxObj?.type === 'table'
         return (
         <ContextMenu
           position={{ x: contextMenu.x, y: contextMenu.y }}
@@ -226,6 +235,11 @@ export function CanvasOverlays({
           onMarkerChange={onMarkerChange}
           currentMarkerStart={ctxObj?.marker_start ?? (ctxObj?.type === 'arrow' ? 'arrow' : 'none')}
           currentMarkerEnd={ctxObj?.marker_end ?? (ctxObj?.type === 'arrow' ? 'arrow' : 'none')}
+          isTable={isTableObj}
+          onAddRow={onAddRow}
+          onDeleteRow={onDeleteRow}
+          onAddColumn={onAddColumn}
+          onDeleteColumn={onDeleteColumn}
         />
         )
       })()}

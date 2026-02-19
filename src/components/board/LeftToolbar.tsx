@@ -9,6 +9,7 @@ import type { ShapePreset } from './shapePresets'
 import {
   STANDALONE_PRESETS,
   FRAME_PRESET,
+  TABLE_PRESET,
   LINE_PRESETS,
   LINE_PLACEHOLDER_PRESETS,
   TRIANGLE_PRESETS,
@@ -60,7 +61,7 @@ interface LeftToolbarProps {
 }
 
 // IDs that belong to each tool group (for active-state highlighting)
-const BASICS_IDS = ['sticky_note', 'text_box', 'frame']
+const BASICS_IDS = ['sticky_note', 'text_box', 'frame', 'table']
 const LINES_IDS = ['line', 'arrow']
 const SHAPES_IDS = [
   'circle',
@@ -165,6 +166,7 @@ export function LeftToolbar({
                     <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} dark={dk} />
                   ))}
                   <FlyoutPresetButton preset={FRAME_PRESET} activePreset={activePreset} onSelect={handlePresetSelect} dark={dk} />
+                  <FlyoutPresetButton preset={TABLE_PRESET} activePreset={activePreset} onSelect={handlePresetSelect} dark={dk} />
                   <FlyoutPlaceholder label="Connector" iconPath="M4 20h2a4 4 0 0 0 4-4v-8a4 4 0 0 1 4-4h2 M18 4l2 4-2 4" dark={dk} />
                   <FlyoutPlaceholder label="Web Frame" iconPath="M3 3h18v18H3z M3 9h18 M9 9v12" dark={dk} />
                   <FlyoutPlaceholder label="File" iconPath="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M9 13h6 M9 17h4" dark={dk} />

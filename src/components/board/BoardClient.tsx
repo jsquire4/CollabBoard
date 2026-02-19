@@ -14,6 +14,7 @@ import { useStyleActions } from '@/hooks/board/useStyleActions'
 import { useZOrderActions } from '@/hooks/board/useZOrderActions'
 import { useGroupActions } from '@/hooks/board/useGroupActions'
 import { useClipboardActions } from '@/hooks/board/useClipboardActions'
+import { useTableActions } from '@/hooks/board/useTableActions'
 import { useConnectorActions } from '@/hooks/board/useConnectorActions'
 import { createClient } from '@/lib/supabase/client'
 import { fireAndRetry } from '@/lib/retryWithRollback'
@@ -297,6 +298,15 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     handleCopy,
     handlePaste,
   } = useClipboardActions({ objects, selectedIds, canEdit, deleteSelected, duplicateSelected, duplicateObject, getDescendants, undoStack, markActivity })
+
+  const {
+    handleAddRow,
+    handleDeleteRow,
+    handleAddColumn,
+    handleDeleteColumn,
+    handleTableDataChange,
+    handleCellTextUpdate,
+  } = useTableActions({ objects, selectedIds, canEdit, updateObject, undoStack })
 
   const {
     connectionIndex,
@@ -793,6 +803,12 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
               onWaypointDelete={handleWaypointDelete}
               autoRoutePointsRef={autoRoutePointsRef}
               onDrawLineFromAnchor={handleDrawLineFromAnchor}
+              onUpdateTableCell={handleCellTextUpdate}
+              onTableDataChange={handleTableDataChange}
+              onAddRow={handleAddRow}
+              onDeleteRow={handleDeleteRow}
+              onAddColumn={handleAddColumn}
+              onDeleteColumn={handleDeleteColumn}
             />
           </CanvasErrorBoundary>
         </div>

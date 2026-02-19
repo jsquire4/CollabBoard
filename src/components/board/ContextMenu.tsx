@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { MarkerIcon, MARKER_TYPES, MARKER_LABELS, MarkerType } from './lineMarkers'
 
 interface ContextMenuProps {
   position: { x: number; y: number }
@@ -11,7 +12,7 @@ interface ContextMenuProps {
   recentColors?: string[]
   colors: string[]
   currentColor?: string
-  /** When true, show line-specific stroke weight/dash options */
+  /** When true, show line-specific options like markers */
   isLine?: boolean
   onStrokeStyleChange?: (updates: { stroke_color?: string | null; stroke_width?: number; stroke_dash?: string }) => void
   onOpacityChange?: (opacity: number) => void
@@ -34,6 +35,9 @@ interface ContextMenuProps {
   canUnlockShape?: boolean
   onEditVertices?: () => void
   canEditVertices?: boolean
+  onMarkerChange?: (updates: { marker_start?: string; marker_end?: string }) => void
+  currentMarkerStart?: string
+  currentMarkerEnd?: string
 }
 
 function MenuItem({
@@ -115,6 +119,9 @@ export function ContextMenu({
   canUnlockShape,
   onEditVertices,
   canEditVertices,
+  onMarkerChange,
+  currentMarkerStart,
+  currentMarkerEnd,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   const [showAllColors, setShowAllColors] = useState(false)
@@ -276,12 +283,12 @@ export function ContextMenu({
         </>
       )}
 
-      {/* Line-specific stroke presets */}
-      {!isLocked && isLine && onStrokeStyleChange && (
+      {/* Stroke style presets */}
+      {!isLocked && onStrokeStyleChange && (
         <>
           <div className="my-1 h-px bg-slate-200" />
           <div className="px-3 py-2">
-            <div className="mb-1.5 text-xs font-medium text-slate-500">Line style</div>
+            <div className="mb-1.5 text-xs font-medium text-slate-500">Stroke style</div>
             <div className="flex flex-wrap gap-1">
               {STROKE_PRESETS.map((p) => (
                 <button
@@ -298,6 +305,51 @@ export function ContextMenu({
                   }`}
                 >
                   {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Markers (lines only) */}
+      {!isLocked && isLine && onMarkerChange && (
+        <>
+          <div className="my-1 h-px bg-slate-200" />
+          <div className="px-3 py-2">
+            <div className="mb-1.5 text-xs font-medium text-slate-500">Start marker</div>
+            <div className="flex flex-wrap gap-0.5">
+              {MARKER_TYPES.map((mt) => (
+                <button
+                  key={`start-${mt}`}
+                  type="button"
+                  onClick={() => { onMarkerChange({ marker_start: mt }); onClose() }}
+                  className={`rounded p-1 transition ${
+                    currentMarkerStart === mt
+                      ? 'bg-indigo-100 text-indigo-700'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                  title={MARKER_LABELS[mt]}
+                >
+                  <MarkerIcon type={mt} size={20} />
+                </button>
+              ))}
+            </div>
+            <div className="mb-1.5 mt-2 text-xs font-medium text-slate-500">End marker</div>
+            <div className="flex flex-wrap gap-0.5">
+              {MARKER_TYPES.map((mt) => (
+                <button
+                  key={`end-${mt}`}
+                  type="button"
+                  onClick={() => { onMarkerChange({ marker_end: mt }); onClose() }}
+                  className={`rounded p-1 transition ${
+                    currentMarkerEnd === mt
+                      ? 'bg-indigo-100 text-indigo-700'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                  title={MARKER_LABELS[mt]}
+                >
+                  <MarkerIcon type={mt} size={20} />
                 </button>
               ))}
             </div>

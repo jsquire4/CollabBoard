@@ -18,6 +18,7 @@ import { ShareDialog } from './ShareDialog'
 import { CanvasErrorBoundary } from './CanvasErrorBoundary'
 import { GroupBreadcrumb } from './GroupBreadcrumb'
 import { getInitialVertexPoints, isVectorType } from './shapeUtils'
+import { FloatingShapePalette } from './FloatingShapePalette'
 import { shapeRegistry } from './shapeRegistry'
 import { getShapeAnchors, findNearestAnchor, AnchorPoint } from './anchorPoints'
 import { parseWaypoints, computeAutoRoute } from './autoRoute'
@@ -131,6 +132,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const [vertexEditId, setVertexEditId] = useState<string | null>(null)
   const [pendingEditId, setPendingEditId] = useState<string | null>(null)
   const [snapIndicator, setSnapIndicator] = useState<{ x: number; y: number } | null>(null)
+  const [shapePalette, setShapePalette] = useState<{ lineId: string; canvasX: number; canvasY: number; screenX: number; screenY: number } | null>(null)
 
   // Grid settings — initialized from server props, persisted on change
   const [gridSize, setGridSize] = useState(initialGridSize)
@@ -312,6 +314,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   // --- Handlers with undo capture ---
   const handlePresetSelect = useCallback((preset: ShapePreset) => {
     if (!canEdit) return
+    setShapePalette(null)
     markActivity()
     setActivePreset(prev => {
       const toggling = prev?.id === preset.id
@@ -578,6 +581,86 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     }
     return { snap, shapeId: null }
   }, [])
+
+  const handleDrawLineFromAnchor = useCallback((type: BoardObjectType, startShapeId: string, startAnchor: string, startX: number, startY: number, endX: number, endY: number, screenEndX?: number, screenEndY?: number) => {
+    if (!canEdit) return
+    markActivity()
+
+    const overrides: Partial<BoardObject> = {
+      x2: endX,
+      y2: endY,
+      connect_start_id: startShapeId,
+      connect_start_anchor: startAnchor,
+    }
+
+    // Check if end snaps to another shape's anchor
+    const { anchors: allAnchors, shapeMap } = computeAllAnchors('__new__')
+    const endSnap = findNearestAnchor(allAnchors, endX, endY, SNAP_DISTANCE)
+    if (endSnap) {
+      overrides.x2 = endSnap.x
+      overrides.y2 = endSnap.y
+      for (const [shapeId, entry] of shapeMap) {
+        if (entry.anchors.some(a => a.id === endSnap.id && a.x === endSnap.x && a.y === endSnap.y)) {
+          overrides.connect_end_id = shapeId
+          overrides.connect_end_anchor = endSnap.id
+          break
+        }
+      }
+    }
+
+    if (type === 'arrow') {
+      overrides.marker_end = 'arrow'
+    }
+
+    const obj = addObject(type, startX, startY, overrides)
+    if (obj) {
+      undoStack.push({ type: 'add', ids: [obj.id] })
+      if (!overrides.connect_end_id) {
+        setShapePalette({
+          lineId: obj.id,
+          canvasX: overrides.x2 as number,
+          canvasY: overrides.y2 as number,
+          screenX: screenEndX ?? 0,
+          screenY: screenEndY ?? 0,
+        })
+      }
+    }
+
+    setActiveTool(null)
+    setActivePreset(null)
+  }, [canEdit, addObject, undoStack, computeAllAnchors, markActivity])
+
+  const handlePaletteShapeSelect = useCallback((type: BoardObjectType) => {
+    if (!shapePalette || !canEdit) return
+    markActivity()
+    const { lineId, canvasX, canvasY } = shapePalette
+    const defaultW = type === 'sticky_note' ? 200 : 120
+    const defaultH = type === 'sticky_note' ? 200 : 120
+    const shapeX = canvasX - defaultW / 2
+    const shapeY = canvasY - defaultH / 2
+    const shapeObj = addObject(type, shapeX, shapeY, { width: defaultW, height: defaultH })
+    if (shapeObj) {
+      const anchors = getShapeAnchors(shapeObj)
+      const nearest = findNearestAnchor(anchors, canvasX, canvasY, Infinity)
+      if (nearest) {
+        // Capture line's before-state for undo before mutating
+        const lineObj = objects.get(lineId)
+        if (lineObj) {
+          undoStack.push({ type: 'update', patches: [{ id: lineId, before: { x2: lineObj.x2, y2: lineObj.y2, connect_end_id: lineObj.connect_end_id, connect_end_anchor: lineObj.connect_end_anchor } }] })
+        }
+        updateObject(lineId, {
+          x2: nearest.x,
+          y2: nearest.y,
+          connect_end_id: shapeObj.id,
+          connect_end_anchor: nearest.id,
+        })
+      }
+      // Push shape add entry after the line update entry so undo pops in reverse:
+      // first undoes the shape add (deletes it), then undoes the line endpoint update
+      undoStack.push({ type: 'add', ids: [shapeObj.id] })
+    }
+    setShapePalette(null)
+  }, [shapePalette, canEdit, addObject, updateObject, undoStack, markActivity, objects])
 
   const handleEndpointDragEnd = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
@@ -920,6 +1003,21 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     if (patches.length > 0) undoStack.push({ type: 'update', patches })
   }, [canEdit, selectedIds, objects, updateObject, undoStack])
 
+  const handleMarkerChange = useCallback((updates: { marker_start?: string; marker_end?: string }) => {
+    if (!canEdit) return
+    const patches: { id: string; before: Partial<BoardObject> }[] = []
+    for (const id of selectedIds) {
+      const obj = objects.get(id)
+      if (!obj) continue
+      const before: Partial<BoardObject> = {}
+      if (updates.marker_start !== undefined) before.marker_start = obj.marker_start ?? 'none'
+      if (updates.marker_end !== undefined) before.marker_end = obj.marker_end ?? 'none'
+      patches.push({ id, before })
+      updateObject(id, updates as Partial<BoardObject>)
+    }
+    if (patches.length > 0) undoStack.push({ type: 'update', patches })
+  }, [canEdit, selectedIds, objects, updateObject, undoStack])
+
   const handleCornerRadiusChange = useCallback((corner_radius: number) => {
     if (!canEdit) return
     const patches: { id: string; before: Partial<BoardObject> }[] = []
@@ -1156,6 +1254,13 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     setVertexEditId(null)
   }, [])
 
+  // Dismiss floating shape palette when tool or selection changes
+  useEffect(() => {
+    if (shapePalette && (activeTool || selectedIds.size > 0)) {
+      setShapePalette(null)
+    }
+  }, [shapePalette, activeTool, selectedIds])
+
   // Exit vertex edit when selection changes
   useEffect(() => {
     if (vertexEditId && !selectedIds.has(vertexEditId)) {
@@ -1222,6 +1327,9 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
       shadowBlur: obj.shadow_blur ?? 6,
       cornerRadius: obj.corner_radius ?? (obj.type === 'rectangle' ? 6 : 0),
       isRectangle: obj.type === 'rectangle',
+      isLine: obj.type === 'line' || obj.type === 'arrow',
+      markerStart: obj.marker_start ?? 'none',
+      markerEnd: obj.marker_end ?? (obj.type === 'arrow' ? 'arrow' : 'none'),
     }
   }, [selectedIds, objects])
 
@@ -1273,7 +1381,17 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           canGroup={canGroup}
           canUngroup={canUngroup}
           selectedStrokeColor={selectedStyleInfo.strokeColor}
+          selectedStrokeWidth={selectedStyleInfo.strokeWidth}
+          selectedStrokeDash={selectedStyleInfo.strokeDash}
+          selectedOpacity={selectedStyleInfo.opacity}
+          selectedShadowBlur={selectedStyleInfo.shadowBlur}
+          selectedCornerRadius={selectedStyleInfo.cornerRadius}
+          showCornerRadius={selectedStyleInfo.isRectangle}
           onStrokeColorChange={handleBorderColorChange}
+          onStrokeStyleChange={handleStrokeStyleChange}
+          onOpacityChange={handleOpacityChange}
+          onShadowChange={handleShadowChange}
+          onCornerRadiusChange={handleCornerRadiusChange}
           anySelectedLocked={anySelectedLocked}
           activePreset={activePreset}
           onPresetSelect={handlePresetSelect}
@@ -1316,6 +1434,9 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
               canUngroup={canUngroup}
               onStrokeStyleChange={handleStrokeStyleChange}
               onOpacityChange={handleOpacityChange}
+              onMarkerChange={handleMarkerChange}
+              selectedMarkerStart={selectedStyleInfo.markerStart}
+              selectedMarkerEnd={selectedStyleInfo.markerEnd}
               onEndpointDragMove={handleEndpointDragMove}
               onEndpointDragEnd={handleEndpointDragEnd}
               onUndo={performUndo}
@@ -1363,6 +1484,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
               onWaypointInsert={handleWaypointInsert}
               onWaypointDelete={handleWaypointDelete}
               autoRoutePointsRef={autoRoutePointsRef}
+              onDrawLineFromAnchor={handleDrawLineFromAnchor}
             />
           </CanvasErrorBoundary>
         </div>
@@ -1372,6 +1494,14 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           boardId={boardId}
           userRole={userRole}
           onClose={() => setShareOpen(false)}
+        />
+      )}
+      {shapePalette && (
+        <FloatingShapePalette
+          x={shapePalette.screenX || window.innerWidth / 2}
+          y={shapePalette.screenY || window.innerHeight / 2}
+          onSelectShape={handlePaletteShapeSelect}
+          onDismiss={() => setShapePalette(null)}
         />
       )}
     </div>

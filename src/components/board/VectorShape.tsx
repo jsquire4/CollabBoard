@@ -1,9 +1,10 @@
 import { memo } from 'react'
-import { Group, Line, Arrow, Circle } from 'react-konva'
+import { Group, Line, Circle } from 'react-konva'
 import Konva from 'konva'
 import { BoardObject } from '@/types/board'
 import { ShapeProps, getShadowProps } from './shapeUtils'
 import { parseWaypoints, snapAngle45 } from './autoRoute'
+import { renderMarker, computeEndpointAngle, MarkerType } from './lineMarkers'
 
 interface VectorShapeProps extends ShapeProps {
   variant: 'line' | 'arrow'
@@ -33,9 +34,9 @@ export const VectorShape = memo(function VectorShape({
 }: VectorShapeProps) {
   const strokeWidth = object.stroke_width ?? 2
 
-  // Parse dash pattern (line only)
+  // Parse dash pattern (all variants)
   let dash: number[] | undefined
-  if (variant === 'line' && object.stroke_dash) {
+  if (object.stroke_dash) {
     try {
       const parsed = JSON.parse(object.stroke_dash)
       dash = Array.isArray(parsed) ? parsed : undefined
@@ -43,6 +44,10 @@ export const VectorShape = memo(function VectorShape({
       dash = undefined
     }
   }
+
+  // Resolve marker types — backward compat: arrows default to filled triangle end
+  const markerStart: MarkerType = (object.marker_start as MarkerType) ?? 'none'
+  const markerEnd: MarkerType = (object.marker_end as MarkerType) ?? (variant === 'arrow' ? 'arrow' : 'none')
 
   // Compute endpoint
   const x2 = object.x2 ?? object.x + object.width
@@ -141,6 +146,7 @@ export const VectorShape = memo(function VectorShape({
   }
 
   const strokeColor = object.stroke_color ?? object.color
+  const effectiveStrokeWidth = isSelected ? Math.max(strokeWidth + 2, 4) : strokeWidth
   const shadowProps = getShadowProps(object)
 
   // Line-specific: selection stroke boost + custom shadow when selected
@@ -166,39 +172,40 @@ export const VectorShape = memo(function VectorShape({
       }}
       opacity={object.opacity ?? 1}
     >
-      {variant === 'line' ? (
-        <Line
-          points={allPoints}
-          stroke={strokeColor}
-          strokeWidth={isSelected ? Math.max(strokeWidth + 2, 4) : strokeWidth}
-          dash={dash}
-          lineCap="round"
-          lineJoin="round"
-          draggable={editable}
-          onDragStart={handleLineDragStart}
-          onDragMove={handleLineDragMove}
-          onDragEnd={handleLineDragEnd}
-          {...lineShadow}
-          hitStrokeWidth={40}
-        />
-      ) : (
-        <Arrow
-          points={allPoints}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          fill={strokeColor}
-          pointerLength={12}
-          pointerWidth={12}
-          lineCap="round"
-          lineJoin="round"
-          draggable={editable}
-          onDragStart={handleLineDragStart}
-          onDragMove={handleLineDragMove}
-          onDragEnd={handleLineDragEnd}
-          {...lineShadow}
-          hitStrokeWidth={40}
-        />
-      )}
+      <Line
+        points={allPoints}
+        stroke={strokeColor}
+        strokeWidth={effectiveStrokeWidth}
+        dash={dash}
+        lineCap="round"
+        lineJoin="round"
+        draggable={editable}
+        onDragStart={handleLineDragStart}
+        onDragMove={handleLineDragMove}
+        onDragEnd={handleLineDragEnd}
+        {...lineShadow}
+        hitStrokeWidth={40}
+      />
+      {/* Start marker */}
+      {markerStart !== 'none' && allPoints.length >= 4 && renderMarker({
+        type: markerStart,
+        x: allPoints[0],
+        y: allPoints[1],
+        angle: computeEndpointAngle(allPoints, 'start'),
+        strokeWidth: effectiveStrokeWidth,
+        color: strokeColor,
+        markerKey: `marker-start-${object.id}`,
+      })}
+      {/* End marker */}
+      {markerEnd !== 'none' && allPoints.length >= 4 && renderMarker({
+        type: markerEnd,
+        x: allPoints[allPoints.length - 2],
+        y: allPoints[allPoints.length - 1],
+        angle: computeEndpointAngle(allPoints, 'end'),
+        strokeWidth: effectiveStrokeWidth,
+        color: strokeColor,
+        markerKey: `marker-end-${object.id}`,
+      })}
       {/* Endpoint anchors — only visible when selected and editable */}
       {isSelected && editable && (
         <>

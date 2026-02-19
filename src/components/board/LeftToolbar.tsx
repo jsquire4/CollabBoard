@@ -19,6 +19,7 @@ import {
 } from './shapePresets'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { EXPANDED_PALETTE } from './ColorPicker'
+import { StylePanel } from './StylePanel'
 
 interface LeftToolbarProps {
   userRole: BoardRole
@@ -42,7 +43,17 @@ interface LeftToolbarProps {
   canGroup: boolean
   canUngroup: boolean
   selectedStrokeColor?: string | null
+  selectedStrokeWidth?: number
+  selectedStrokeDash?: string
+  selectedOpacity?: number
+  selectedShadowBlur?: number
+  selectedCornerRadius?: number
+  showCornerRadius?: boolean
   onStrokeColorChange: (color: string | null) => void
+  onStrokeStyleChange?: (updates: { stroke_color?: string | null; stroke_width?: number; stroke_dash?: string }) => void
+  onOpacityChange?: (opacity: number) => void
+  onShadowChange?: (updates: { shadow_blur?: number; shadow_color?: string; shadow_offset_x?: number; shadow_offset_y?: number }) => void
+  onCornerRadiusChange?: (corner_radius: number) => void
   anySelectedLocked?: boolean
   activePreset: ShapePreset | null
   onPresetSelect: (preset: ShapePreset) => void
@@ -84,7 +95,17 @@ export function LeftToolbar({
   canGroup,
   canUngroup,
   selectedStrokeColor,
+  selectedStrokeWidth,
+  selectedStrokeDash,
+  selectedOpacity,
+  selectedShadowBlur,
+  selectedCornerRadius,
+  showCornerRadius,
   onStrokeColorChange,
+  onStrokeStyleChange,
+  onOpacityChange,
+  onShadowChange,
+  onCornerRadiusChange,
   anySelectedLocked,
   activePreset,
   onPresetSelect,
@@ -263,6 +284,22 @@ export function LeftToolbar({
                 onColorChange={onStrokeColorChange}
                 dark={dk}
               />
+              {onStrokeStyleChange && onOpacityChange && onShadowChange && (
+                <StylePanel
+                  strokeColor={selectedStrokeColor}
+                  strokeWidth={selectedStrokeWidth}
+                  strokeDash={selectedStrokeDash}
+                  opacity={selectedOpacity}
+                  shadowBlur={selectedShadowBlur}
+                  cornerRadius={selectedCornerRadius}
+                  showCornerRadius={showCornerRadius}
+                  onStrokeStyleChange={onStrokeStyleChange}
+                  onOpacityChange={onOpacityChange}
+                  onShadowChange={onShadowChange}
+                  onCornerRadiusChange={onCornerRadiusChange}
+                  compact
+                />
+              )}
               <Divider dark={dk} />
               <button
                 type="button"

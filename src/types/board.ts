@@ -29,6 +29,8 @@ export type BoardObjectType =
 
 export type FontStyle = 'normal' | 'bold' | 'italic' | 'bold italic'
 
+export type MarkerType = 'none' | 'arrow' | 'arrow_open' | 'circle' | 'circle_open' | 'square' | 'diamond' | 'diamond_open' | 'bar'
+
 export interface BoardObject {
   id: string
   board_id: string
@@ -72,6 +74,8 @@ export interface BoardObject {
   connect_end_id?: string | null
   connect_end_anchor?: string | null
   waypoints?: string | null
+  marker_start?: string | null
+  marker_end?: string | null
   field_clocks?: Record<string, { ts: number; c: number; n: string }>
   deleted_at?: string | null
 }

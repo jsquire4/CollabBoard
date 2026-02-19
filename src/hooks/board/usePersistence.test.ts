@@ -4,7 +4,7 @@ import { checkLocked, usePersistence, UsePersistenceDeps } from './usePersistenc
 import { BoardObject } from '@/types/board'
 import { createHLC } from '@/lib/crdt/hlc'
 import { FieldClocks } from '@/lib/crdt/merge'
-import { makeRectangle, makeGroup, makeLine, objectsMap } from '@/test/boardObjectFactory'
+import { makeRectangle, makeGroup, makeLine, makeTable, objectsMap } from '@/test/boardObjectFactory'
 
 // ── Supabase mock ───────────────────────────────────────────────────
 
@@ -807,5 +807,66 @@ describe('usePersistence', () => {
     // functions.invoke should NOT have been called since there are no local wins
     expect(supabase.functions.invoke).not.toHaveBeenCalled()
     Object.defineProperty(crdtModule, 'CRDT_ENABLED', { value: originalCRDT, writable: true, configurable: true })
+  })
+
+  it('addObject creates table with table_data and correct defaults', () => {
+    const tableData = JSON.stringify({
+      columns: [{ id: 'c1', name: 'Col 1', width: 120 }],
+      rows: [{ id: 'r1', height: 32, cells: { c1: { text: '' } } }],
+    })
+    const setObjects = vi.fn()
+    const { result } = renderHook(() => usePersistence(makeDeps({ setObjects })))
+
+    act(() => {
+      result.current.addObject('table', 50, 50, { table_data: tableData })
+    })
+
+    expect(setObjects).toHaveBeenCalled()
+    const updater = setObjects.mock.calls[0][0] as (prev: Map<string, BoardObject>) => Map<string, BoardObject>
+    const map = updater(new Map())
+    const obj = [...map.values()][0]
+    expect(obj.type).toBe('table')
+    expect(obj.table_data).toBe(tableData)
+    expect(obj.width).toBe(360)
+    expect(obj.height).toBe(128)
+    expect(obj.color).toBe('#FFFFFF')
+  })
+
+  it('updateObject persists table_data changes', () => {
+    const table = makeTable({ id: 'tbl-1' })
+    const objectsRef = { current: objectsMap(table) }
+    const setObjects = vi.fn()
+    const queueBroadcast = vi.fn()
+    const { result } = renderHook(() => usePersistence(makeDeps({ objectsRef, setObjects, queueBroadcast })))
+
+    const newTableData = JSON.stringify({ columns: [], rows: [] })
+    act(() => {
+      result.current.updateObject('tbl-1', { table_data: newTableData, width: 400, height: 200 })
+    })
+
+    expect(setObjects).toHaveBeenCalled()
+  })
+
+  it('duplicateObject clones table_data for tables', () => {
+    const table = makeTable({ id: 'tbl-1' })
+    const objectsRef = { current: objectsMap(table) }
+    const setObjects = vi.fn()
+    const { result } = renderHook(() => usePersistence(makeDeps({ objectsRef, setObjects })))
+
+    act(() => {
+      result.current.duplicateObject('tbl-1')
+    })
+
+    expect(setObjects).toHaveBeenCalled()
+    // Get the second call's updater (first is from addObject internal, but duplicateObject chains through addObject)
+    const calls = setObjects.mock.calls
+    const lastUpdater = calls[calls.length - 1][0]
+    if (typeof lastUpdater === 'function') {
+      const map = lastUpdater(new Map())
+      const dup = [...map.values()][0]
+      expect(dup).toBeDefined()
+      expect(dup.type).toBe('table')
+      expect(dup.table_data).toBe(table.table_data)
+    }
   })
 })

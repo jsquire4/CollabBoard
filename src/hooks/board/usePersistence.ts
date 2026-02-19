@@ -21,6 +21,7 @@ const BOARD_OBJECT_COLUMNS = [
   'corner_radius', 'title', 'locked_by',
   'sides', 'custom_points',
   'connect_start_id', 'connect_start_anchor', 'connect_end_id', 'connect_end_anchor', 'waypoints',
+  'marker_start', 'marker_end', 'table_data',
   'z_index', 'parent_id', 'created_by', 'created_at', 'updated_at', 'deleted_at',
 ].join(',')
 
@@ -204,6 +205,7 @@ export function usePersistence({
       group: { width: 0, height: 0, color: 'transparent', text: '' },
       line: { width: 120, height: 2, color: '#374151', stroke_width: 2, stroke_dash: undefined },
       arrow: { width: 120, height: 40, color: '#F59E0B', stroke_width: 2, text: '' },
+      table: { width: 360, height: 128, color: '#FFFFFF', text: '' },
     }
     const def = shapeRegistry.get(type)
     const defaults: Record<string, Partial<BoardObject>> = {

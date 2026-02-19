@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import Konva from 'konva'
 import { BoardObject } from '@/types/board'
+import { nextCell, parseTableData } from '@/lib/table/tableUtils'
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -197,10 +198,8 @@ export function useTextEditing({
     const obj = objects.get(editingId)
     if (!obj?.table_data) return
 
-    let data: { columns: { id: string }[]; rows: { cells: Record<string, { text: string }> }[] }
-    try {
-      data = typeof obj.table_data === 'string' ? JSON.parse(obj.table_data) : obj.table_data
-    } catch { return }
+    const data = parseTableData(obj.table_data)
+    if (!data) return
 
     let direction: 'right' | 'left' | 'down' | 'up' | null = null
     if (e.key === 'Tab' && !e.shiftKey) { direction = 'right'; e.preventDefault() }
@@ -213,23 +212,8 @@ export function useTextEditing({
 
     if (!direction) return
 
-    // Import nextCell inline to avoid circular deps — just do the navigation math
     const { row, col } = editingCellCoords
-    const lastRow = data.rows.length - 1
-    const lastCol = data.columns.length - 1
-    let next: { row: number; col: number } | null = null
-
-    if (direction === 'right') {
-      if (col < lastCol) next = { row, col: col + 1 }
-      else if (row < lastRow) next = { row: row + 1, col: 0 }
-    } else if (direction === 'left') {
-      if (col > 0) next = { row, col: col - 1 }
-      else if (row > 0) next = { row: row - 1, col: lastCol }
-    } else if (direction === 'down') {
-      if (row < lastRow) next = { row: row + 1, col }
-    } else if (direction === 'up') {
-      if (row > 0) next = { row: row - 1, col }
-    }
+    const next = nextCell(data, row, col, direction)
 
     // Save current cell first
     if (onUpdateTableCell) {

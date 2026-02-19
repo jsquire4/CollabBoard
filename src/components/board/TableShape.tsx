@@ -94,12 +94,11 @@ export const TableShape = memo(function TableShape({
       const col = parseInt(parts[2], 10)
       if (!isNaN(row) && !isNaN(col)) {
         // Find the corresponding text node
-        const group = (target.findAncestor('Group') || target.parent) as Konva.Group
-        if (group) {
-          const textNode = group.findOne(`Text.cell\\:${row}\\:${col}`) as Konva.Text | undefined
-          // Fallback: search by name attribute
-          const found = textNode || (group.find('Text') as Konva.Text[]).find(
-            (n: Konva.Text) => n.name() === `cell:${row}:${col}`
+        const group = target.findAncestor('Group') || target.parent
+        if (group && 'find' in group) {
+          // Find the corresponding text node by name
+          const found = ((group as Konva.Group).find('Text') as Konva.Text[]).find(
+            (n) => n.name() === `cell:${row}:${col}`
           )
           if (found) {
             onStartCellEdit(object.id, found, row, col)

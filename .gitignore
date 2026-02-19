@@ -44,6 +44,8 @@ next-env.d.ts
 BUILD_INSTRUCTIONS.md
 CLAUDE.md
 .cursorrules
+.cursor
 .claude
 /docs
 /research
+AI_Dev_log.md

@@ -1,0 +1,517 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { renderHook, act, waitFor } from '@testing-library/react'
+import { checkLocked, usePersistence, UsePersistenceDeps } from './usePersistence'
+import { BoardObject } from '@/types/board'
+import { createHLC } from '@/lib/crdt/hlc'
+import { FieldClocks } from '@/lib/crdt/merge'
+import { makeRectangle, makeGroup, makeLine, objectsMap } from '@/test/boardObjectFactory'
+
+// ── Supabase mock ───────────────────────────────────────────────────
+
+let mockFrom = vi.fn()
+
+function mockSupabase() {
+  return {
+    from: (...args: unknown[]) => (mockFrom as Function)(...args),
+    functions: { invoke: vi.fn(() => Promise.resolve({ error: null })) },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any
+}
+
+vi.mock('uuid', () => ({
+  v4: (() => {
+    let c = 0
+    return () => `mock-uuid-${++c}`
+  })(),
+}))
+
+function chainMock(result: { data?: unknown; error?: { message: string } | null }) {
+  const chain: Record<string, unknown> = {}
+  const terminal = Promise.resolve(result)
+  chain.select = vi.fn(() => chain)
+  chain.insert = vi.fn(() => terminal)
+  chain.update = vi.fn(() => chain)
+  chain.delete = vi.fn(() => chain)
+  chain.upsert = vi.fn(() => terminal)
+  chain.eq = vi.fn(() => chain)
+  chain.is = vi.fn(() => terminal)
+  // Make chain thenable for .update().eq().then()
+  chain.then = vi.fn((cb: (r: unknown) => void) => { cb(result); return Promise.resolve() })
+  return chain as {
+    select: ReturnType<typeof vi.fn>
+    insert: ReturnType<typeof vi.fn>
+    update: ReturnType<typeof vi.fn>
+    delete: ReturnType<typeof vi.fn>
+    upsert: ReturnType<typeof vi.fn>
+    eq: ReturnType<typeof vi.fn>
+    is: ReturnType<typeof vi.fn>
+    then: ReturnType<typeof vi.fn>
+  }
+}
+
+// ── Pure function tests ─────────────────────────────────────────────
+
+describe('checkLocked', () => {
+  it('returns false for unlocked object', () => {
+    const obj = makeRectangle({ id: 'a' })
+    const ref = { current: objectsMap(obj) }
+    expect(checkLocked(ref, 'a')).toBe(false)
+  })
+
+  it('returns true for directly locked object', () => {
+    const obj = makeRectangle({ id: 'a', locked_by: 'user-1' })
+    const ref = { current: objectsMap(obj) }
+    expect(checkLocked(ref, 'a')).toBe(true)
+  })
+
+  it('returns true for object with locked ancestor', () => {
+    const parent = makeGroup({ id: 'g1', locked_by: 'user-1' })
+    const child = makeRectangle({ id: 'c1', parent_id: 'g1' })
+    const ref = { current: objectsMap(parent, child) }
+    expect(checkLocked(ref, 'c1')).toBe(true)
+  })
+
+  it('returns false for unknown object', () => {
+    const ref = { current: new Map<string, BoardObject>() }
+    expect(checkLocked(ref, 'missing')).toBe(false)
+  })
+})
+
+// ── Hook tests ──────────────────────────────────────────────────────
+
+function makeDeps(overrides?: Partial<UsePersistenceDeps>): UsePersistenceDeps {
+  return {
+    boardId: 'board-1',
+    userId: 'user-1',
+    canEdit: true,
+    supabase: mockSupabase(),
+    setObjects: vi.fn(),
+    objectsRef: { current: new Map() },
+    setSelectedIds: vi.fn(),
+    getDescendants: vi.fn(() => []),
+    getMaxZIndex: vi.fn(() => 0),
+    queueBroadcast: vi.fn(),
+    stampChange: vi.fn(),
+    stampCreate: vi.fn(),
+    fieldClocksRef: { current: new Map<string, FieldClocks>() },
+    hlcRef: { current: createHLC('user-1') },
+    ...overrides,
+  }
+}
+
+describe('usePersistence', () => {
+  beforeEach(() => {
+    mockFrom = vi.fn(() => chainMock({ data: [], error: null }))
+  })
+
+  it('returns expected API shape', () => {
+    const { result } = renderHook(() => usePersistence(makeDeps()))
+    expect(typeof result.current.loadObjects).toBe('function')
+    expect(typeof result.current.addObject).toBe('function')
+    expect(typeof result.current.addObjectWithId).toBe('function')
+    expect(typeof result.current.updateObject).toBe('function')
+    expect(typeof result.current.deleteObject).toBe('function')
+    expect(typeof result.current.duplicateObject).toBe('function')
+    expect(typeof result.current.persistZIndexBatch).toBe('function')
+    expect(typeof result.current.updateObjectDrag).toBe('function')
+    expect(typeof result.current.updateObjectDragEnd).toBe('function')
+    expect(typeof result.current.moveGroupChildren).toBe('function')
+    expect(typeof result.current.waitForPersist).toBe('function')
+    expect(typeof result.current.reconcileOnReconnect).toBe('function')
+  })
+
+  it('loadObjects fetches from DB and calls setObjects', async () => {
+    const rect = makeRectangle({ id: 'r1', board_id: 'board-1' })
+    const chain = chainMock({ data: [rect], error: null })
+    mockFrom.mockReturnValue(chain)
+    const setObjects = vi.fn()
+
+    const { result } = renderHook(() => usePersistence(makeDeps({ setObjects })))
+
+    await act(async () => {
+      await result.current.loadObjects()
+    })
+
+    expect(mockFrom).toHaveBeenCalledWith('board_objects')
+    expect(chain.select).toHaveBeenCalled()
+    expect(setObjects).toHaveBeenCalledWith(expect.any(Map))
+    const map = setObjects.mock.calls[0][0] as Map<string, BoardObject>
+    expect(map.get('r1')).toBeDefined()
+  })
+
+  it('addObject creates object with correct defaults and calls insert', () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const setObjects = vi.fn()
+    const { result } = renderHook(() => usePersistence(makeDeps({ setObjects })))
+
+    let obj: BoardObject | null = null
+    act(() => {
+      obj = result.current.addObject('rectangle', 100, 200)
+    })
+
+    expect(obj).not.toBeNull()
+    expect(obj!.x).toBe(100)
+    expect(obj!.y).toBe(200)
+    expect(obj!.type).toBe('rectangle')
+    expect(obj!.board_id).toBe('board-1')
+    expect(obj!.created_by).toBe('user-1')
+    expect(setObjects).toHaveBeenCalled()
+    expect(chain.insert).toHaveBeenCalled()
+  })
+
+  it('addObject returns null when canEdit is false', () => {
+    const { result } = renderHook(() => usePersistence(makeDeps({ canEdit: false })))
+    let obj: unknown
+    act(() => { obj = result.current.addObject('rectangle', 0, 0) })
+    expect(obj).toBeNull()
+  })
+
+  it('addObject broadcasts on insert success', async () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const queueBroadcast = vi.fn()
+    const { result } = renderHook(() => usePersistence(makeDeps({ queueBroadcast })))
+
+    act(() => { result.current.addObject('rectangle', 0, 0) })
+    // Wait for the async insert promise to resolve
+    await waitFor(() => {
+      expect(queueBroadcast).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ action: 'create' })])
+      )
+    })
+  })
+
+  it('addObject rolls back on insert failure', async () => {
+    const chain = chainMock({ error: { message: 'insert failed' } })
+    mockFrom.mockReturnValue(chain)
+    const setObjects = vi.fn()
+    const { result } = renderHook(() => usePersistence(makeDeps({ setObjects })))
+
+    act(() => { result.current.addObject('rectangle', 0, 0) })
+    await waitFor(() => {
+      // Should have been called twice: once for optimistic add, once for rollback
+      expect(setObjects).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('addObjectWithId uses upsert', () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const obj = makeRectangle({ id: 'existing-1' })
+    const { result } = renderHook(() => usePersistence(makeDeps()))
+
+    act(() => { result.current.addObjectWithId(obj) })
+
+    expect(chain.upsert).toHaveBeenCalled()
+  })
+
+  it('updateObject persists and broadcasts on success', () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const obj = makeRectangle({ id: 'r1' })
+    const queueBroadcast = vi.fn()
+    const setObjects = vi.fn()
+    const deps = makeDeps({
+      queueBroadcast,
+      setObjects,
+      objectsRef: { current: objectsMap(obj) },
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    act(() => { result.current.updateObject('r1', { x: 50 }) })
+
+    expect(setObjects).toHaveBeenCalled()
+    expect(chain.update).toHaveBeenCalled()
+  })
+
+  it('updateObject blocks on locked objects', () => {
+    const obj = makeRectangle({ id: 'r1', locked_by: 'user-2' })
+    const setObjects = vi.fn()
+    const deps = makeDeps({
+      setObjects,
+      objectsRef: { current: objectsMap(obj) },
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    act(() => { result.current.updateObject('r1', { x: 50 }) })
+
+    expect(setObjects).not.toHaveBeenCalled()
+  })
+
+  it('updateObject allows lock/unlock even on locked objects', () => {
+    const obj = makeRectangle({ id: 'r1', locked_by: 'user-2' })
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const setObjects = vi.fn()
+    const deps = makeDeps({
+      setObjects,
+      objectsRef: { current: objectsMap(obj) },
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    act(() => { result.current.updateObject('r1', { locked_by: null }) })
+
+    expect(setObjects).toHaveBeenCalled()
+  })
+
+  it('deleteObject removes object and descendants from state', async () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const child = makeRectangle({ id: 'c1', parent_id: 'g1' })
+    const setObjects = vi.fn()
+    const setSelectedIds = vi.fn()
+    const deps = makeDeps({
+      setObjects,
+      setSelectedIds,
+      objectsRef: { current: objectsMap(makeGroup({ id: 'g1' }), child) },
+      getDescendants: vi.fn(() => [child]),
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    await act(async () => { await result.current.deleteObject('g1') })
+
+    expect(setObjects).toHaveBeenCalled()
+    expect(setSelectedIds).toHaveBeenCalled()
+  })
+
+  it('deleteObject blocks on locked objects', async () => {
+    const obj = makeRectangle({ id: 'r1', locked_by: 'user-2' })
+    const setObjects = vi.fn()
+    const deps = makeDeps({
+      setObjects,
+      objectsRef: { current: objectsMap(obj) },
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    await act(async () => { await result.current.deleteObject('r1') })
+
+    expect(setObjects).not.toHaveBeenCalled()
+  })
+
+  it('duplicateObject duplicates simple object via addObject', () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const original = makeRectangle({ id: 'r1', x: 100, y: 100 })
+    const setSelectedIds = vi.fn()
+    const deps = makeDeps({
+      setSelectedIds,
+      objectsRef: { current: objectsMap(original) },
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    let dup: BoardObject | null = null
+    act(() => { dup = result.current.duplicateObject('r1') })
+
+    expect(dup).not.toBeNull()
+    expect(dup!.x).toBe(120) // +20 offset
+    expect(dup!.y).toBe(120)
+    expect(setSelectedIds).toHaveBeenCalled()
+  })
+
+  it('duplicateObject handles group with descendants', () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const group = makeGroup({ id: 'g1', x: 0, y: 0 })
+    const child = makeRectangle({ id: 'c1', parent_id: 'g1', x: 10, y: 10 })
+    const setObjects = vi.fn()
+    const setSelectedIds = vi.fn()
+    const queueBroadcast = vi.fn()
+    const deps = makeDeps({
+      setObjects,
+      setSelectedIds,
+      queueBroadcast,
+      objectsRef: { current: objectsMap(group, child) },
+      getDescendants: vi.fn(() => [child]),
+      getMaxZIndex: vi.fn(() => 5),
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    let dup: BoardObject | null = null
+    act(() => { dup = result.current.duplicateObject('g1') })
+
+    expect(dup).not.toBeNull()
+    expect(dup!.type).toBe('group')
+    expect(setObjects).toHaveBeenCalled()
+    expect(queueBroadcast).toHaveBeenCalled()
+    // Parent inserted first
+    expect(chain.insert).toHaveBeenCalled()
+  })
+
+  it('duplicateObject returns null for unknown id', () => {
+    const { result } = renderHook(() => usePersistence(makeDeps()))
+    let dup: BoardObject | null = null
+    act(() => { dup = result.current.duplicateObject('nonexistent') })
+    expect(dup).toBeNull()
+  })
+
+  it('persistZIndexBatch sends parallel DB updates', () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const { result } = renderHook(() => usePersistence(makeDeps()))
+
+    act(() => {
+      result.current.persistZIndexBatch(
+        [{ id: 'a', z_index: 10 }, { id: 'b', z_index: 20 }],
+        new Date().toISOString()
+      )
+    })
+
+    // Called twice (once per update)
+    expect(chain.update).toHaveBeenCalledTimes(2)
+  })
+
+  it('updateObjectDrag updates state and broadcasts but skips DB', () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const obj = makeRectangle({ id: 'r1' })
+    const setObjects = vi.fn()
+    const queueBroadcast = vi.fn()
+    const deps = makeDeps({
+      setObjects,
+      queueBroadcast,
+      objectsRef: { current: objectsMap(obj) },
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    act(() => { result.current.updateObjectDrag('r1', { x: 50 }) })
+
+    expect(setObjects).toHaveBeenCalled()
+    expect(queueBroadcast).toHaveBeenCalled()
+    // Should NOT call supabase update
+    expect(chain.update).not.toHaveBeenCalled()
+  })
+
+  it('updateObjectDragEnd writes to DB', () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const obj = makeRectangle({ id: 'r1' })
+    const setObjects = vi.fn()
+    const queueBroadcast = vi.fn()
+    const deps = makeDeps({
+      setObjects,
+      queueBroadcast,
+      objectsRef: { current: objectsMap(obj) },
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    act(() => { result.current.updateObjectDragEnd('r1', { x: 50 }) })
+
+    expect(setObjects).toHaveBeenCalled()
+    expect(queueBroadcast).toHaveBeenCalled()
+    expect(chain.update).toHaveBeenCalled()
+  })
+
+  it('updateObjectDrag blocks on locked objects', () => {
+    const obj = makeRectangle({ id: 'r1', locked_by: 'user-2' })
+    const setObjects = vi.fn()
+    const deps = makeDeps({
+      setObjects,
+      objectsRef: { current: objectsMap(obj) },
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    act(() => { result.current.updateObjectDrag('r1', { x: 50 }) })
+    expect(setObjects).not.toHaveBeenCalled()
+  })
+
+  it('moveGroupChildren translates descendants', () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const child1 = makeRectangle({ id: 'c1', parent_id: 'g1', x: 10, y: 10 })
+    const child2 = makeRectangle({ id: 'c2', parent_id: 'g1', x: 50, y: 50 })
+    const setObjects = vi.fn()
+    const queueBroadcast = vi.fn()
+    const deps = makeDeps({
+      setObjects,
+      queueBroadcast,
+      getDescendants: vi.fn(() => [child1, child2]),
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    act(() => { result.current.moveGroupChildren('g1', 100, 200) })
+
+    expect(setObjects).toHaveBeenCalled()
+    expect(queueBroadcast).toHaveBeenCalled()
+    // DB writes happen (not skipDb)
+    expect(chain.update).toHaveBeenCalledTimes(2)
+  })
+
+  it('moveGroupChildren skips DB when skipDb=true', () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const child = makeRectangle({ id: 'c1', parent_id: 'g1' })
+    const deps = makeDeps({
+      getDescendants: vi.fn(() => [child]),
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    act(() => { result.current.moveGroupChildren('g1', 10, 10, true) })
+
+    expect(chain.update).not.toHaveBeenCalled()
+  })
+
+  it('moveGroupChildren translates vector endpoints', () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const line = makeLine({ id: 'l1', parent_id: 'g1', x: 10, y: 10, x2: 100, y2: 100 })
+    const setObjects = vi.fn()
+    const stampChange = vi.fn()
+    const deps = makeDeps({
+      setObjects,
+      stampChange,
+      getDescendants: vi.fn(() => [line]),
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    act(() => { result.current.moveGroupChildren('g1', 5, 10) })
+
+    // stampChange should be called with endpoint fields
+    expect(stampChange).toHaveBeenCalledWith('l1', ['x', 'y', 'x2', 'y2'])
+  })
+
+  it('moveGroupChildren does nothing with no descendants', () => {
+    const setObjects = vi.fn()
+    const deps = makeDeps({ setObjects, getDescendants: vi.fn(() => []) })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    act(() => { result.current.moveGroupChildren('g1', 10, 10) })
+    expect(setObjects).not.toHaveBeenCalled()
+  })
+
+  it('waitForPersist resolves true for unknown ID', async () => {
+    const { result } = renderHook(() => usePersistence(makeDeps()))
+    const val = await result.current.waitForPersist('unknown')
+    expect(val).toBe(true)
+  })
+
+  it('addObject for line type sets x2/y2', () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const { result } = renderHook(() => usePersistence(makeDeps()))
+
+    let obj: BoardObject | null = null
+    act(() => { obj = result.current.addObject('line', 100, 200) })
+
+    expect(obj).not.toBeNull()
+    expect(obj!.type).toBe('line')
+    expect(obj!.x2).toBeDefined()
+    expect(obj!.y2).toBeDefined()
+  })
+
+  it('deleteObject does nothing when canEdit is false', async () => {
+    const setObjects = vi.fn()
+    const deps = makeDeps({ canEdit: false, setObjects })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    await act(async () => { await result.current.deleteObject('r1') })
+    expect(setObjects).not.toHaveBeenCalled()
+  })
+
+  it('duplicateObject returns null when canEdit is false', () => {
+    const { result } = renderHook(() => usePersistence(makeDeps({ canEdit: false })))
+    let dup: unknown
+    act(() => { dup = result.current.duplicateObject('r1') })
+    expect(dup).toBeNull()
+  })
+})

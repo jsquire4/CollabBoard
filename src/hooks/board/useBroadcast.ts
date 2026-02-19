@@ -6,7 +6,7 @@ import { BoardObject } from '@/types/board'
 import { HLC, tickHLC, receiveHLC } from '@/lib/crdt/hlc'
 import { FieldClocks, mergeFields, mergeClocks, stampFields, shouldDeleteWin } from '@/lib/crdt/merge'
 
-const CRDT_ENABLED = process.env.NEXT_PUBLIC_CRDT_ENABLED === 'true'
+export const CRDT_ENABLED = process.env.NEXT_PUBLIC_CRDT_ENABLED === 'true'
 
 // ── Types ───────────────────────────────────────────────────────────
 

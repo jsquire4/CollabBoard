@@ -3,37 +3,18 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { RealtimeChannel } from '@supabase/supabase-js'
-import { BoardObject, BoardObjectType } from '@/types/board'
+import { BoardObject } from '@/types/board'
 import { BoardRole } from '@/types/sharing'
 import { createClient } from '@/lib/supabase/client'
 import { OnlineUser } from '@/hooks/usePresence'
-import { HLC, createHLC, tickHLC, hlcGreaterThan } from '@/lib/crdt/hlc'
-import { FieldClocks, mergeClocks } from '@/lib/crdt/merge'
-import { shapeRegistry } from '@/components/board/shapeRegistry'
-import { useBroadcast, BoardChange } from '@/hooks/board/useBroadcast'
+import { HLC, createHLC, tickHLC } from '@/lib/crdt/hlc'
+import { FieldClocks } from '@/lib/crdt/merge'
+import { useBroadcast, BoardChange, CRDT_ENABLED } from '@/hooks/board/useBroadcast'
+import { usePersistence } from '@/hooks/board/usePersistence'
 export { coalesceBroadcastQueue } from '@/hooks/board/useBroadcast'
 export type { BoardChange } from '@/hooks/board/useBroadcast'
 
-const CRDT_ENABLED = process.env.NEXT_PUBLIC_CRDT_ENABLED === 'true'
-
 const COLOR_PALETTE = ['#FFEB3B', '#FF9800', '#E91E63', '#9C27B0', '#2196F3', '#4CAF50']
-
-// Explicit column list for board_objects queries (avoids pulling large JSONB when not needed)
-const BOARD_OBJECT_COLUMNS = [
-  'id', 'board_id', 'type', 'x', 'y', 'x2', 'y2', 'width', 'height', 'rotation',
-  'text', 'color', 'font_size', 'font_family', 'font_style',
-  'stroke_width', 'stroke_dash', 'stroke_color',
-  'opacity', 'shadow_color', 'shadow_blur', 'shadow_offset_x', 'shadow_offset_y',
-  'text_align', 'text_vertical_align', 'text_padding', 'text_color',
-  'corner_radius', 'title', 'locked_by',
-  'sides', 'custom_points',
-  'connect_start_id', 'connect_start_anchor', 'connect_end_id', 'connect_end_anchor', 'waypoints',
-  'z_index', 'parent_id', 'created_by', 'created_at', 'updated_at', 'deleted_at',
-].join(',')
-
-const BOARD_OBJECT_SELECT = CRDT_ENABLED
-  ? BOARD_OBJECT_COLUMNS + ',field_clocks'
-  : BOARD_OBJECT_COLUMNS
 
 const SELECTION_BROADCAST_DEBOUNCE_MS = 50
 
@@ -42,13 +23,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
   const objectsRef = useRef<Map<string, BoardObject>>(objects)
   useEffect(() => { objectsRef.current = objects }, [objects])
 
-  // Track in-flight insert promises so callers can await persistence before
-  // setting FK references (e.g. connect_end_id on a connector pointing at a
-  // shape that was just created).
-  const persistPromisesRef = useRef<Map<string, Promise<boolean>>>(new Map())
-  const waitForPersist = useCallback((id: string): Promise<boolean> => {
-    return persistPromisesRef.current.get(id) ?? Promise.resolve(true)
-  }, [])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
   const [remoteSelections, setRemoteSelections] = useState<Map<string, Set<string>>>(new Map())
@@ -61,119 +35,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
 
   const canEdit = userRole !== 'viewer'
 
-  // Extracted so it can be called on mount and on reconnect
-  const loadObjects = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('board_objects')
-      .select(BOARD_OBJECT_SELECT)
-      .eq('board_id', boardId)
-      .is('deleted_at', null) as unknown as { data: (BoardObject & { field_clocks?: FieldClocks })[] | null; error: { message: string } | null }
-
-    if (error) {
-      console.error('Failed to load board objects:', error.message)
-      return
-    }
-
-    const map = new Map<string, BoardObject>()
-    const clocksMap = new Map<string, FieldClocks>()
-    for (const obj of data ?? []) {
-      map.set(obj.id, obj as BoardObject)
-      // Restore field clocks from DB if present
-      if (CRDT_ENABLED && obj.field_clocks && typeof obj.field_clocks === 'object') {
-        clocksMap.set(obj.id, obj.field_clocks as FieldClocks)
-      }
-    }
-    setObjects(map)
-    if (CRDT_ENABLED) {
-      fieldClocksRef.current = clocksMap
-    }
-  }, [boardId])
-
-  // Load on mount
-  useEffect(() => {
-    loadObjects()
-  }, [loadObjects])
-
-  // CRDT Phase 3: Reconcile local state against DB on reconnect.
-  // Compares local field clocks against DB clocks and pushes any local
-  // wins to the Edge Function for server-side merge.
-  const reconcileOnReconnect = useCallback(async () => {
-    if (!CRDT_ENABLED) return
-
-    // Fetch current DB state (including clocks)
-    const { data: dbObjects, error } = await supabase
-      .from('board_objects')
-      .select('id, field_clocks')
-      .eq('board_id', boardId)
-      .is('deleted_at', null)
-
-    if (error) {
-      console.error('Failed to fetch DB state for reconciliation:', error.message)
-      return
-    }
-
-    const dbClocksMap = new Map<string, FieldClocks>()
-    for (const row of dbObjects ?? []) {
-      dbClocksMap.set(row.id, (row.field_clocks ?? {}) as FieldClocks)
-    }
-
-    // Find fields where local clock beats DB clock
-    const localWins: {
-      action: 'update'
-      objectId: string
-      fields: Record<string, unknown>
-      clocks: FieldClocks
-    }[] = []
-
-    const currentObjects = objectsRef.current
-    for (const [id, localClocks] of fieldClocksRef.current) {
-      const dbClocks = dbClocksMap.get(id) ?? {}
-      const localObj = currentObjects.get(id)
-      if (!localObj) continue
-
-      const winningFields: Record<string, unknown> = {}
-      const winningClocks: FieldClocks = {}
-
-      for (const [field, localClock] of Object.entries(localClocks)) {
-        const dbClock = dbClocks[field]
-        if (!dbClock || hlcGreaterThan(localClock, dbClock)) {
-          const value = (localObj as unknown as Record<string, unknown>)[field]
-          if (value !== undefined) {
-            winningFields[field] = value
-            winningClocks[field] = localClock
-          }
-        }
-      }
-
-      if (Object.keys(winningFields).length > 0) {
-        localWins.push({
-          action: 'update',
-          objectId: id,
-          fields: winningFields,
-          clocks: winningClocks,
-        })
-      }
-    }
-
-    if (localWins.length > 0) {
-      const { error: fnError } = await supabase.functions.invoke('merge-board-state', {
-        body: { boardId, changes: localWins },
-      })
-      if (fnError) {
-        console.error('Failed to reconcile on reconnect:', fnError.message)
-      }
-    }
-
-    // Reload full state to get converged result.
-    // loadObjects filters `deleted_at IS NULL`, which is correct because the
-    // Edge Function's merge clears deleted_at for resurrected objects (add-wins).
-    await loadObjects()
-  }, [boardId, loadObjects])
-
-  // Broadcast batching + CRDT stamping (extracted to useBroadcast)
-  const { queueBroadcast, flushBroadcast, stampChange, stampCreate } = useBroadcast({
-    channel, userId, setObjects, fieldClocksRef, hlcRef,
-  })
+  // ── Computed values ─────────────────────────────────────────────
 
   // Helper: get max z_index
   const getMaxZIndex = useCallback(() => {
@@ -253,259 +115,38 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     return current.id
   }, [objects])
 
-  const addObject = useCallback((
-    type: BoardObjectType,
-    x: number,
-    y: number,
-    overrides?: Partial<BoardObject>
-  ) => {
-    if (!canEdit) return null as unknown as BoardObject
+  // Computed: sorted objects by z_index
+  const sortedObjects = useMemo(() => {
+    return Array.from(objects.values()).sort((a, b) => a.z_index - b.z_index)
+  }, [objects])
 
-    const id = uuidv4()
-    const now = new Date().toISOString()
+  // ── Extracted hooks ─────────────────────────────────────────────
 
-    // Build defaults from shape registry + manual entries for non-registry types
-    const manualDefaults: Record<string, Partial<BoardObject>> = {
-      sticky_note: { width: 150, height: 150, color: '#FFEB3B', text: '', font_size: 14, font_family: 'sans-serif', font_style: 'normal' },
-      frame: { width: 400, height: 300, color: 'rgba(200,200,200,0.3)', text: 'Frame' },
-      group: { width: 0, height: 0, color: 'transparent', text: '' },
-      line: { width: 120, height: 2, color: '#374151', stroke_width: 2, stroke_dash: undefined },
-      arrow: { width: 120, height: 40, color: '#F59E0B', stroke_width: 2, text: '' },
-    }
-    const def = shapeRegistry.get(type)
-    const defaults: Record<string, Partial<BoardObject>> = {
-      ...manualDefaults,
-      ...(def ? { [type]: { width: def.defaultWidth, height: def.defaultHeight, color: def.defaultColor, ...def.defaultOverrides } } : {}),
-    }
+  // Broadcast batching + CRDT stamping (extracted to useBroadcast)
+  const { queueBroadcast, flushBroadcast, stampChange, stampCreate } = useBroadcast({
+    channel, userId, setObjects, fieldClocksRef, hlcRef,
+  })
 
-    // For vector types, compute x2/y2 from x + default width/height
-    if (type === 'line' || type === 'arrow') {
-      const dw = defaults[type]?.width ?? 120
-      const dh = defaults[type]?.height ?? 0
-      defaults[type] = { ...defaults[type], x2: x + dw, y2: y + dh }
-    }
+  // Persistence: DB CRUD + optimistic updates + broadcast on success
+  const {
+    loadObjects, reconcileOnReconnect,
+    addObject, addObjectWithId, updateObject, deleteObject, duplicateObject,
+    persistZIndexBatch, updateObjectDrag, updateObjectDragEnd,
+    moveGroupChildren, waitForPersist,
+  } = usePersistence({
+    boardId, userId, canEdit, supabase,
+    setObjects, objectsRef, setSelectedIds,
+    getDescendants, getMaxZIndex,
+    queueBroadcast, stampChange, stampCreate,
+    fieldClocksRef, hlcRef,
+  })
 
-    const obj: BoardObject = {
-      id,
-      board_id: boardId,
-      type,
-      x,
-      y,
-      width: 150,
-      height: 150,
-      rotation: 0,
-      text: '',
-      color: '#FFEB3B',
-      font_size: 14,
-      z_index: getMaxZIndex() + 1,
-      parent_id: null,
-      created_by: userId,
-      created_at: now,
-      updated_at: now,
-      ...defaults[type],
-      ...overrides,
-    }
+  // Load on mount
+  useEffect(() => {
+    loadObjects()
+  }, [loadObjects])
 
-    // Stamp clocks before insert so we can persist them
-    const clocks = stampCreate(id, obj)
-
-    setObjects(prev => {
-      const next = new Map(prev)
-      next.set(id, obj)
-      return next
-    })
-
-    // Persist to Supabase, then broadcast on success
-    const { id: _id, created_at, updated_at, field_clocks: _fc, deleted_at: _da, ...insertData } = obj
-    const insertRow = CRDT_ENABLED
-      ? { ...insertData, id: obj.id, field_clocks: fieldClocksRef.current.get(id) ?? {} }
-      : { ...insertData, id: obj.id }
-    const insertPromise = Promise.resolve(supabase
-      .from('board_objects')
-      .insert(insertRow)
-      .then(({ error }) => {
-        persistPromisesRef.current.delete(id)
-        if (error) {
-          console.error('Failed to save object:', error.message)
-          // Rollback optimistic update
-          setObjects(prev => { const next = new Map(prev); next.delete(id); return next })
-          fieldClocksRef.current.delete(id)
-          return false
-        } else {
-          queueBroadcast([{ action: 'create', object: obj, clocks }])
-          return true
-        }
-      }))
-    persistPromisesRef.current.set(id, insertPromise)
-
-    return obj
-  }, [userId, boardId, canEdit, getMaxZIndex, queueBroadcast, stampCreate])
-
-  const addObjectWithId = useCallback((obj: BoardObject) => {
-    if (!canEdit) return
-
-    const clocks = stampCreate(obj.id, obj)
-
-    setObjects(prev => {
-      const next = new Map(prev)
-      next.set(obj.id, { ...obj, updated_at: new Date().toISOString() })
-      return next
-    })
-
-    const { id: _id, created_at, updated_at, field_clocks: _fc, deleted_at: _da, ...insertData } = obj
-    const insertRow = CRDT_ENABLED
-      ? { ...insertData, id: obj.id, field_clocks: fieldClocksRef.current.get(obj.id) ?? {} }
-      : { ...insertData, id: obj.id }
-    supabase
-      .from('board_objects')
-      .upsert(insertRow, { onConflict: 'id' })
-      .then(({ error }) => {
-        if (error) {
-          console.error('Failed to re-insert object:', error.message)
-          setObjects(prev => { const next = new Map(prev); next.delete(obj.id); return next })
-          fieldClocksRef.current.delete(obj.id)
-        } else {
-          queueBroadcast([{ action: 'create', object: obj, clocks }])
-        }
-      })
-  }, [canEdit, queueBroadcast, stampCreate])
-
-  const updateObject = useCallback((id: string, updates: Partial<BoardObject>) => {
-    if (!canEdit) return
-
-    // Lock guard: block mutations on locked objects (except lock/unlock itself)
-    if (!('locked_by' in updates)) {
-      const obj = objectsRef.current.get(id)
-      if (obj) {
-        // Walk parent chain to check inherited locks
-        let cur: BoardObject | undefined = obj
-        while (cur) {
-          if (cur.locked_by) return
-          if (!cur.parent_id) break
-          cur = objectsRef.current.get(cur.parent_id)
-        }
-      }
-    }
-
-    // Capture previous state for rollback
-    const previousObj = objectsRef.current.get(id)
-
-    setObjects(prev => {
-      const existing = prev.get(id)
-      if (!existing) return prev
-      const next = new Map(prev)
-      next.set(id, { ...existing, ...updates, updated_at: new Date().toISOString() })
-      return next
-    })
-
-    // Stamp clocks for changed fields
-    const changedFields = Object.keys(updates).filter(k => k !== 'updated_at')
-    const clocks = stampChange(id, changedFields)
-
-    // Persist to Supabase, then broadcast on success
-    const dbUpdate: Record<string, unknown> = { ...updates, updated_at: new Date().toISOString() }
-    if (CRDT_ENABLED) {
-      dbUpdate.field_clocks = fieldClocksRef.current.get(id) ?? {}
-      dbUpdate.deleted_at = null // Clear tombstone — add-wins: any update resurrects
-    }
-    supabase
-      .from('board_objects')
-      .update(dbUpdate)
-      .eq('id', id)
-      .then(({ error }) => {
-        if (error) {
-          console.error('Failed to update object:', error.message)
-          // Rollback optimistic update
-          if (previousObj) {
-            setObjects(prev => { const next = new Map(prev); next.set(id, previousObj); return next })
-          }
-        } else {
-          queueBroadcast([{ action: 'update', object: { id, ...updates }, clocks }])
-        }
-      })
-  }, [canEdit, queueBroadcast, stampChange])
-
-  const deleteObject = useCallback(async (id: string) => {
-    if (!canEdit) return
-
-    // Lock guard: block deletion of locked objects
-    const obj = objectsRef.current.get(id)
-    if (obj) {
-      let cur: BoardObject | undefined = obj
-      while (cur) {
-        if (cur.locked_by) return
-        if (!cur.parent_id) break
-        cur = objectsRef.current.get(cur.parent_id)
-      }
-    }
-
-    // Also delete all descendants
-    const descendants = getDescendants(id)
-    const idsToDelete = [id, ...descendants.map(d => d.id)]
-
-    // Stamp a delete clock (used for add-wins comparison on remote).
-    // A single HLC tick covers the parent + all descendants — one user action at one causal point.
-    const deleteClock = CRDT_ENABLED ? (() => {
-      hlcRef.current = tickHLC(hlcRef.current)
-      return hlcRef.current
-    })() : undefined
-
-    // Optimistic local update: remove from view (clocks retained for CRDT tombstone)
-    setObjects(prev => {
-      const next = new Map(prev)
-      for (const did of idsToDelete) {
-        next.delete(did)
-      }
-      return next
-    })
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      for (const did of idsToDelete) {
-        next.delete(did)
-      }
-      return next
-    })
-
-    if (CRDT_ENABLED) {
-      // Soft-delete: set deleted_at on all objects in parallel (tombstone)
-      const now = new Date().toISOString()
-      const results = await Promise.all(
-        idsToDelete.map(did =>
-          supabase.from('board_objects').update({ deleted_at: now }).eq('id', did)
-        )
-      )
-      const failed = results.some(r => r.error)
-      if (failed) {
-        results.filter(r => r.error).forEach(r => console.error('Failed to soft-delete object:', r.error!.message))
-      } else {
-        queueBroadcast(idsToDelete.map(did => ({
-          action: 'delete' as const,
-          object: { id: did } as BoardObject,
-          clocks: deleteClock ? { _deleted: deleteClock } : undefined,
-        })))
-      }
-    } else {
-      // Hard-delete: children first (parallel), then parent (FK constraint)
-      const childIds = descendants.map(d => d.id)
-      if (childIds.length > 0) {
-        const childResults = await Promise.all(
-          childIds.map(did => supabase.from('board_objects').delete().eq('id', did))
-        )
-        const childFailed = childResults.some(r => r.error)
-        if (childFailed) {
-          childResults.filter(r => r.error).forEach(r => console.error('Failed to delete object:', r.error!.message))
-          return // Don't delete parent if children failed
-        }
-      }
-      const { error } = await supabase.from('board_objects').delete().eq('id', id)
-      if (error) {
-        console.error('Failed to delete object:', error.message)
-      } else {
-        queueBroadcast(idsToDelete.map(did => ({ action: 'delete' as const, object: { id: did } as BoardObject })))
-      }
-    }
-  }, [canEdit, getDescendants, queueBroadcast])
-
+  // ── Selection ───────────────────────────────────────────────────
 
   const deleteSelected = useCallback(() => {
     if (!canEdit) return
@@ -513,115 +154,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       deleteObject(id)
     }
   }, [selectedIds, deleteObject, canEdit])
-
-  const duplicateObject = useCallback((id: string) => {
-    if (!canEdit) return null
-
-    const original = objects.get(id)
-    if (!original) return null
-
-    // If it's a group, duplicate group + all descendants
-    if (original.type === 'group' || original.type === 'frame') {
-      const descendants = getDescendants(id)
-      const idMap = new Map<string, string>() // old id -> new id
-      const groupId = uuidv4()
-      idMap.set(id, groupId)
-      for (const d of descendants) {
-        idMap.set(d.id, uuidv4())
-      }
-
-      const now = new Date().toISOString()
-      const newObjects: BoardObject[] = []
-
-      // Clone the group/frame itself
-      newObjects.push({
-        ...original,
-        id: groupId,
-        x: original.x + 20,
-        y: original.y + 20,
-        z_index: getMaxZIndex() + 1,
-        parent_id: original.parent_id,
-        created_by: userId,
-        created_at: now,
-        updated_at: now,
-      })
-
-      // Clone descendants
-      for (const d of descendants) {
-        const cloned: BoardObject = {
-          ...d,
-          id: idMap.get(d.id)!,
-          x: d.x + 20,
-          y: d.y + 20,
-          z_index: d.z_index,
-          parent_id: d.parent_id ? idMap.get(d.parent_id) ?? null : null,
-          created_by: userId,
-          created_at: now,
-          updated_at: now,
-        }
-        if (d.x2 != null) cloned.x2 = d.x2 + 20
-        if (d.y2 != null) cloned.y2 = d.y2 + 20
-        newObjects.push(cloned)
-      }
-
-      setObjects(prev => {
-        const next = new Map(prev)
-        for (const obj of newObjects) {
-          next.set(obj.id, obj)
-        }
-        return next
-      })
-
-      queueBroadcast(newObjects.map(obj => ({
-        action: 'create' as const,
-        object: obj,
-        clocks: stampCreate(obj.id, obj),
-      })))
-
-      // Persist: insert parent first (await), then children
-      const parentObj = newObjects[0]
-      const childObjs = newObjects.slice(1)
-      const { id: _pid, created_at: _pca, updated_at: _pua, field_clocks: _pfc, deleted_at: _pda, ...parentInsert } = parentObj
-      const parentRow = CRDT_ENABLED
-        ? { ...parentInsert, id: parentObj.id, field_clocks: fieldClocksRef.current.get(parentObj.id) ?? {} }
-        : { ...parentInsert, id: parentObj.id }
-      supabase
-        .from('board_objects')
-        .insert(parentRow)
-        .then(({ error }) => {
-          if (error) {
-            console.error('Failed to save duplicated parent:', error.message)
-            return
-          }
-          // Now safe to insert children
-          for (const obj of childObjs) {
-            const { id: _cid, created_at: _cca, updated_at: _cua, field_clocks: _cfc, deleted_at: _cda, ...childInsert } = obj
-            const childRow = CRDT_ENABLED
-              ? { ...childInsert, id: obj.id, field_clocks: fieldClocksRef.current.get(obj.id) ?? {} }
-              : { ...childInsert, id: obj.id }
-            supabase
-              .from('board_objects')
-              .insert(childRow)
-              .then(({ error: childErr }) => {
-                if (childErr) console.error('Failed to save duplicated child:', childErr.message)
-              })
-          }
-        })
-
-      setSelectedIds(new Set([groupId]))
-      return newObjects[0]
-    }
-
-    // Simple object duplication — clone all visual properties
-    const { id: _oid, board_id: _obid, created_by: _ocb, created_at: _oca, updated_at: _oua, field_clocks: _ofc, deleted_at: _oda, type: _otype, x: _ox, y: _oy, z_index: _oz, ...visualProps } = original
-    const dupOverrides: Partial<BoardObject> = { ...visualProps }
-    // Copy endpoints for vector types with +20 offset
-    if (original.x2 != null) dupOverrides.x2 = original.x2 + 20
-    if (original.y2 != null) dupOverrides.y2 = original.y2 + 20
-    const newObj = addObject(original.type, original.x + 20, original.y + 20, dupOverrides)
-    if (newObj) setSelectedIds(new Set([newObj.id]))
-    return newObj
-  }, [objects, addObject, canEdit, getDescendants, getMaxZIndex, userId, queueBroadcast, stampCreate])
 
   const duplicateSelected = useCallback((): string[] => {
     if (!canEdit) return []
@@ -641,7 +173,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     return []
   }, [selectedIds, duplicateObject, canEdit])
 
-  // Selection
   const selectObject = useCallback((id: string | null, opts?: { shift?: boolean; ctrl?: boolean }) => {
     if (id === null) {
       setSelectedIds(new Set())
@@ -653,11 +184,9 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
 
     // If the shape belongs to a group/frame, single-click always selects the
     // top-level container (even if we're currently inside the group).
-    // Individual shape selection only happens via double-click (enterGroup).
     if (obj?.parent_id) {
       const parent = objects.get(obj.parent_id)
       if (parent && (parent.type === 'group' || parent.type === 'frame')) {
-        // Exit group mode if we were inside
         setActiveGroupId(null)
         const topId = getTopLevelAncestor(id)
         if (opts?.shift) {
@@ -700,8 +229,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     setActiveGroupId(null)
   }, [])
 
-  // Enter group mode (double-click on a group/frame).
-  // Optionally select a specific child shape immediately.
   const enterGroup = useCallback((groupId: string, selectChildId?: string) => {
     const obj = objects.get(groupId)
     if (!obj || (obj.type !== 'group' && obj.type !== 'frame')) return
@@ -709,13 +236,13 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     setSelectedIds(selectChildId ? new Set([selectChildId]) : new Set())
   }, [objects])
 
-  // Exit group mode
   const exitGroup = useCallback(() => {
     setActiveGroupId(null)
     setSelectedIds(new Set())
   }, [])
 
-  // Helper: get all IDs that should move together (object + descendants if group/frame)
+  // ── Z-ordering ──────────────────────────────────────────────────
+
   const getZOrderSet = useCallback((id: string): BoardObject[] => {
     const obj = objects.get(id)
     if (!obj) return []
@@ -724,24 +251,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     }
     return [obj]
   }, [objects, getDescendants])
-
-  // Z-ordering — batched: single setObjects + single queueBroadcast + parallel DB updates.
-  // Uses .update() instead of .upsert() because these objects already exist and the
-  // INSERT RLS policy requires board_id/created_by which aren't in the z-index patch.
-  const persistZIndexBatch = useCallback((updates: { id: string; z_index: number }[], now: string) => {
-    Promise.all(updates.map(u => {
-      const patch: Record<string, unknown> = { z_index: u.z_index, updated_at: now }
-      if (CRDT_ENABLED) {
-        patch.field_clocks = fieldClocksRef.current.get(u.id) ?? {}
-        patch.deleted_at = null
-      }
-      return supabase.from('board_objects').update(patch).eq('id', u.id)
-    })).then(results => {
-      for (const { error } of results) {
-        if (error) console.error('Failed to update z_index:', error.message)
-      }
-    })
-  }, [])
 
   const bringToFront = useCallback((id: string) => {
     if (!canEdit) return
@@ -905,7 +414,8 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     persistZIndexBatch(dbUpdates, now)
   }, [objects, canEdit, getZOrderSet, queueBroadcast, persistZIndexBatch, stampChange])
 
-  // Group selected objects
+  // ── Group / Ungroup ─────────────────────────────────────────────
+
   const groupSelected = useCallback(async () => {
     if (!canEdit || selectedIds.size < 2) return null
     const ids = Array.from(selectedIds)
@@ -933,7 +443,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       updated_at: now,
     }
 
-    // Optimistic local update: add group + set parent_id on children
     setObjects(prev => {
       const next = new Map(prev)
       next.set(groupId, groupObj)
@@ -957,7 +466,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     ])
 
     // Persist: insert group first, then update children
-    const { id: _id, created_at, updated_at, field_clocks: _fc, deleted_at: _da, ...insertData } = groupObj
+    const { id: _id, created_at: _ca, updated_at: _ua, field_clocks: _fc, deleted_at: _da, ...insertData } = groupObj
     const insertRow = CRDT_ENABLED
       ? { ...insertData, id: groupId, field_clocks: fieldClocksRef.current.get(groupId) ?? {} }
       : { ...insertData, id: groupId }
@@ -979,7 +488,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
         .from('board_objects')
         .update(childUpdate)
         .eq('id', obj.id)
-        .then(({ error }) => {
+        .then(({ error }: { error: { message: string } | null }) => {
           if (error) console.error('Failed to update child parent_id:', error.message)
         })
     }
@@ -987,7 +496,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     return groupObj
   }, [canEdit, selectedIds, objects, boardId, userId, queueBroadcast, stampCreate, stampChange])
 
-  // Ungroup: dissolve a group, freeing its children
   const ungroupSelected = useCallback(() => {
     if (!canEdit) return
     for (const id of selectedIds) {
@@ -997,7 +505,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       for (const child of children) {
         updateObject(child.id, { parent_id: obj.parent_id })
       }
-      // Remove the group object from local state
       setObjects(prev => {
         const next = new Map(prev)
         next.delete(id)
@@ -1005,28 +512,24 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       })
 
       if (CRDT_ENABLED) {
-        // Soft-delete: stamp a delete clock for add-wins comparison on remote.
-        // A single HLC tick covers the whole ungroup — one user action at one causal point.
         hlcRef.current = tickHLC(hlcRef.current)
         const deleteClock = hlcRef.current
-        // Do NOT clear fieldClocksRef — allows add-wins resurrection
         queueBroadcast([{ action: 'delete', object: { id } as BoardObject, clocks: { _deleted: deleteClock } }])
         supabase
           .from('board_objects')
           .update({ deleted_at: new Date().toISOString() })
           .eq('id', id)
-          .then(({ error }) => {
+          .then(({ error }: { error: { message: string } | null }) => {
             if (error) console.error('Failed to soft-delete group:', error.message)
           })
       } else {
-        // Legacy: hard-delete from DB
         fieldClocksRef.current.delete(id)
         queueBroadcast([{ action: 'delete', object: { id } as BoardObject }])
         supabase
           .from('board_objects')
           .delete()
           .eq('id', id)
-          .then(({ error }) => {
+          .then(({ error }: { error: { message: string } | null }) => {
             if (error) console.error('Failed to delete group:', error.message)
           })
       }
@@ -1034,152 +537,12 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     setSelectedIds(new Set())
   }, [canEdit, selectedIds, objects, getChildren, updateObject, queueBroadcast])
 
-  // Move group/frame: move all children by delta (batched — single state update + single broadcast)
-  const moveGroupChildren = useCallback((parentId: string, dx: number, dy: number, skipDb = false) => {
-    if (!canEdit) return
-    const descendants = getDescendants(parentId)
-    if (descendants.length === 0) return
+  // ── Frame containment ───────────────────────────────────────────
 
-    const now = new Date().toISOString()
-    const changes: BoardChange[] = []
-    // Helper: translate absolute waypoints by (dx, dy)
-    const translateWaypoints = (wp: string | null | undefined): string | null => {
-      if (!wp) return null
-      try {
-        const pts: number[] = JSON.parse(wp)
-        if (!Array.isArray(pts) || pts.length < 2 || pts.length % 2 !== 0) return null
-        const translated: number[] = []
-        for (let i = 0; i < pts.length; i += 2) {
-          translated.push(pts[i] + dx, pts[i + 1] + dy)
-        }
-        return JSON.stringify(translated)
-      } catch { return null }
-    }
-
-    for (const d of descendants) {
-      const hasEndpoints = d.x2 != null && d.y2 != null
-      const fields = hasEndpoints ? ['x', 'y', 'x2', 'y2'] : ['x', 'y']
-      if (d.waypoints) fields.push('waypoints')
-      const clocks = stampChange(d.id, fields)
-      const update: Partial<BoardObject> & { id: string } = { id: d.id, x: d.x + dx, y: d.y + dy }
-      if (hasEndpoints) { update.x2 = d.x2! + dx; update.y2 = d.y2! + dy }
-      if (d.waypoints) { update.waypoints = translateWaypoints(d.waypoints) }
-      changes.push({ action: 'update', object: update, clocks })
-    }
-
-    setObjects(prev => {
-      const next = new Map(prev)
-      for (const d of descendants) {
-        const existing = next.get(d.id)
-        if (existing) {
-          const updated = { ...existing, x: existing.x + dx, y: existing.y + dy, updated_at: now }
-          if (existing.x2 != null) updated.x2 = existing.x2 + dx
-          if (existing.y2 != null) updated.y2 = existing.y2 + dy
-          if (existing.waypoints) updated.waypoints = translateWaypoints(existing.waypoints)
-          next.set(d.id, updated)
-        }
-      }
-      return next
-    })
-
-    queueBroadcast(changes)
-
-    if (!skipDb) {
-      Promise.all(descendants.map(d => {
-        const patch: Record<string, unknown> = { x: d.x + dx, y: d.y + dy, updated_at: now }
-        if (d.x2 != null) patch.x2 = d.x2 + dx
-        if (d.y2 != null) patch.y2 = d.y2 + dy
-        if (d.waypoints) patch.waypoints = translateWaypoints(d.waypoints)
-        if (CRDT_ENABLED) {
-          patch.field_clocks = fieldClocksRef.current.get(d.id) ?? {}
-          patch.deleted_at = null
-        }
-        return supabase.from('board_objects').update(patch).eq('id', d.id)
-      })).then(results => {
-        for (const { error } of results) {
-          if (error) console.error('Failed to update child position:', error.message)
-        }
-      })
-    }
-  }, [canEdit, getDescendants, queueBroadcast, stampChange])
-
-  // Drag-specific updates: local state + broadcast only (no DB write)
-  const updateObjectDrag = useCallback((id: string, updates: Partial<BoardObject>) => {
-    if (!canEdit) return
-
-    // Lock guard
-    const obj = objectsRef.current.get(id)
-    if (obj) {
-      let cur: BoardObject | undefined = obj
-      while (cur) {
-        if (cur.locked_by) return
-        if (!cur.parent_id) break
-        cur = objectsRef.current.get(cur.parent_id)
-      }
-    }
-
-    setObjects(prev => {
-      const existing = prev.get(id)
-      if (!existing) return prev
-      const next = new Map(prev)
-      next.set(id, { ...existing, ...updates, updated_at: new Date().toISOString() })
-      return next
-    })
-
-    const changedFields = Object.keys(updates).filter(k => k !== 'updated_at')
-    const clocks = stampChange(id, changedFields)
-    queueBroadcast([{ action: 'update', object: { id, ...updates }, clocks }])
-  }, [canEdit, queueBroadcast, stampChange])
-
-  // Drag end: local state + DB write + broadcast
-  const updateObjectDragEnd = useCallback((id: string, updates: Partial<BoardObject>) => {
-    if (!canEdit) return
-
-    // Lock guard
-    const lockObj = objectsRef.current.get(id)
-    if (lockObj) {
-      let cur: BoardObject | undefined = lockObj
-      while (cur) {
-        if (cur.locked_by) return
-        if (!cur.parent_id) break
-        cur = objectsRef.current.get(cur.parent_id)
-      }
-    }
-
-    const now = new Date().toISOString()
-    setObjects(prev => {
-      const existing = prev.get(id)
-      if (!existing) return prev
-      const next = new Map(prev)
-      next.set(id, { ...existing, ...updates, updated_at: now })
-      return next
-    })
-
-    const changedFields = Object.keys(updates).filter(k => k !== 'updated_at')
-    const clocks = stampChange(id, changedFields)
-    queueBroadcast([{ action: 'update', object: { id, ...updates }, clocks }])
-
-    const dbUpdate: Record<string, unknown> = { ...updates, updated_at: now }
-    if (CRDT_ENABLED) {
-      dbUpdate.field_clocks = fieldClocksRef.current.get(id) ?? {}
-      dbUpdate.deleted_at = null
-    }
-    supabase
-      .from('board_objects')
-      .update(dbUpdate)
-      .eq('id', id)
-      .then(({ error }) => {
-        if (error) console.error('Failed to update object:', error.message)
-      })
-  }, [canEdit, queueBroadcast, stampChange])
-
-  // Frame containment: check if an object should be inside a frame after drag.
-  // Uses memoized framesDesc (sorted z_index desc) so we can short-circuit on first hit.
   const checkFrameContainment = useCallback((id: string) => {
     const obj = objects.get(id)
     if (!obj || obj.type === 'frame') return
 
-    // For vector types, use midpoint of endpoints
     let centerX: number, centerY: number
     if (obj.x2 != null && obj.y2 != null) {
       centerX = (obj.x + obj.x2) / 2
@@ -1189,8 +552,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       centerY = obj.y + obj.height / 2
     }
 
-    // Find the highest-z frame containing this object's center.
-    // framesDesc is sorted by z_index descending, so the first match is the best.
     let bestFrame: BoardObject | null = null
     for (const frame of framesDesc) {
       if (frame.id === id) continue
@@ -1207,7 +568,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
 
     const newParentId = bestFrame?.id ?? null
     if (obj.parent_id !== newParentId) {
-      // Only update parent if the parent is a frame (don't break group membership)
       const currentParent = obj.parent_id ? objects.get(obj.parent_id) : null
       if (!currentParent || currentParent.type === 'frame') {
         updateObject(id, { parent_id: newParentId })
@@ -1215,7 +575,8 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     }
   }, [objects, framesDesc, updateObject])
 
-  // Lock helpers: check if an object is locked (directly or via ancestor inheritance)
+  // ── Lock helpers ────────────────────────────────────────────────
+
   const isObjectLocked = useCallback((id: string): boolean => {
     let current = objectsRef.current.get(id)
     while (current) {
@@ -1236,7 +597,8 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     updateObject(id, { locked_by: null })
   }, [canEdit, updateObject])
 
-  // Broadcast local selection changes to remote users (debounced)
+  // ── Remote selection broadcasting ───────────────────────────────
+
   const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (!channel) return
@@ -1298,7 +660,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     }
   }, [channel, userId, flushSelections])
 
-  // Clean up remote selections when a user leaves (no longer in onlineUsers)
+  // Clean up remote selections when a user leaves
   useEffect(() => {
     if (!onlineUsers) return
     const onlineIds = new Set(onlineUsers.map(u => u.user_id))
@@ -1314,11 +676,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       return changed ? next : prev
     })
   }, [onlineUsers])
-
-  // Computed: sorted objects by z_index
-  const sortedObjects = useMemo(() => {
-    return Array.from(objects.values()).sort((a, b) => a.z_index - b.z_index)
-  }, [objects])
 
   return {
     objects,

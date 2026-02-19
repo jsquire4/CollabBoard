@@ -82,11 +82,16 @@ export function usePersistence({
       .from('board_objects')
       .select(BOARD_OBJECT_SELECT)
       .eq('board_id', boardId)
-      .is('deleted_at', null) as unknown as { data: (BoardObject & { field_clocks?: FieldClocks })[] | null; error: { message: string } | null }
+      .is('deleted_at', null)
+      .limit(5000) as unknown as { data: (BoardObject & { field_clocks?: FieldClocks })[] | null; error: { message: string } | null }
 
     if (error) {
       console.error('Failed to load board objects:', error.message)
       return
+    }
+
+    if (data && data.length === 5000) {
+      console.warn('Board object limit reached (5000). Some objects may not be loaded.')
     }
 
     const map = new Map<string, BoardObject>()
@@ -376,14 +381,12 @@ export function usePersistence({
 
     if (CRDT_ENABLED) {
       const now = new Date().toISOString()
-      const results = await Promise.all(
-        idsToDelete.map(did =>
-          supabase.from('board_objects').update({ deleted_at: now }).eq('id', did)
-        )
-      )
-      const failed = results.some(r => r.error)
-      if (failed) {
-        results.filter(r => r.error).forEach(r => console.error('Failed to soft-delete object:', r.error!.message))
+      const { error: softDeleteError } = await supabase
+        .from('board_objects')
+        .update({ deleted_at: now })
+        .in('id', idsToDelete)
+      if (softDeleteError) {
+        console.error('Failed to soft-delete objects:', softDeleteError.message)
       } else {
         queueBroadcast(idsToDelete.map(did => ({
           action: 'delete' as const,
@@ -395,12 +398,12 @@ export function usePersistence({
       // Hard-delete: children first (parallel), then parent (FK constraint)
       const childIds = descendants.map(d => d.id)
       if (childIds.length > 0) {
-        const childResults = await Promise.all(
-          childIds.map(did => supabase.from('board_objects').delete().eq('id', did))
-        )
-        const childFailed = childResults.some(r => r.error)
-        if (childFailed) {
-          childResults.filter(r => r.error).forEach(r => console.error('Failed to delete object:', r.error!.message))
+        const { error: childError } = await supabase
+          .from('board_objects')
+          .delete()
+          .in('id', childIds)
+        if (childError) {
+          console.error('Failed to delete children:', childError.message)
           return
         }
       }

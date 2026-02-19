@@ -139,6 +139,7 @@ export function Canvas({
   const stageRef = useRef<Konva.Stage>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const shapeRefs = useRef<Map<string, Konva.Node>>(new Map())
+  const reverseShapeRefs = useRef<Map<Konva.Node, string>>(new Map())
   const objectsRef = useRef(objects)
   objectsRef.current = objects
 
@@ -152,7 +153,7 @@ export function Canvas({
     marqueeJustCompletedRef, drawJustCompletedRef,
     setDrawPreview, setLinePreview, setConnectorHint,
   } = useStageInteractions({
-    stageRef, stagePos, stageScale, shapeRefs,
+    stageRef, stagePos, stageScale, shapeRefs, reverseShapeRefs,
     onDrawShape, onSelectObjects, onDrawLineFromAnchor,
     onCursorMove, onActivity,
   })
@@ -204,11 +205,14 @@ export function Canvas({
     return ids
   }, [selectedIds, objects, getDescendants, isObjectLocked])
 
-  // Ref callback for shape registration
+  // Ref callback for shape registration (maintains both forward and reverse maps)
   const handleShapeRef = useCallback((id: string, node: Konva.Node | null) => {
     if (node) {
       shapeRefs.current.set(id, node)
+      reverseShapeRefs.current.set(node, id)
     } else {
+      const existing = shapeRefs.current.get(id)
+      if (existing) reverseShapeRefs.current.delete(existing)
       shapeRefs.current.delete(id)
     }
   }, [])

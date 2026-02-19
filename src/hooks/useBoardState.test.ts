@@ -157,7 +157,9 @@ describe('useBoardState', () => {
     mockFrom.mockImplementation(() => ({
       select: vi.fn(() => ({
         eq: vi.fn(() => ({
-          is: vi.fn(() => Promise.resolve({ data: [rect], error: null })),
+          is: vi.fn(() => ({
+            limit: vi.fn(() => Promise.resolve({ data: [rect], error: null })),
+          })),
         })),
       })),
     }))
@@ -314,12 +316,20 @@ function createBoardObjectsChain(
   return {
     select: vi.fn(() => ({
       eq: vi.fn(() => ({
-        is: vi.fn(() => resolved),
+        is: vi.fn(() => ({
+          limit: vi.fn(() => resolved),
+        })),
       })),
     })),
     insert: overrides?.mockInsert ?? vi.fn(() => Promise.resolve({ error: null })),
-    update: overrides?.mockUpdate ?? vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ error: null })) })),
-    delete: overrides?.mockDelete ?? vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ error: null })) })),
+    update: overrides?.mockUpdate ?? vi.fn(() => ({
+      eq: vi.fn(() => Promise.resolve({ error: null })),
+      in: vi.fn(() => Promise.resolve({ error: null })),
+    })),
+    delete: overrides?.mockDelete ?? vi.fn(() => ({
+      eq: vi.fn(() => Promise.resolve({ error: null })),
+      in: vi.fn(() => Promise.resolve({ error: null })),
+    })),
     upsert: vi.fn(() => Promise.resolve({ error: null })),
   }
 }

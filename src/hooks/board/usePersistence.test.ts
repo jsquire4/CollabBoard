@@ -34,7 +34,9 @@ function chainMock(result: { data?: unknown; error?: { message: string } | null 
   chain.delete = vi.fn(() => chain)
   chain.upsert = vi.fn(() => terminal)
   chain.eq = vi.fn(() => chain)
-  chain.is = vi.fn(() => terminal)
+  chain.in = vi.fn(() => terminal)
+  chain.is = vi.fn(() => chain)
+  chain.limit = vi.fn(() => terminal)
   // Make chain thenable for .update().eq().then()
   chain.then = vi.fn((cb: (r: unknown) => void) => { cb(result); return Promise.resolve() })
   return chain as {
@@ -44,7 +46,9 @@ function chainMock(result: { data?: unknown; error?: { message: string } | null 
     delete: ReturnType<typeof vi.fn>
     upsert: ReturnType<typeof vi.fn>
     eq: ReturnType<typeof vi.fn>
+    in: ReturnType<typeof vi.fn>
     is: ReturnType<typeof vi.fn>
+    limit: ReturnType<typeof vi.fn>
     then: ReturnType<typeof vi.fn>
   }
 }
@@ -513,5 +517,91 @@ describe('usePersistence', () => {
     let dup: unknown
     act(() => { dup = result.current.duplicateObject('r1') })
     expect(dup).toBeNull()
+  })
+
+  it('CRDT soft-delete uses single .in() call instead of N individual calls', async () => {
+    // Temporarily enable CRDT for this test
+    const crdtModule = await import('@/hooks/board/useBroadcast')
+    const originalCRDT = crdtModule.CRDT_ENABLED
+    Object.defineProperty(crdtModule, 'CRDT_ENABLED', { value: true, writable: true, configurable: true })
+
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const child = makeRectangle({ id: 'c1', parent_id: 'g1' })
+    const setObjects = vi.fn()
+    const setSelectedIds = vi.fn()
+    const queueBroadcast = vi.fn()
+    const deps = makeDeps({
+      setObjects,
+      setSelectedIds,
+      queueBroadcast,
+      objectsRef: { current: objectsMap(makeGroup({ id: 'g1' }), child) },
+      getDescendants: vi.fn(() => [child]),
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    await act(async () => { await result.current.deleteObject('g1') })
+
+    // Should use .in() with both IDs, not multiple .eq() calls
+    expect(chain.in).toHaveBeenCalledWith('id', ['g1', 'c1'])
+    // .update() called once (not twice)
+    expect(chain.update).toHaveBeenCalledTimes(1)
+
+    Object.defineProperty(crdtModule, 'CRDT_ENABLED', { value: originalCRDT, writable: true, configurable: true })
+  })
+
+  it('hard-delete path batches children via .in()', async () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const child1 = makeRectangle({ id: 'c1', parent_id: 'g1' })
+    const child2 = makeRectangle({ id: 'c2', parent_id: 'g1' })
+    const setObjects = vi.fn()
+    const setSelectedIds = vi.fn()
+    const deps = makeDeps({
+      setObjects,
+      setSelectedIds,
+      objectsRef: { current: objectsMap(makeGroup({ id: 'g1' }), child1, child2) },
+      getDescendants: vi.fn(() => [child1, child2]),
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    await act(async () => { await result.current.deleteObject('g1') })
+
+    // Children should be deleted with .in() (single call)
+    expect(chain.in).toHaveBeenCalledWith('id', ['c1', 'c2'])
+    // .delete() called twice: once for children batch (.in), once for parent (.eq)
+    expect(chain.delete).toHaveBeenCalledTimes(2)
+  })
+
+  it('loadObjects query includes .limit(5000)', async () => {
+    const chain = chainMock({ data: [], error: null })
+    mockFrom.mockReturnValue(chain)
+    const setObjects = vi.fn()
+
+    const { result } = renderHook(() => usePersistence(makeDeps({ setObjects })))
+
+    await act(async () => {
+      await result.current.loadObjects()
+    })
+
+    expect(chain.limit).toHaveBeenCalledWith(5000)
+  })
+
+  it('loadObjects warns when cap is hit', async () => {
+    const data = Array.from({ length: 5000 }, (_, i) =>
+      makeRectangle({ id: `r${i}`, board_id: 'board-1' })
+    )
+    const chain = chainMock({ data, error: null })
+    mockFrom.mockReturnValue(chain)
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const { result } = renderHook(() => usePersistence(makeDeps()))
+
+    await act(async () => { await result.current.loadObjects() })
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Board object limit reached')
+    )
+    consoleSpy.mockRestore()
   })
 })

@@ -19,6 +19,7 @@ export async function fetchBoardsGrouped(): Promise<{
     .select('role, boards(id, name, created_by, created_at, updated_at)')
     .eq('user_id', user.id)
     .order('added_at', { ascending: false })
+    .limit(200)
 
   if (error) {
     console.error('Failed to fetch boards:', error.message)

@@ -119,6 +119,7 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
         .from('board_objects')
         .select('*')
         .eq('board_id', boardId)
+        .is('deleted_at', null)
 
       if (sourceObjects && sourceObjects.length > 0) {
         // Build old ID → new ID mapping so FK refs point to the new board's objects
@@ -137,7 +138,15 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
           connect_start_id: remap(rest.connect_start_id),
           connect_end_id: remap(rest.connect_end_id),
         }))
-        await supabase.from('board_objects').insert(copies)
+        const CHUNK_SIZE = 300
+        for (let i = 0; i < copies.length; i += CHUNK_SIZE) {
+          const { error: chunkError } = await supabase.from('board_objects').insert(copies.slice(i, i + CHUNK_SIZE))
+          if (chunkError) {
+            console.error('Failed to duplicate board objects chunk:', chunkError.message)
+            setError('Failed to duplicate board objects.')
+            return
+          }
+        }
       }
 
       setMyBoards(prev => [{ ...newBoard, role: 'owner' as const }, ...prev])

@@ -14,6 +14,7 @@ export interface UseStageInteractionsDeps {
   stagePos: { x: number; y: number }
   stageScale: number
   shapeRefs: React.RefObject<Map<string, Konva.Node>>
+  reverseShapeRefs?: React.RefObject<Map<Konva.Node, string>>
   onDrawShape?: (type: BoardObjectType, x: number, y: number, width: number, height: number) => void
   onSelectObjects: (ids: string[]) => void
   onDrawLineFromAnchor?: (type: BoardObjectType, startShapeId: string, startAnchor: string, startX: number, startY: number, endX: number, endY: number, screenEndX?: number, screenEndY?: number) => void
@@ -24,7 +25,7 @@ export interface UseStageInteractionsDeps {
 // ── Hook ────────────────────────────────────────────────────────────
 
 export function useStageInteractions({
-  stageRef, stagePos, stageScale, shapeRefs,
+  stageRef, stagePos, stageScale, shapeRefs, reverseShapeRefs,
   onDrawShape, onSelectObjects, onDrawLineFromAnchor,
   onCursorMove, onActivity,
 }: UseStageInteractionsDeps) {
@@ -88,9 +89,16 @@ export function useStageInteractions({
   const findShapeIdFromNode = (node: Konva.Node): string | null => {
     let current: Konva.Node | null = node
     const stage = stageRef.current
+    const reverseMap = reverseShapeRefs?.current
     while (current && current !== stage) {
-      const id = Array.from(shapeRefs.current.entries()).find(([, n]) => n === current)?.[0]
-      if (id) return id
+      if (reverseMap) {
+        const id = reverseMap.get(current)
+        if (id) return id
+      } else {
+        // Fallback: O(n) scan when reverse map not available
+        const id = Array.from(shapeRefs.current.entries()).find(([, n]) => n === current)?.[0]
+        if (id) return id
+      }
       current = current.parent
     }
     return null

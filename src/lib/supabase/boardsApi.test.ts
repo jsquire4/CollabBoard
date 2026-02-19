@@ -25,10 +25,11 @@ function chain(resolveValue: { data?: unknown; error?: { message: string } | nul
   const c = {
     select: vi.fn(() => c),
     eq: vi.fn(() => c),
-    order: vi.fn(() => Promise.resolve(resolveValue)),
+    order: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve(resolveValue)) })),
     single: vi.fn(() => Promise.resolve(resolveValue)),
     upsert: vi.fn(() => Promise.resolve({})),
     delete: vi.fn(() => c),
+    limit: vi.fn(() => Promise.resolve(resolveValue)),
   }
   return c
 }
@@ -60,7 +61,7 @@ describe('boardsApi', () => {
           return {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
-                order: vi.fn(() => Promise.resolve({ data: null, error: { message: 'DB error' } })),
+                order: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve({ data: null, error: { message: 'DB error' } })) })),
               })),
             })),
           }
@@ -115,7 +116,7 @@ describe('boardsApi', () => {
           return {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
-                order: vi.fn(() => Promise.resolve({ data: boardData, error: null })),
+                order: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve({ data: boardData, error: null })) })),
               })),
             })),
           }
@@ -166,7 +167,7 @@ describe('boardsApi', () => {
           return {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
-                order: vi.fn(() => Promise.resolve({ data: boardData, error: null })),
+                order: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve({ data: boardData, error: null })) })),
               })),
             })),
           }
@@ -200,8 +201,8 @@ describe('boardsApi', () => {
           return {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
-                order: vi.fn(() =>
-                  Promise.resolve({
+                order: vi.fn(() => ({
+                  limit: vi.fn(() => Promise.resolve({
                     data: [
                       { role: 'owner', boards: null },
                       {
@@ -216,8 +217,8 @@ describe('boardsApi', () => {
                       },
                     ],
                     error: null,
-                  })
-                ),
+                  })),
+                })),
               })),
             })),
           }
@@ -285,7 +286,7 @@ describe('boardsApi', () => {
           return {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
-                order: vi.fn(() => Promise.resolve({ data: boardData, error: null })),
+                order: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve({ data: boardData, error: null })) })),
               })),
             })),
             upsert: vi.fn(() => Promise.resolve({})),
@@ -362,6 +363,40 @@ describe('boardsApi', () => {
       const result = await fetchBoardRole('board-1')
 
       expect(result).toBe('editor')
+    })
+  })
+
+  describe('fetchBoardsGrouped safety cap', () => {
+    it('applies .limit(200) to board_members query', async () => {
+      mockAuthGetUser.mockResolvedValue({
+        data: { user: { id: 'u1', email: 'u@test.com' } },
+      })
+
+      const limitFn = vi.fn(() => Promise.resolve({ data: [], error: null }))
+
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'board_members') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                order: vi.fn(() => ({ limit: limitFn })),
+              })),
+            })),
+          }
+        }
+        if (table === 'board_invites') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => Promise.resolve({ data: [], error: null })),
+            })),
+          }
+        }
+        return chain({ data: null, error: null })
+      })
+
+      await fetchBoardsGrouped()
+
+      expect(limitFn).toHaveBeenCalledWith(200)
     })
   })
 })

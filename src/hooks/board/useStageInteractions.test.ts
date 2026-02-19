@@ -165,4 +165,17 @@ describe('useStageInteractions', () => {
       expect(result.current.handleStageMouseDown).toBeDefined()
     })
   })
+
+  describe('reverseShapeRefs integration', () => {
+    it('accepts reverseShapeRefs in deps and renders without error', () => {
+      const reverseShapeRefs = { current: new Map() }
+      const { result } = renderWithContext(makeDeps({ reverseShapeRefs }))
+      expect(result.current.handleStageMouseDown).toBeDefined()
+    })
+
+    it('works without reverseShapeRefs (backward compatible)', () => {
+      const { result } = renderWithContext(makeDeps())
+      expect(result.current.handleStageMouseDown).toBeDefined()
+    })
+  })
 })

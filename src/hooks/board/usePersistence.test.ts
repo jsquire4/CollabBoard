@@ -832,6 +832,26 @@ describe('usePersistence', () => {
     expect(obj.color).toBe('#FFFFFF')
   })
 
+  it('addObject creates table with default table_data when no override provided', () => {
+    const setObjects = vi.fn()
+    const { result } = renderHook(() => usePersistence(makeDeps({ setObjects })))
+
+    act(() => {
+      result.current.addObject('table', 50, 50)
+    })
+
+    expect(setObjects).toHaveBeenCalled()
+    const updater = setObjects.mock.calls[0][0] as (prev: Map<string, BoardObject>) => Map<string, BoardObject>
+    const map = updater(new Map())
+    const obj = [...map.values()][0]
+    expect(obj.type).toBe('table')
+    expect(obj.table_data).toBeDefined()
+    expect(typeof obj.table_data).toBe('string')
+    const parsed = JSON.parse(obj.table_data!)
+    expect(parsed.columns).toHaveLength(3)
+    expect(parsed.rows).toHaveLength(3)
+  })
+
   it('updateObject persists table_data changes', () => {
     const table = makeTable({ id: 'tbl-1' })
     const objectsRef = { current: objectsMap(table) }

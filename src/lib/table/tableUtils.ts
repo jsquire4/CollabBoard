@@ -132,7 +132,7 @@ export function resizeColumn(
   colIndex: number,
   width: number
 ): TableData {
-  const clampedWidth = Math.max(MIN_COL_WIDTH, width)
+  const clampedWidth = Math.max(MIN_COL_WIDTH, Number.isFinite(width) ? width : MIN_COL_WIDTH)
   const columns = data.columns.map((col, i) =>
     i === colIndex ? { ...col, width: clampedWidth } : col
   )
@@ -147,7 +147,7 @@ export function resizeRow(
   rowIndex: number,
   height: number
 ): TableData {
-  const clampedHeight = Math.max(MIN_ROW_HEIGHT, height)
+  const clampedHeight = Math.max(MIN_ROW_HEIGHT, Number.isFinite(height) ? height : MIN_ROW_HEIGHT)
   const rows = data.rows.map((row, i) =>
     i === rowIndex ? { ...row, height: clampedHeight } : row
   )

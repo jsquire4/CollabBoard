@@ -10,6 +10,7 @@ import { shapeRegistry } from '@/components/board/shapeRegistry'
 import { BoardChange, CRDT_ENABLED } from '@/hooks/board/useBroadcast'
 import { fireAndRetry, retryWithRollback } from '@/lib/retryWithRollback'
 import { BoardLogger } from '@/lib/logger'
+import { createDefaultTableData, serializeTableData } from '@/lib/table/tableUtils'
 
 // Explicit column list for board_objects queries (avoids pulling large JSONB when not needed)
 const BOARD_OBJECT_COLUMNS = [
@@ -205,7 +206,7 @@ export function usePersistence({
       group: { width: 0, height: 0, color: 'transparent', text: '' },
       line: { width: 120, height: 2, color: '#374151', stroke_width: 2, stroke_dash: undefined },
       arrow: { width: 120, height: 40, color: '#F59E0B', stroke_width: 2, text: '' },
-      table: { width: 360, height: 128, color: '#FFFFFF', text: '' },
+      table: { width: 360, height: 128, color: '#FFFFFF', text: '', table_data: serializeTableData(createDefaultTableData(3, 3)) },
     }
     const def = shapeRegistry.get(type)
     const defaults: Record<string, Partial<BoardObject>> = {

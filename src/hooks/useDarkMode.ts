@@ -9,12 +9,17 @@ const STORAGE_KEY = 'collabboard-ui-dark-mode'
  * persists changes, and listens for system preference changes.
  */
 export function useDarkMode(): [boolean, (value: boolean) => void] {
-  const [dark, setDark] = useState(() => {
-    if (typeof window === 'undefined') return false
+  const [dark, setDark] = useState(false)
+
+  // Sync with localStorage/system preference on mount (client-only)
+  useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored !== null) return stored === 'true'
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
-  })
+    if (stored !== null) {
+      setDark(stored === 'true')
+    } else {
+      setDark(window.matchMedia('(prefers-color-scheme: dark)').matches)
+    }
+  }, [])
 
   // Persist to localStorage
   useEffect(() => {

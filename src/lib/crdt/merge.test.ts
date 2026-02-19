@@ -3,7 +3,7 @@ import { HLC, tickHLC, createHLC } from './hlc'
 import { mergeFields, mergeClocks, stampFields, shouldDeleteWin, FieldClocks } from './merge'
 
 // Helper: create a simple test object
-type TestObj = { id: string; x: number; y: number; color: string; z_index: number; text: string }
+type TestObj = { id: string; x: number; y: number; color: string; z_index: number; text: string; rich_text?: string }
 
 function makeObj(overrides?: Partial<TestObj>): TestObj {
   return { id: 'obj1', x: 0, y: 0, color: '#fff', z_index: 1, text: '', ...overrides }
@@ -365,6 +365,97 @@ describe('convergence', () => {
 
     // Delete should NOT win because update has a newer field clock
     expect(shouldDeleteWin(deleteClock, updateClocks)).toBe(false)
+  })
+
+  it('rich_text merges as atomic blob via LWW', () => {
+    const local = makeObj({ text: 'old' })
+    const localClocks: FieldClocks = {
+      text: makeClock(1000, 0, 'a'),
+    }
+    const richTextJson = '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"bold","marks":[{"type":"bold"}]}]}]}'
+    const remoteFields = { rich_text: richTextJson, text: 'bold' }
+    const remoteClocks: FieldClocks = {
+      rich_text: makeClock(2000, 0, 'b'),
+      text: makeClock(2000, 0, 'b'),
+    }
+
+    const { merged, changed } = mergeFields(local, localClocks, remoteFields, remoteClocks)
+    expect((merged as Record<string, unknown>).rich_text).toBe(richTextJson)
+    expect(merged.text).toBe('bold')
+    expect(changed).toBe(true)
+  })
+
+  it('concurrent rich_text + x edits both survive (field independence)', () => {
+    const local = makeObj({ x: 100 })
+    const localClocks: FieldClocks = {
+      x: makeClock(2000, 0, 'a'),
+    }
+    const richTextJson = '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"new"}]}]}'
+    const remoteFields = { rich_text: richTextJson }
+    const remoteClocks: FieldClocks = {
+      rich_text: makeClock(2000, 0, 'b'),
+    }
+
+    const { merged } = mergeFields(local, localClocks, remoteFields, remoteClocks)
+    expect(merged.x).toBe(100) // local x kept
+    expect((merged as Record<string, unknown>).rich_text).toBe(richTextJson) // remote rich_text applied
+  })
+
+  it('rich_text LWW — newer local wins over older remote', () => {
+    const localRichText = '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"local"}]}]}'
+    const local = { ...makeObj(), rich_text: localRichText } as TestObj
+    const localClocks: FieldClocks = {
+      rich_text: makeClock(3000, 0, 'a'),
+    }
+    const remoteRichText = '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"remote"}]}]}'
+    const remoteFields = { rich_text: remoteRichText }
+    const remoteClocks: FieldClocks = {
+      rich_text: makeClock(2000, 0, 'b'),
+    }
+
+    const { merged, changed } = mergeFields(local, localClocks, remoteFields, remoteClocks)
+    expect((merged as Record<string, unknown>).rich_text).toBe(localRichText)
+    expect(changed).toBe(false)
+  })
+
+  it('rich_text idempotency — same update applied twice is stable', () => {
+    const local = makeObj()
+    const localClocks: FieldClocks = {}
+    const richTextJson = '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"hello"}]}]}'
+    const remoteFields = { rich_text: richTextJson }
+    const remoteClocks: FieldClocks = { rich_text: makeClock(1000, 0, 'b') }
+
+    const first = mergeFields(local, localClocks, remoteFields, remoteClocks)
+    const second = mergeFields(first.merged, first.clocks, remoteFields, remoteClocks)
+    expect((second.merged as Record<string, unknown>).rich_text).toBe(richTextJson)
+    expect(second.changed).toBe(false)
+  })
+
+  it('rich_text convergence — two clients cross-sync rich_text produce same result', () => {
+    const base = makeObj()
+
+    const opsA = { fields: { rich_text: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"A"}]}]}' }, clocks: { rich_text: makeClock(1000, 0, 'a') } }
+    const opsB = { fields: { rich_text: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"B"}]}]}' }, clocks: { rich_text: makeClock(1001, 0, 'b') } }
+
+    // Client A applies own then B
+    let stateA = mergeFields(base, {}, opsA.fields, opsA.clocks)
+    stateA = mergeFields(stateA.merged, stateA.clocks, opsB.fields, opsB.clocks)
+
+    // Client B applies own then A
+    let stateB = mergeFields(base, {}, opsB.fields, opsB.clocks)
+    stateB = mergeFields(stateB.merged, stateB.clocks, opsA.fields, opsA.clocks)
+
+    expect((stateA.merged as Record<string, unknown>).rich_text).toEqual((stateB.merged as Record<string, unknown>).rich_text)
+    // B wins because 1001 > 1000
+    expect((stateA.merged as Record<string, unknown>).rich_text).toBe(opsB.fields.rich_text)
+  })
+
+  it('rich_text null stays null when no remote update', () => {
+    const local = makeObj()
+    const localClocks: FieldClocks = {}
+    const { merged, changed } = mergeFields(local, localClocks, {}, {})
+    expect((merged as Record<string, unknown>).rich_text).toBeUndefined()
+    expect(changed).toBe(false)
   })
 
   it('delete with newer clock wins over stale update', () => {

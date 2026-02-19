@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { Group, Rect, Text, Line } from 'react-konva'
 import Konva from 'konva'
 import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
+import { RICH_TEXT_ENABLED } from '@/lib/richText'
 
 interface StickyNoteProps extends ShapeProps {
   onStartEdit: (id: string, node: Konva.Text, field?: 'text' | 'title') => void
@@ -143,7 +144,7 @@ export const StickyNote = memo(function StickyNote({
         strokeWidth={1}
       />
       {/* Body text */}
-      {!(isEditing && editingField === 'text') && (
+      {!(isEditing && editingField === 'text') && !(RICH_TEXT_ENABLED && object.rich_text) && (
         <Text
           name="body"
           x={bodyPadding}

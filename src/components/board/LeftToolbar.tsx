@@ -20,6 +20,9 @@ import {
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { EXPANDED_PALETTE } from './ColorPicker'
 import { StylePanel } from './StylePanel'
+import { RichTextToolbar } from './RichTextToolbar'
+import { RICH_TEXT_ENABLED } from '@/lib/richText'
+import type { Editor } from '@tiptap/react'
 
 interface LeftToolbarProps {
   userRole: BoardRole
@@ -58,6 +61,7 @@ interface LeftToolbarProps {
   activePreset: ShapePreset | null
   onPresetSelect: (preset: ShapePreset) => void
   uiDarkMode?: boolean
+  richTextEditor?: Editor | null
 }
 
 // IDs that belong to each tool group (for active-state highlighting)
@@ -110,6 +114,7 @@ export function LeftToolbar({
   activePreset,
   onPresetSelect,
   uiDarkMode = false,
+  richTextEditor,
 }: LeftToolbarProps) {
   const canEdit = userRole !== 'viewer'
   const dk = uiDarkMode
@@ -133,19 +138,23 @@ export function LeftToolbar({
                   Text
                 </div>
               </div>
-              <FontSelector
-                dark={dk}
-                fontFamily={selectedFontFamily}
-                fontSize={selectedFontSize}
-                fontStyle={selectedFontStyle}
-                textAlign={selectedTextAlign}
-                textVerticalAlign={selectedTextVerticalAlign}
-                textColor={selectedTextColor}
-                showTextLayout={true}
-                onFontChange={onFontChange}
-                onTextStyleChange={onTextStyleChange}
-                compact
-              />
+              {RICH_TEXT_ENABLED && richTextEditor ? (
+                <RichTextToolbar editor={richTextEditor} dark={dk} />
+              ) : (
+                <FontSelector
+                  dark={dk}
+                  fontFamily={selectedFontFamily}
+                  fontSize={selectedFontSize}
+                  fontStyle={selectedFontStyle}
+                  textAlign={selectedTextAlign}
+                  textVerticalAlign={selectedTextVerticalAlign}
+                  textColor={selectedTextColor}
+                  showTextLayout={true}
+                  onFontChange={onFontChange}
+                  onTextStyleChange={onTextStyleChange}
+                  compact
+                />
+              )}
             </div>
           ) : (
             <>

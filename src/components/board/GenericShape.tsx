@@ -4,6 +4,7 @@ import Konva from 'konva'
 import { BoardObject } from '@/types/board'
 import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
 import { shapeRegistry } from './shapeRegistry'
+import { RICH_TEXT_ENABLED } from '@/lib/richText'
 
 interface GenericShapeProps extends ShapeProps {
   onStartEdit?: (id: string, node: Konva.Text) => void
@@ -221,7 +222,7 @@ export const GenericShape = memo(function GenericShape({
       opacity={object.opacity ?? 1}
     >
       {renderPrimitive(true)}
-      {!isEditing && (
+      {!isEditing && !(RICH_TEXT_ENABLED && object.rich_text) && (
         <Text
           x={inset.x}
           y={inset.y}

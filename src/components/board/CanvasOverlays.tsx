@@ -3,6 +3,7 @@ import { BoardObject } from '@/types/board'
 import { ContextMenu } from './ContextMenu'
 import { ZoomControls } from './ZoomControls'
 import { getTextCharLimit, STICKY_TITLE_CHAR_LIMIT } from '@/hooks/board/useTextEditing'
+import { RICH_TEXT_ENABLED } from '@/lib/richText'
 import type { ContextMenuState } from '@/hooks/board/useContextMenu'
 
 interface ConnectorHintData {
@@ -97,8 +98,8 @@ export function CanvasOverlays({
 }: CanvasOverlaysProps) {
   return (
     <>
-      {/* Textarea overlay for editing text */}
-      {editingId && (
+      {/* Textarea overlay for editing text (skip for rich text body editing — handled by TipTapEditorOverlay) */}
+      {editingId && !(RICH_TEXT_ENABLED && editingField !== 'title') && (
         <textarea
           ref={textareaRef}
           value={editText}

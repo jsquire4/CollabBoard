@@ -30,6 +30,25 @@ export type BoardObjectType =
 
 export type FontStyle = 'normal' | 'bold' | 'italic' | 'bold italic'
 
+// TipTap rich text JSON types
+export interface TipTapMark {
+  type: string
+  attrs?: Record<string, unknown>
+}
+
+export interface TipTapNode {
+  type: string
+  attrs?: Record<string, unknown>
+  marks?: TipTapMark[]
+  content?: TipTapNode[]
+  text?: string
+}
+
+export interface TipTapDoc {
+  type: 'doc'
+  content: TipTapNode[]
+}
+
 export type MarkerType = 'none' | 'arrow' | 'arrow_open' | 'circle' | 'circle_open' | 'square' | 'diamond' | 'diamond_open' | 'bar'
 
 export interface BoardObject {
@@ -66,6 +85,7 @@ export interface BoardObject {
   text_padding?: number | null
   text_color?: string | null
   corner_radius?: number | null
+  rich_text?: string | null // JSON-serialized TipTapDoc
   title?: string | null
   locked_by?: string | null
   sides?: number | null

@@ -21,6 +21,9 @@ import { fireAndRetry } from '@/lib/retryWithRollback'
 import { logger } from '@/lib/logger'
 import { toast } from 'sonner'
 import { BoardObject, BoardObjectType } from '@/types/board'
+import { RICH_TEXT_ENABLED, extractPlainText } from '@/lib/richText'
+import type { TipTapDoc } from '@/types/board'
+import type { Editor } from '@tiptap/react'
 import { BoardRole } from '@/types/sharing'
 import { BoardTopBar } from './BoardTopBar'
 import { LeftToolbar } from './LeftToolbar'
@@ -567,6 +570,24 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     updateObject(id, { title: title.slice(0, 256) })
   }, [canEdit, updateObject, markActivity])
 
+  const [richTextEditor, setRichTextEditor] = useState<Editor | null>(null)
+
+  const handleUpdateRichText = useCallback((id: string, json: string, before: { text: string; rich_text: string | null }) => {
+    if (!canEdit) return
+    markActivity()
+    const obj = objects.get(id)
+    if (!obj) return
+    // Use the before state captured at edit start (not current obj, which was mutated by live broadcasts)
+    undoStack.push({ type: 'update', patches: [{ id, before }] })
+    // Extract plain text for fallback display and collaboration
+    let plain = obj.text
+    try {
+      const doc = JSON.parse(json) as TipTapDoc
+      plain = extractPlainText(doc)
+    } catch { /* keep existing text */ }
+    updateObject(id, { rich_text: json, text: plain })
+  }, [canEdit, objects, updateObject, undoStack, markActivity])
+
   const handleTransformEnd = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
     markActivity()
@@ -737,6 +758,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           activePreset={activePreset}
           onPresetSelect={handlePresetSelect}
           uiDarkMode={uiDarkMode}
+          richTextEditor={RICH_TEXT_ENABLED ? richTextEditor : undefined}
         />
         <div className="relative flex-1 overflow-hidden">
           <CanvasErrorBoundary>
@@ -753,6 +775,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
               onDragMove={handleDragMove}
               onUpdateText={handleUpdateText}
               onUpdateTitle={handleUpdateTitle}
+              onUpdateRichText={RICH_TEXT_ENABLED ? handleUpdateRichText : undefined}
+              onEditorReady={RICH_TEXT_ENABLED ? setRichTextEditor : undefined}
               onTransformEnd={handleTransformEnd}
               onDelete={handleDelete}
               onDuplicate={handleDuplicate}

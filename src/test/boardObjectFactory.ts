@@ -110,6 +110,25 @@ export function makeTable(overrides?: Partial<BoardObject>): BoardObject {
   })
 }
 
+/** Create a board object with a minimal TipTap rich_text doc. */
+export function makeRichTextObject(overrides?: Partial<BoardObject>): BoardObject {
+  const doc = {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Rich text content' }],
+      },
+    ],
+  }
+  return makeObject({
+    type: 'rectangle',
+    text: 'Rich text content',
+    rich_text: JSON.stringify(doc),
+    ...overrides,
+  })
+}
+
 /** Build an objects Map from an array */
 export function objectsMap(...objs: BoardObject[]): Map<string, BoardObject> {
   return new Map(objs.map(o => [o.id, o]))

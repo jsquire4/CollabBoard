@@ -19,7 +19,7 @@ const BOARD_OBJECT_COLUMNS = [
   'stroke_width', 'stroke_dash', 'stroke_color',
   'opacity', 'shadow_color', 'shadow_blur', 'shadow_offset_x', 'shadow_offset_y',
   'text_align', 'text_vertical_align', 'text_padding', 'text_color',
-  'corner_radius', 'title', 'locked_by',
+  'corner_radius', 'title', 'rich_text', 'locked_by',
   'sides', 'custom_points',
   'connect_start_id', 'connect_start_anchor', 'connect_end_id', 'connect_end_anchor', 'waypoints',
   'marker_start', 'marker_end', 'table_data',

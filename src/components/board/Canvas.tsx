@@ -188,6 +188,9 @@ export function Canvas({
 
   // Expand group IDs in selectedIds to their visible children (for Transformer attachment).
   // Vector types (line/arrow) are excluded — they use endpoint anchors instead.
+  // Stabilized with a ref so the Transformer useEffect doesn't re-run during drag
+  // when connector updates cause objects to change but the selected set stays the same.
+  const prevEffectiveRef = useRef<Set<string>>(new Set())
   const effectiveNodeIds = useMemo(() => {
     const ids = new Set<string>()
     for (const id of selectedIds) {
@@ -202,6 +205,12 @@ export function Canvas({
         ids.add(id)
       }
     }
+    // Return previous reference if contents haven't changed
+    const prev = prevEffectiveRef.current
+    if (ids.size === prev.size && [...ids].every(id => prev.has(id))) {
+      return prev
+    }
+    prevEffectiveRef.current = ids
     return ids
   }, [selectedIds, objects, getDescendants, isObjectLocked])
 

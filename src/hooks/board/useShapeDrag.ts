@@ -4,6 +4,7 @@ import { useCallback, useMemo } from 'react'
 import Konva from 'konva'
 import { useBoardContext } from '@/contexts/BoardContext'
 import { snapToGrid } from '@/components/board/shapeUtils'
+import { shapeRegistry } from '@/components/board/shapeRegistry'
 
 interface UseShapeDragDeps {
   shapeRefs: React.RefObject<Map<string, Konva.Node>>
@@ -49,7 +50,15 @@ export function useShapeDrag({
     const finalX = snapToGridEnabled ? snapToGrid(x, gridSize, gridSubdivisions) : x
     const finalY = snapToGridEnabled ? snapToGrid(y, gridSize, gridSubdivisions) : y
     if (snapToGridEnabled) {
-      shapeRefs.current.get(id)?.position({ x: finalX, y: finalY })
+      const node = shapeRefs.current.get(id)
+      if (node) {
+        const def = shapeRegistry.get(obj.type)
+        if (def?.centerOrigin) {
+          node.position({ x: finalX + obj.width / 2, y: finalY + obj.height / 2 })
+        } else {
+          node.position({ x: finalX, y: finalY })
+        }
+      }
     }
 
     const dx = finalX - obj.x

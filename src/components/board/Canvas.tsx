@@ -6,7 +6,7 @@ import Konva from 'konva'
 import { useCanvas } from '@/hooks/useCanvas'
 import { useModifierKeys } from '@/hooks/useShiftKey'
 import { BoardObject, BoardObjectType } from '@/types/board'
-import { BoardRole } from '@/types/sharing'
+import { useBoardContext } from '@/contexts/BoardContext'
 import { StickyNote } from './StickyNote'
 import { FrameShape } from './FrameShape'
 import { GenericShape } from './GenericShape'
@@ -210,11 +210,7 @@ const RemoteSelectionHighlights = memo(function RemoteSelectionHighlights({
 })
 
 interface CanvasProps {
-  objects: Map<string, BoardObject>
-  sortedObjects: BoardObject[]
-  selectedIds: Set<string>
-  activeGroupId: string | null
-  activeTool?: BoardObjectType | null
+  // Command callbacks (not in context — explicit for testability)
   onDrawShape?: (type: BoardObjectType, x: number, y: number, width: number, height: number) => void
   onCancelTool?: () => void
   onSelect: (id: string | null, opts?: { shift?: boolean; ctrl?: boolean }) => void
@@ -251,20 +247,14 @@ interface CanvasProps {
   onRedo?: () => void
   onCheckFrameContainment: (id: string) => void
   onMoveGroupChildren: (parentId: string, dx: number, dy: number, skipDb?: boolean) => void
-  getChildren: (parentId: string) => BoardObject[]
-  getDescendants: (parentId: string) => BoardObject[]
   recentColors?: string[]
   colors: string[]
   selectedColor?: string
-  userRole: BoardRole
-  onlineUsers?: OnlineUser[]
   onEndpointDragMove?: (id: string, updates: Partial<BoardObject>) => void
   onEndpointDragEnd?: (id: string, updates: Partial<BoardObject>) => void
   onCursorMove?: (x: number, y: number) => void
   onCursorUpdate?: (fn: (cursors: Map<string, RemoteCursorData>) => void) => void
-  remoteSelections?: Map<string, Set<string>>
   onEditingChange?: (isEditing: boolean) => void
-  isObjectLocked?: (id: string) => boolean
   anySelectedLocked?: boolean
   onLock?: () => void
   onUnlock?: () => void
@@ -280,16 +270,7 @@ interface CanvasProps {
   onActivity?: () => void
   pendingEditId?: string | null
   onPendingEditConsumed?: () => void
-  gridSize?: number
-  gridSubdivisions?: number
-  gridVisible?: boolean
-  snapToGrid?: boolean
-  gridStyle?: string
-  canvasColor?: string
-  gridColor?: string
-  subdivisionColor?: string
   onUpdateBoardSettings?: (updates: { grid_size?: number; grid_subdivisions?: number; grid_visible?: boolean; snap_to_grid?: boolean; grid_style?: string; canvas_color?: string; grid_color?: string; subdivision_color?: string }) => void
-  uiDarkMode?: boolean
   onWaypointDragEnd?: (id: string, waypointIndex: number, x: number, y: number) => void
   onWaypointInsert?: (id: string, afterSegmentIndex: number) => void
   onWaypointDelete?: (id: string, waypointIndex: number) => void
@@ -298,8 +279,7 @@ interface CanvasProps {
 }
 
 export function Canvas({
-  objects, sortedObjects, selectedIds, activeGroupId,
-  activeTool, onDrawShape, onCancelTool,
+  onDrawShape, onCancelTool,
   onSelect, onSelectObjects, onClearSelection, onEnterGroup, onExitGroup,
   onDragEnd, onDragMove, onUpdateText, onUpdateTitle, onTransformEnd, onTransformMove,
   onDelete, onDuplicate, onCopy, onPaste, onColorChange,
@@ -313,12 +293,11 @@ export function Canvas({
   onDragStart: onDragStartProp,
   onUndo, onRedo,
   onCheckFrameContainment, onMoveGroupChildren,
-  getChildren, getDescendants,
-  recentColors, colors, selectedColor, userRole,
+  recentColors, colors, selectedColor,
   onEndpointDragMove, onEndpointDragEnd,
-  onlineUsers, onCursorMove, onCursorUpdate, remoteSelections,
+  onCursorMove, onCursorUpdate,
   onEditingChange,
-  isObjectLocked, anySelectedLocked,
+  anySelectedLocked,
   onLock, onUnlock, canLock, canUnlock,
   vertexEditId, onEditVertices, onExitVertexEdit, onVertexDragEnd, onVertexInsert,
   canEditVertices,
@@ -326,23 +305,23 @@ export function Canvas({
   onActivity,
   pendingEditId,
   onPendingEditConsumed,
-  gridSize = 40,
-  gridSubdivisions = 1,
-  gridVisible = true,
-  snapToGrid: snapToGridEnabled = false,
-  gridStyle = 'lines',
-  canvasColor = '#e8ecf1',
-  gridColor = '#b4becd',
-  subdivisionColor = '#b4becd',
   onUpdateBoardSettings,
-  uiDarkMode = false,
   onWaypointDragEnd,
   onWaypointInsert,
   onWaypointDelete,
   autoRoutePointsRef,
   onDrawLineFromAnchor,
 }: CanvasProps) {
-  const canEdit = userRole !== 'viewer'
+  // ── Read shared state from context ──────────────────────────────
+  const {
+    objects, sortedObjects, selectedIds, activeGroupId, activeTool,
+    getChildren, getDescendants,
+    userRole, canEdit,
+    onlineUsers, remoteSelections, isObjectLocked,
+    gridSize, gridSubdivisions, gridVisible,
+    snapToGrid: snapToGridEnabled,
+    gridStyle, canvasColor, gridColor, subdivisionColor, uiDarkMode,
+  } = useBoardContext()
   const { stagePos, setStagePos, stageScale, handleWheel, zoomIn, zoomOut, resetZoom } = useCanvas()
   const stageRef = useRef<Konva.Stage>(null)
   const trRef = useRef<Konva.Transformer>(null)

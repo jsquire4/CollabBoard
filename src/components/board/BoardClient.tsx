@@ -670,11 +670,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         <div className="relative flex-1 overflow-hidden">
           <CanvasErrorBoundary>
             <Canvas
-              objects={objects}
-              sortedObjects={sortedObjects}
-              selectedIds={selectedIds}
-              activeGroupId={activeGroupId}
-              activeTool={activeTool}
               onDrawShape={handleDrawShape}
               onCancelTool={handleCancelTool}
               onSelect={selectObject}
@@ -713,19 +708,13 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
               onRedo={performRedo}
               onCheckFrameContainment={checkFrameContainment}
               onMoveGroupChildren={moveGroupChildren}
-              getChildren={getChildren}
-              getDescendants={getDescendants}
               recentColors={recentColors}
               colors={EXPANDED_PALETTE}
               selectedColor={selectedColor}
-              userRole={userRole}
-              onlineUsers={onlineUsers}
               onCursorMove={sendCursorWithActivity}
               onCursorUpdate={onCursorUpdate}
               onActivity={markActivity}
-              remoteSelections={remoteSelections}
               onEditingChange={setIsEditingText}
-              isObjectLocked={isObjectLocked}
               anySelectedLocked={anySelectedLocked}
               onLock={handleLockSelected}
               onUnlock={handleUnlockSelected}
@@ -740,16 +729,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
               snapIndicator={snapIndicator}
               pendingEditId={pendingEditId}
               onPendingEditConsumed={() => setPendingEditId(null)}
-              gridSize={gridSize}
-              gridSubdivisions={gridSubdivisions}
-              gridVisible={gridVisible}
-              snapToGrid={snapToGrid}
-              gridStyle={gridStyle}
-              canvasColor={canvasColor}
-              gridColor={gridColor}
-              subdivisionColor={subdivisionColor}
               onUpdateBoardSettings={updateBoardSettings}
-              uiDarkMode={uiDarkMode}
               onWaypointDragEnd={handleWaypointDragEnd}
               onWaypointInsert={handleWaypointInsert}
               onWaypointDelete={handleWaypointDelete}

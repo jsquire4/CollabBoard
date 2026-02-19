@@ -43,6 +43,7 @@ interface UseConnectorActionsDeps {
   setShapePalette: (palette: { lineId: string; canvasX: number; canvasY: number; screenX?: number; screenY?: number } | null) => void
   shapePalette: { lineId: string; canvasX: number; canvasY: number; screenX?: number; screenY?: number } | null
   autoRoutePointsRef: MutableRefObject<Map<string, number[]>>
+  waitForPersist: (id: string) => Promise<boolean>
 }
 
 export function useConnectorActions({
@@ -59,6 +60,7 @@ export function useConnectorActions({
   setShapePalette,
   shapePalette,
   autoRoutePointsRef,
+  waitForPersist,
 }: UseConnectorActionsDeps) {
   // --- Connection index ---
   const connectionIndexRef = useRef<Map<string, Array<{ connectorId: string; endpoint: 'start' | 'end' }>>>(new Map())
@@ -301,7 +303,7 @@ export function useConnectorActions({
     }
   }, [canEdit, addObject, undoStack, computeAllAnchors, markActivity, setShapePalette])
 
-  const handlePaletteShapeSelect = useCallback((type: BoardObjectType) => {
+  const handlePaletteShapeSelect = useCallback(async (type: BoardObjectType) => {
     if (!shapePalette || !canEdit) return
     markActivity()
     const { lineId, canvasX, canvasY } = shapePalette
@@ -314,6 +316,8 @@ export function useConnectorActions({
       const anchors = getShapeAnchors(shapeObj)
       const nearest = findNearestAnchor(anchors, canvasX, canvasY, Infinity)
       if (nearest) {
+        // Await shape persistence before setting connect_end_id FK reference
+        await waitForPersist(shapeObj.id)
         const lineObj = objects.get(lineId)
         if (lineObj) {
           undoStack.push({ type: 'update', patches: [{ id: lineId, before: { x2: lineObj.x2, y2: lineObj.y2, connect_end_id: lineObj.connect_end_id, connect_end_anchor: lineObj.connect_end_anchor } }] })
@@ -328,7 +332,7 @@ export function useConnectorActions({
       undoStack.push({ type: 'add', ids: [shapeObj.id] })
     }
     setShapePalette(null)
-  }, [shapePalette, canEdit, addObject, updateObject, undoStack, markActivity, objects, setShapePalette])
+  }, [shapePalette, canEdit, addObject, updateObject, undoStack, markActivity, objects, setShapePalette, waitForPersist])
 
   const handleWaypointDragEnd = useCallback((id: string, waypointIndex: number, x: number, y: number) => {
     if (!canEdit) return

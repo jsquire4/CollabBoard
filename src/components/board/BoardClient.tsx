@@ -108,6 +108,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     reconcileOnReconnect,
     deleteObject, getZOrderSet, addObjectWithId, duplicateObject,
     isObjectLocked, lockObject, unlockObject,
+    waitForPersist,
   } = useBoardState(userId, boardId, userRole, channel, onlineUsers)
   const [shareOpen, setShareOpen] = useState(false)
   const [isEditingText, setIsEditingText] = useState(false)
@@ -239,7 +240,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     handleWaypointDragEnd,
     handleWaypointInsert,
     handleWaypointDelete,
-  } = useConnectorActions({ objects, canEdit, updateObject, updateObjectDrag, updateObjectDragEnd, addObject, checkFrameContainment, undoStack, markActivity, setSnapIndicator, setShapePalette, shapePalette, autoRoutePointsRef })
+  } = useConnectorActions({ objects, canEdit, updateObject, updateObjectDrag, updateObjectDragEnd, addObject, checkFrameContainment, undoStack, markActivity, setSnapIndicator, setShapePalette, shapePalette, autoRoutePointsRef, waitForPersist })
 
   // Wrap connectorEndpointDragEnd to inject preDragRef
   const handleEndpointDragEnd = useCallback((id: string, updates: Partial<BoardObject>) => {

@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
-import { resolveKeyboardAction } from './useKeyboardShortcuts'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { renderHook } from '@testing-library/react'
+import { resolveKeyboardAction, useKeyboardShortcuts } from './useKeyboardShortcuts'
 
 function makeEvent(overrides: Partial<{ key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }>) {
   return {
@@ -289,6 +290,257 @@ describe('resolveKeyboardAction (pure function)', () => {
         makeEvent({ key: 'a' }),
         makeState()
       )).toBeNull()
+    })
+  })
+})
+
+describe('useKeyboardShortcuts (hook integration)', () => {
+  function makeDeps(overrides?: Partial<{
+    editingId: string | null
+    canEdit: boolean
+    selectedIds: Set<string>
+    activeGroupId: string | null
+    activeTool: string | null
+    vertexEditId: string | null
+    anySelectedLocked: boolean
+  }>) {
+    return {
+      editingId: null as string | null,
+      canEdit: true,
+      selectedIds: new Set<string>(['r1']),
+      activeGroupId: null as string | null,
+      activeTool: null as string | null,
+      vertexEditId: null as string | null,
+      anySelectedLocked: false,
+      onDelete: vi.fn(),
+      onDuplicate: vi.fn(),
+      onCopy: vi.fn(),
+      onPaste: vi.fn(),
+      onGroup: vi.fn(),
+      onUngroup: vi.fn(),
+      onClearSelection: vi.fn(),
+      onExitGroup: vi.fn(),
+      onCancelTool: vi.fn(),
+      onUndo: vi.fn(),
+      onRedo: vi.fn(),
+      onExitVertexEdit: vi.fn(),
+      onBringToFront: vi.fn(),
+      onBringForward: vi.fn(),
+      onSendBackward: vi.fn(),
+      onSendToBack: vi.fn(),
+      onCancelDraw: vi.fn(),
+      onEscapeContextMenu: vi.fn(),
+      ...overrides,
+    }
+  }
+
+  function dispatchKeyDown(options: { key: string; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }) {
+    const event = new KeyboardEvent('keydown', {
+      key: options.key,
+      ctrlKey: options.ctrlKey ?? false,
+      metaKey: options.metaKey ?? false,
+      shiftKey: options.shiftKey ?? false,
+      bubbles: true,
+    })
+    window.dispatchEvent(event)
+    return event
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  describe('Delete/Backspace', () => {
+    it('calls onDelete when Delete is pressed', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'Delete' })
+      expect(deps.onDelete).toHaveBeenCalledTimes(1)
+    })
+
+    it('calls onDelete when Backspace is pressed', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'Backspace' })
+      expect(deps.onDelete).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not call onDelete when editingId is set', () => {
+      const deps = makeDeps({ editingId: 'editing-1' })
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'Delete' })
+      expect(deps.onDelete).not.toHaveBeenCalled()
+    })
+
+    it('does not call onDelete when canEdit is false', () => {
+      const deps = makeDeps({ canEdit: false })
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'Delete' })
+      expect(deps.onDelete).not.toHaveBeenCalled()
+    })
+
+    it('does not call onDelete when selection is locked', () => {
+      const deps = makeDeps({ anySelectedLocked: true })
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'Delete' })
+      expect(deps.onDelete).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Ctrl+D / Ctrl+V / Ctrl+C', () => {
+    it('calls onDuplicate when Ctrl+D is pressed', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'd', ctrlKey: true })
+      expect(deps.onDuplicate).toHaveBeenCalledTimes(1)
+    })
+
+    it('calls onPaste when Ctrl+V is pressed', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'v', ctrlKey: true })
+      expect(deps.onPaste).toHaveBeenCalledTimes(1)
+    })
+
+    it('calls onCopy when Ctrl+C is pressed', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'c', ctrlKey: true })
+      expect(deps.onCopy).toHaveBeenCalledTimes(1)
+    })
+
+    it('works with metaKey (Mac)', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'd', metaKey: true })
+      expect(deps.onDuplicate).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('Ctrl+G / Ctrl+Shift+G', () => {
+    it('calls onGroup when Ctrl+G is pressed', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'g', ctrlKey: true })
+      expect(deps.onGroup).toHaveBeenCalledTimes(1)
+    })
+
+    it('calls onUngroup when Ctrl+Shift+G is pressed', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'g', ctrlKey: true, shiftKey: true })
+      expect(deps.onUngroup).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('Ctrl+Z / Ctrl+Shift+Z', () => {
+    it('calls onUndo when Ctrl+Z is pressed', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'z', ctrlKey: true })
+      expect(deps.onUndo).toHaveBeenCalledTimes(1)
+    })
+
+    it('calls onRedo when Ctrl+Shift+Z is pressed', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'z', ctrlKey: true, shiftKey: true })
+      expect(deps.onRedo).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('z-order shortcuts', () => {
+    it('calls onBringToFront for each selected id when Ctrl+Shift+] is pressed', () => {
+      const deps = makeDeps({ selectedIds: new Set(['r1', 'r2']) })
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: ']', ctrlKey: true, shiftKey: true })
+      expect(deps.onBringToFront).toHaveBeenCalledWith('r1')
+      expect(deps.onBringToFront).toHaveBeenCalledWith('r2')
+    })
+
+    it('calls onBringForward for each selected id when Ctrl+] is pressed', () => {
+      const deps = makeDeps({ selectedIds: new Set(['r1']) })
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: ']', ctrlKey: true })
+      expect(deps.onBringForward).toHaveBeenCalledWith('r1')
+    })
+
+    it('calls onSendToBack for each selected id when Ctrl+Shift+[ is pressed', () => {
+      const deps = makeDeps({ selectedIds: new Set(['r1']) })
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: '[', ctrlKey: true, shiftKey: true })
+      expect(deps.onSendToBack).toHaveBeenCalledWith('r1')
+    })
+
+    it('calls onSendBackward for each selected id when Ctrl+[ is pressed', () => {
+      const deps = makeDeps({ selectedIds: new Set(['r1']) })
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: '[', ctrlKey: true })
+      expect(deps.onSendBackward).toHaveBeenCalledWith('r1')
+    })
+  })
+
+  describe('Escape', () => {
+    it('calls onExitVertexEdit and onEscapeContextMenu when vertexEditId is set', () => {
+      const deps = makeDeps({ vertexEditId: 'v1' })
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'Escape' })
+      expect(deps.onExitVertexEdit).toHaveBeenCalledTimes(1)
+      expect(deps.onEscapeContextMenu).toHaveBeenCalledTimes(1)
+      expect(deps.onCancelTool).not.toHaveBeenCalled()
+      expect(deps.onExitGroup).not.toHaveBeenCalled()
+      expect(deps.onClearSelection).not.toHaveBeenCalled()
+    })
+
+    it('calls onCancelTool, onCancelDraw, and onEscapeContextMenu when activeTool is set', () => {
+      const deps = makeDeps({ activeTool: 'rectangle' })
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'Escape' })
+      expect(deps.onCancelTool).toHaveBeenCalledTimes(1)
+      expect(deps.onCancelDraw).toHaveBeenCalledTimes(1)
+      expect(deps.onEscapeContextMenu).toHaveBeenCalledTimes(1)
+      expect(deps.onExitGroup).not.toHaveBeenCalled()
+      expect(deps.onClearSelection).not.toHaveBeenCalled()
+    })
+
+    it('calls onExitGroup and onEscapeContextMenu when activeGroupId is set', () => {
+      const deps = makeDeps({ activeGroupId: 'g1' })
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'Escape' })
+      expect(deps.onExitGroup).toHaveBeenCalledTimes(1)
+      expect(deps.onEscapeContextMenu).toHaveBeenCalledTimes(1)
+      expect(deps.onClearSelection).not.toHaveBeenCalled()
+    })
+
+    it('calls onClearSelection and onEscapeContextMenu when idle', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'Escape' })
+      expect(deps.onClearSelection).toHaveBeenCalledTimes(1)
+      expect(deps.onEscapeContextMenu).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('unrecognized keys', () => {
+    it('does not call any handler for random keys', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'a' })
+      expect(deps.onDelete).not.toHaveBeenCalled()
+      expect(deps.onDuplicate).not.toHaveBeenCalled()
+      expect(deps.onCopy).not.toHaveBeenCalled()
+      expect(deps.onPaste).not.toHaveBeenCalled()
+      expect(deps.onClearSelection).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('cleanup', () => {
+    it('removes listener on unmount', () => {
+      const deps = makeDeps()
+      const { unmount } = renderHook(() => useKeyboardShortcuts(deps))
+      unmount()
+      dispatchKeyDown({ key: 'Delete' })
+      expect(deps.onDelete).not.toHaveBeenCalled()
     })
   })
 })

@@ -487,6 +487,8 @@ export function Canvas({
   const drawStart = useRef<{ x: number; y: number } | null>(null)
   const isDrawing = useRef(false)
   const [drawPreview, setDrawPreview] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+  const drawIsLineRef = useRef(false)
+  const [linePreview, setLinePreview] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
 
   // Anchor preview state for line/arrow tool hover
   const [hoveredAnchors, setHoveredAnchors] = useState<AnchorPoint[] | null>(null)
@@ -1003,6 +1005,7 @@ export function Canvas({
 
       drawStart.current = { x: sx, y: sy }
       isDrawing.current = true
+      drawIsLineRef.current = (activeTool === 'line' || activeTool === 'arrow')
       setDrawPreview({ x: sx, y: sy, width: 0, height: 0 })
       return
     }
@@ -1047,7 +1050,7 @@ export function Canvas({
         if (shapeId) {
           const obj = objectsRef.current.get(shapeId)
           if (obj && !isVectorType(obj.type) && obj.type !== 'group') {
-            const anchors = getShapeAnchors(obj)
+            const anchors = getShapeAnchors(obj).filter(a => a.id !== 'center')
             setHoveredAnchors(anchors.length > 0 ? anchors : null)
           } else {
             setHoveredAnchors(null)
@@ -1076,7 +1079,7 @@ export function Canvas({
         if (shapeId) {
           const obj = objectsRef.current.get(shapeId)
           if (obj && !isVectorType(obj.type) && obj.type !== 'group') {
-            const anchors = getShapeAnchors(obj)
+            const anchors = getShapeAnchors(obj).filter(a => a.id !== 'center')
             const nearest = findNearestAnchor(anchors, canvasX, canvasY, 30)
             if (nearest) {
               setConnectorHint({ shapeId, anchor: nearest })
@@ -1098,11 +1101,17 @@ export function Canvas({
     if (isDrawing.current && drawStart.current) {
       const cx = snapToGridEnabledRef.current ? snapToGrid(canvasX, gridSizeRef.current, gridSubdivisionsRef.current) : canvasX
       const cy = snapToGridEnabledRef.current ? snapToGrid(canvasY, gridSizeRef.current, gridSubdivisionsRef.current) : canvasY
-      const x = Math.min(drawStart.current.x, cx)
-      const y = Math.min(drawStart.current.y, cy)
-      const width = Math.abs(cx - drawStart.current.x)
-      const height = Math.abs(cy - drawStart.current.y)
-      setDrawPreview({ x, y, width, height })
+      if (drawIsLineRef.current) {
+        setLinePreview({ x1: drawStart.current.x, y1: drawStart.current.y, x2: cx, y2: cy })
+        setDrawPreview(null)
+      } else {
+        const x = Math.min(drawStart.current.x, cx)
+        const y = Math.min(drawStart.current.y, cy)
+        const width = Math.abs(cx - drawStart.current.x)
+        const height = Math.abs(cy - drawStart.current.y)
+        setDrawPreview({ x, y, width, height })
+        setLinePreview(null)
+      }
       return
     }
 
@@ -1121,7 +1130,7 @@ export function Canvas({
   const handleStageMouseUp = useCallback(() => {
     onActivity?.()
     // Finalize draw-to-create (or connector hint drawing)
-    const effectiveTool = connectorHintDrawingRef.current ? 'arrow' as BoardObjectType : activeTool
+    const effectiveTool = connectorHintDrawingRef.current ? 'line' as BoardObjectType : activeTool
     if (isDrawing.current && drawStart.current && effectiveTool && onDrawShape) {
       const stage = stageRef.current
       const pos = stage?.getPointerPosition()
@@ -1156,7 +1165,9 @@ export function Canvas({
       drawStart.current = null
       drawSnapStartRef.current = null
       connectorHintDrawingRef.current = false
+      drawIsLineRef.current = false
       setDrawPreview(null)
+      setLinePreview(null)
       setHoveredAnchors(null)
       drawJustCompletedRef.current = true
       return
@@ -1791,7 +1802,7 @@ export function Canvas({
             />
           ))}
 
-          {/* Draw-to-create preview rectangle */}
+          {/* Draw-to-create preview rectangle (non-line shapes) */}
           {drawPreview && drawPreview.width > 0 && drawPreview.height > 0 && (
             <KonvaRect
               x={drawPreview.x}
@@ -1802,6 +1813,17 @@ export function Canvas({
               stroke="#6366F1"
               strokeWidth={1.5}
               dash={[6, 3]}
+              listening={false}
+            />
+          )}
+
+          {/* Draw-to-create preview line (line/arrow/connector) */}
+          {linePreview && (
+            <KonvaLine
+              points={[linePreview.x1, linePreview.y1, linePreview.x2, linePreview.y2]}
+              stroke="#6366F1"
+              strokeWidth={1.5 / stageScale}
+              dash={[6 / stageScale, 3 / stageScale]}
               listening={false}
             />
           )}
@@ -1946,6 +1968,7 @@ export function Canvas({
               y: connectorHint.anchor.y,
             }
             connectorHintDrawingRef.current = true
+            drawIsLineRef.current = true
             setConnectorHint(null)
             drawStart.current = { x: connectorHint.anchor.x, y: connectorHint.anchor.y }
             isDrawing.current = true
@@ -1956,7 +1979,9 @@ export function Canvas({
               drawStart.current = null
               drawSnapStartRef.current = null
               connectorHintDrawingRef.current = false
+              drawIsLineRef.current = false
               setDrawPreview(null)
+              setLinePreview(null)
               window.removeEventListener('mouseup', cleanup)
             }
             window.addEventListener('mouseup', cleanup, { once: true })

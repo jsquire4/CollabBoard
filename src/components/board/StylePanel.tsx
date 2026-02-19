@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
 const STROKE_COLOR_SWATCHES = [
@@ -43,6 +43,7 @@ interface StylePanelProps {
   onShadowChange: (updates: { shadow_blur?: number; shadow_color?: string; shadow_offset_x?: number; shadow_offset_y?: number }) => void
   onCornerRadiusChange?: (corner_radius: number) => void
   compact?: boolean
+  dark?: boolean
 }
 
 export function StylePanel({
@@ -58,24 +59,52 @@ export function StylePanel({
   onShadowChange,
   onCornerRadiusChange,
   compact,
+  dark = false,
 }: StylePanelProps) {
+  const dk = dark
   const [showPopover, setShowPopover] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
 
   useClickOutside(popoverRef, showPopover, () => setShowPopover(false))
+
+  useEffect(() => {
+    if (!compact || !showPopover || !btnRef.current) return
+    const rect = btnRef.current.getBoundingClientRect()
+    const top = rect.top
+    const left = rect.right + 8
+    setPopoverPos({ top, left })
+    const rafId = requestAnimationFrame(() => {
+      const panel = popoverRef.current
+      if (!panel) return
+      const panelRect = panel.getBoundingClientRect()
+      if (panelRect.bottom > window.innerHeight - 8) {
+        setPopoverPos({ top: Math.max(8, window.innerHeight - panelRect.height - 8), left })
+      }
+    })
+    return () => cancelAnimationFrame(rafId)
+  }, [compact, showPopover])
+
+  const sectionLabel = `mb-1 text-xs font-medium ${dk ? 'text-slate-400' : 'text-slate-500'}`
+  const subLabel = `mb-1 text-xs ${dk ? 'text-slate-500' : 'text-slate-400'}`
+  const valueLabelSm = `text-right text-xs ${dk ? 'text-slate-400' : 'text-slate-500'}`
+  const rangeTrack = `h-1 w-full cursor-pointer appearance-none rounded accent-indigo-600 ${dk ? 'bg-slate-700' : 'bg-slate-200'}`
+  const presetActive = 'bg-indigo-100 text-indigo-700'
+  const presetInactive = dk ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
 
   const content = (
     <div className="w-56 space-y-3 p-3">
       {/* Outline section */}
       <div>
-        <div className="mb-1 text-xs font-medium text-slate-500">Outline</div>
+        <div className={sectionLabel}>Outline</div>
         <div className="flex flex-wrap gap-1 mb-2">
           <button
             type="button"
             onClick={() => onStrokeStyleChange({ stroke_color: null })}
-            className={`h-6 w-6 rounded-full border-2 border-slate-300 transition hover:scale-110 flex items-center justify-center ${
-              !strokeColor ? 'ring-2 ring-slate-700 ring-offset-1' : ''
-            }`}
+            className={`h-6 w-6 rounded-full border-2 transition hover:scale-110 flex items-center justify-center ${
+              dk ? 'border-slate-600' : 'border-slate-300'
+            } ${!strokeColor ? (dk ? 'ring-2 ring-slate-400 ring-offset-1 ring-offset-slate-900' : 'ring-2 ring-slate-700 ring-offset-1') : ''}`}
             title="No outline"
           >
             <span className="text-xs text-red-400 font-bold">/</span>
@@ -86,9 +115,11 @@ export function StylePanel({
               type="button"
               onClick={() => onStrokeStyleChange({ stroke_color: color })}
               className={`h-6 w-6 rounded-full transition hover:scale-110 ${
-                color === '#FFFFFF' ? 'border border-slate-300' : ''
+                color === '#FFFFFF' ? (dk ? 'border border-slate-600' : 'border border-slate-300') : ''
               } ${
-                color === strokeColor ? 'ring-2 ring-slate-700 ring-offset-1' : ''
+                color === strokeColor
+                  ? (dk ? 'ring-2 ring-slate-400 ring-offset-1 ring-offset-slate-900' : 'ring-2 ring-slate-700 ring-offset-1')
+                  : ''
               }`}
               style={{ backgroundColor: color }}
               title={color}
@@ -97,7 +128,7 @@ export function StylePanel({
         </div>
         {strokeColor && (
           <>
-            <div className="mb-1 text-xs text-slate-400">Weight</div>
+            <div className={subLabel}>Weight</div>
             <div className="flex flex-wrap gap-1 mb-2">
               {STROKE_PRESETS.map((p) => (
                 <button
@@ -105,16 +136,14 @@ export function StylePanel({
                   type="button"
                   onClick={() => onStrokeStyleChange({ stroke_width: p.width })}
                   className={`rounded px-2 py-0.5 text-xs font-medium transition ${
-                    strokeWidth === p.width
-                      ? 'bg-indigo-100 text-indigo-700'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    strokeWidth === p.width ? presetActive : presetInactive
                   }`}
                 >
                   {p.label}
                 </button>
               ))}
             </div>
-            <div className="mb-1 text-xs text-slate-400">Style</div>
+            <div className={subLabel}>Style</div>
             <div className="flex flex-wrap gap-1">
               {DASH_PRESETS.map((p) => (
                 <button
@@ -122,9 +151,7 @@ export function StylePanel({
                   type="button"
                   onClick={() => onStrokeStyleChange({ stroke_dash: p.dash })}
                   className={`rounded px-2 py-0.5 text-xs font-medium transition ${
-                    strokeDash === p.dash
-                      ? 'bg-indigo-100 text-indigo-700'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    strokeDash === p.dash ? presetActive : presetInactive
                   }`}
                 >
                   {p.label}
@@ -137,7 +164,7 @@ export function StylePanel({
 
       {/* Shadow section */}
       <div>
-        <div className="mb-1 text-xs font-medium text-slate-500">Shadow</div>
+        <div className={sectionLabel}>Shadow</div>
         <div className="flex items-center gap-2">
           <input
             type="range"
@@ -146,15 +173,15 @@ export function StylePanel({
             step="1"
             value={shadowBlur}
             onChange={(e) => onShadowChange({ shadow_blur: Number(e.target.value) })}
-            className="h-1 w-full cursor-pointer appearance-none rounded bg-slate-200 accent-indigo-600"
+            className={rangeTrack}
           />
-          <span className="min-w-[24px] text-right text-xs text-slate-500">{shadowBlur}</span>
+          <span className={`min-w-[24px] ${valueLabelSm}`}>{shadowBlur}</span>
         </div>
       </div>
 
       {/* Opacity section */}
       <div>
-        <div className="mb-1 text-xs font-medium text-slate-500">Opacity</div>
+        <div className={sectionLabel}>Opacity</div>
         <div className="flex items-center gap-2 mb-1">
           <input
             type="range"
@@ -163,9 +190,9 @@ export function StylePanel({
             step="0.05"
             value={opacity}
             onChange={(e) => onOpacityChange(Number(e.target.value))}
-            className="h-1 w-full cursor-pointer appearance-none rounded bg-slate-200 accent-indigo-600"
+            className={rangeTrack}
           />
-          <span className="min-w-[32px] text-right text-xs text-slate-500">{Math.round(opacity * 100)}%</span>
+          <span className={`min-w-[32px] ${valueLabelSm}`}>{Math.round(opacity * 100)}%</span>
         </div>
         <div className="flex flex-wrap gap-1">
           {OPACITY_PRESETS.map((p) => (
@@ -174,9 +201,7 @@ export function StylePanel({
               type="button"
               onClick={() => onOpacityChange(p.value)}
               className={`rounded px-2 py-0.5 text-xs font-medium transition ${
-                Math.abs(opacity - p.value) < 0.01
-                  ? 'bg-indigo-100 text-indigo-700'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                Math.abs(opacity - p.value) < 0.01 ? presetActive : presetInactive
               }`}
             >
               {p.label}
@@ -188,7 +213,7 @@ export function StylePanel({
       {/* Corner radius section */}
       {showCornerRadius && onCornerRadiusChange && (
         <div>
-          <div className="mb-1 text-xs font-medium text-slate-500">Corner Radius</div>
+          <div className={sectionLabel}>Corner Radius</div>
           <div className="flex items-center gap-2">
             <input
               type="range"
@@ -197,9 +222,9 @@ export function StylePanel({
               step="1"
               value={cornerRadius}
               onChange={(e) => onCornerRadiusChange(Number(e.target.value))}
-              className="h-1 w-full cursor-pointer appearance-none rounded bg-slate-200 accent-indigo-600"
+              className={rangeTrack}
             />
-            <span className="min-w-[24px] text-right text-xs text-slate-500">{cornerRadius}</span>
+            <span className={`min-w-[24px] ${valueLabelSm}`}>{cornerRadius}</span>
           </div>
         </div>
       )}
@@ -208,17 +233,18 @@ export function StylePanel({
 
   if (compact) {
     return (
-      <div className="relative" ref={popoverRef}>
+      <div ref={popoverRef}>
         <button
+          ref={btnRef}
           type="button"
           onClick={() => setShowPopover(!showPopover)}
           aria-label="Style options"
           aria-expanded={showPopover}
           aria-haspopup="dialog"
-          className="flex h-10 w-10 flex-col items-center justify-center rounded-lg transition hover:bg-slate-100"
+          className={`flex h-10 w-10 flex-col items-center justify-center rounded-lg transition ${dk ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}
           title="Style"
         >
-          <svg className="h-5 w-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className={`h-5 w-5 ${dk ? 'text-slate-400' : 'text-slate-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
           </svg>
         </button>
@@ -226,7 +252,8 @@ export function StylePanel({
           <div
             role="dialog"
             aria-label="Style options"
-            className="absolute left-full top-0 z-50 ml-2 rounded-xl border border-slate-200 bg-white shadow-xl"
+            className={`fixed z-[200] rounded-xl border shadow-xl ${dk ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}
+            style={{ top: popoverPos.top, left: popoverPos.left }}
           >
             {content}
           </div>
@@ -235,5 +262,9 @@ export function StylePanel({
     )
   }
 
-  return <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-lg">{content}</div>
+  return (
+    <div className={`rounded-xl border p-3 shadow-lg ${dk ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}>
+      {content}
+    </div>
+  )
 }

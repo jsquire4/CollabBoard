@@ -298,6 +298,7 @@ export function LeftToolbar({
                   onShadowChange={onShadowChange}
                   onCornerRadiusChange={onCornerRadiusChange}
                   compact
+                  dark={dk}
                 />
               )}
               <Divider dark={dk} />

@@ -56,6 +56,7 @@ function makeDeps(overrides?: Record<string, unknown>) {
     setShapePalette: vi.fn(),
     shapePalette: null as { lineId: string; canvasX: number; canvasY: number; screenX?: number; screenY?: number } | null,
     autoRoutePointsRef: { current: new Map<string, number[]>() },
+    waitForPersist: vi.fn(() => Promise.resolve(true)),
     ...overrides,
   }
 }
@@ -335,28 +336,28 @@ describe('useConnectorActions', () => {
   })
 
   describe('handlePaletteShapeSelect', () => {
-    it('does nothing when canEdit is false', () => {
+    it('does nothing when canEdit is false', async () => {
       const deps = makeDeps({
         canEdit: false,
         shapePalette: { lineId: 'l1', canvasX: 200, canvasY: 200, screenX: 100, screenY: 100 },
       })
       const { result } = renderHook(() => useConnectorActions(deps))
 
-      act(() => result.current.handlePaletteShapeSelect('rectangle'))
+      await act(async () => result.current.handlePaletteShapeSelect('rectangle'))
 
       expect(deps.addObject).not.toHaveBeenCalled()
     })
 
-    it('does nothing when shapePalette is null', () => {
+    it('does nothing when shapePalette is null', async () => {
       const deps = makeDeps({ shapePalette: null })
       const { result } = renderHook(() => useConnectorActions(deps))
 
-      act(() => result.current.handlePaletteShapeSelect('rectangle'))
+      await act(async () => result.current.handlePaletteShapeSelect('rectangle'))
 
       expect(deps.addObject).not.toHaveBeenCalled()
     })
 
-    it('creates a new shape via addObject and pushes undo entry', () => {
+    it('creates a new shape via addObject and pushes undo entry', async () => {
       const newShape = makeRectangle({ id: 'new-shape', x: 140, y: 140, width: 120, height: 120 })
       const addObject = vi.fn(() => newShape)
       const line = makeLine({ id: 'l1', x: 50, y: 50, x2: 200, y2: 200 })
@@ -367,7 +368,7 @@ describe('useConnectorActions', () => {
       })
       const { result } = renderHook(() => useConnectorActions(deps))
 
-      act(() => result.current.handlePaletteShapeSelect('rectangle'))
+      await act(async () => result.current.handlePaletteShapeSelect('rectangle'))
 
       // Should create shape centered on canvasX/canvasY: x = 200 - 120/2 = 140, y = 200 - 120/2 = 140
       expect(addObject).toHaveBeenCalledWith('rectangle', 140, 140, { width: 120, height: 120 })
@@ -377,7 +378,7 @@ describe('useConnectorActions', () => {
       expect(deps.setShapePalette).toHaveBeenCalledWith(null)
     })
 
-    it('updates connector endpoint when nearest anchor is found and pushes update undo entry', () => {
+    it('updates connector endpoint when nearest anchor is found and pushes update undo entry', async () => {
       const newShape = makeRectangle({ id: 'new-shape', x: 140, y: 140, width: 120, height: 120 })
       const addObject = vi.fn(() => newShape)
       const line = makeLine({ id: 'l1', x: 50, y: 50, x2: 200, y2: 200, connect_end_id: null, connect_end_anchor: null })
@@ -388,7 +389,7 @@ describe('useConnectorActions', () => {
       })
       const { result } = renderHook(() => useConnectorActions(deps))
 
-      act(() => result.current.handlePaletteShapeSelect('rectangle'))
+      await act(async () => result.current.handlePaletteShapeSelect('rectangle'))
 
       // The mock getShapeAnchors returns anchors for the new shape:
       // top: (200, 140), bottom: (200, 260), left: (140, 200), right: (260, 200)

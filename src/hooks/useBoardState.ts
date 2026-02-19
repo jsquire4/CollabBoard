@@ -97,6 +97,14 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
   const [objects, setObjects] = useState<Map<string, BoardObject>>(new Map())
   const objectsRef = useRef<Map<string, BoardObject>>(objects)
   useEffect(() => { objectsRef.current = objects }, [objects])
+
+  // Track in-flight insert promises so callers can await persistence before
+  // setting FK references (e.g. connect_end_id on a connector pointing at a
+  // shape that was just created).
+  const persistPromisesRef = useRef<Map<string, Promise<boolean>>>(new Map())
+  const waitForPersist = useCallback((id: string): Promise<boolean> => {
+    return persistPromisesRef.current.get(id) ?? Promise.resolve(true)
+  }, [])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
   const [remoteSelections, setRemoteSelections] = useState<Map<string, Set<string>>>(new Map())
@@ -585,19 +593,23 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     const insertRow = CRDT_ENABLED
       ? { ...insertData, id: obj.id, field_clocks: fieldClocksRef.current.get(id) ?? {} }
       : { ...insertData, id: obj.id }
-    supabase
+    const insertPromise = Promise.resolve(supabase
       .from('board_objects')
       .insert(insertRow)
       .then(({ error }) => {
+        persistPromisesRef.current.delete(id)
         if (error) {
           console.error('Failed to save object:', error.message)
           // Rollback optimistic update
           setObjects(prev => { const next = new Map(prev); next.delete(id); return next })
           fieldClocksRef.current.delete(id)
+          return false
         } else {
           queueBroadcast([{ action: 'create', object: obj, clocks }])
+          return true
         }
-      })
+      }))
+    persistPromisesRef.current.set(id, insertPromise)
 
     return obj
   }, [userId, boardId, canEdit, getMaxZIndex, queueBroadcast, stampCreate])
@@ -1617,5 +1629,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     isObjectLocked,
     lockObject,
     unlockObject,
+    waitForPersist,
   }
 }

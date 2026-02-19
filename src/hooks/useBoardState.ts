@@ -7,18 +7,14 @@ import { BoardObject, BoardObjectType } from '@/types/board'
 import { BoardRole } from '@/types/sharing'
 import { createClient } from '@/lib/supabase/client'
 import { OnlineUser } from '@/hooks/usePresence'
-import { HLC, createHLC, tickHLC, receiveHLC, hlcGreaterThan } from '@/lib/crdt/hlc'
-import { FieldClocks, mergeFields, mergeClocks, stampFields, shouldDeleteWin } from '@/lib/crdt/merge'
+import { HLC, createHLC, tickHLC, hlcGreaterThan } from '@/lib/crdt/hlc'
+import { FieldClocks, mergeClocks } from '@/lib/crdt/merge'
 import { shapeRegistry } from '@/components/board/shapeRegistry'
+import { useBroadcast, BoardChange } from '@/hooks/board/useBroadcast'
+export { coalesceBroadcastQueue } from '@/hooks/board/useBroadcast'
+export type { BoardChange } from '@/hooks/board/useBroadcast'
 
 const CRDT_ENABLED = process.env.NEXT_PUBLIC_CRDT_ENABLED === 'true'
-
-interface BoardChange {
-  action: 'create' | 'update' | 'delete'
-  object: Partial<BoardObject> & { id: string }
-  timestamp?: number
-  clocks?: FieldClocks
-}
 
 const COLOR_PALETTE = ['#FFEB3B', '#FF9800', '#E91E63', '#9C27B0', '#2196F3', '#4CAF50']
 
@@ -40,58 +36,6 @@ const BOARD_OBJECT_SELECT = CRDT_ENABLED
   : BOARD_OBJECT_COLUMNS
 
 const SELECTION_BROADCAST_DEBOUNCE_MS = 50
-const BROADCAST_IDLE_MS = 5    // flush quickly if no burst follows
-const BROADCAST_MAX_MS = 50    // ceiling for burst batching
-const BROADCAST_WARN_BYTES = 50 * 1024  // warn when payload exceeds 50KB
-const BROADCAST_MAX_BYTES = 64 * 1024   // Supabase Realtime limit ~64KB
-
-/**
- * Coalesces a queue of broadcast changes from a single user within a batch window.
- * Deduplicates updates to the same object ID (merges partial updates), preserving
- * create/delete ordering. Isolated as a pure function so it can be swapped for
- * CRDT-aware merge logic later.
- */
-export function coalesceBroadcastQueue(pending: BoardChange[]): BoardChange[] {
-  const result: BoardChange[] = []
-  const seen = new Map<string, number>() // object id -> index in result
-
-  for (const change of pending) {
-    const id = change.object.id
-    const existingIdx = seen.get(id)
-
-    if (change.action === 'delete') {
-      // If there's a prior create for this id, remove it entirely
-      if (existingIdx !== undefined && result[existingIdx]?.action === 'create') {
-        result[existingIdx] = undefined as unknown as BoardChange // mark for removal
-        seen.delete(id)
-      } else if (existingIdx !== undefined) {
-        // Replace any prior update with delete
-        result[existingIdx] = change
-      } else {
-        seen.set(id, result.length)
-        result.push(change)
-      }
-    } else if (change.action === 'update' && existingIdx !== undefined) {
-      const existing = result[existingIdx]
-      if (existing && (existing.action === 'update' || existing.action === 'create')) {
-        // Merge partial updates, merging clocks when both carry them
-        result[existingIdx] = {
-          ...existing,
-          object: { ...existing.object, ...change.object },
-          timestamp: change.timestamp ?? existing.timestamp,
-          clocks: existing.clocks && change.clocks
-            ? mergeClocks(existing.clocks, change.clocks)
-            : change.clocks ?? existing.clocks,
-        }
-      }
-    } else {
-      seen.set(id, result.length)
-      result.push(change)
-    }
-  }
-
-  return result.filter(Boolean)
-}
 
 export function useBoardState(userId: string, boardId: string, userRole: BoardRole = 'viewer', channel?: RealtimeChannel | null, onlineUsers?: OnlineUser[]) {
   const [objects, setObjects] = useState<Map<string, BoardObject>>(new Map())
@@ -226,227 +170,10 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     await loadObjects()
   }, [boardId, loadObjects])
 
-  // Broadcast helper — sends changes to other clients.
-  // Only send when the WebSocket is connected to avoid the REST fallback.
-  // Monitors payload size and chunks if it exceeds the Supabase Realtime limit.
-  const broadcastChanges = useCallback((changes: BoardChange[]) => {
-    if (!channel) return
-    if ((channel as unknown as { state: string }).state !== 'joined') return
-
-    // sender_id is self-reported by the client. The channel uses `private: true`
-    // so only authenticated users can join, but a malicious client could still
-    // spoof another user's ID. This only affects cosmetic display (cursor color,
-    // remote selection label) — all data mutations go through Supabase RLS.
-    const payload = { changes, sender_id: userId }
-    const serialized = JSON.stringify(payload)
-    const byteSize = new TextEncoder().encode(serialized).byteLength
-
-    if (byteSize <= BROADCAST_MAX_BYTES) {
-      if (byteSize > BROADCAST_WARN_BYTES) {
-        console.warn(`Broadcast payload near limit: ${(byteSize / 1024).toFixed(1)}KB`)
-      }
-      channel.send({ type: 'broadcast', event: 'board:sync', payload })
-    } else {
-      // Chunk: split changes into smaller payloads that fit under the limit
-      const chunks: BoardChange[][] = []
-      let current: BoardChange[] = []
-      let currentSize = 0
-      // Overhead for the wrapper: {"changes":[],"sender_id":"..."}
-      const overhead = new TextEncoder().encode(JSON.stringify({ changes: [], sender_id: userId })).byteLength
-
-      for (const change of changes) {
-        const changeSize = new TextEncoder().encode(JSON.stringify(change)).byteLength + 1 // +1 for comma
-        if (current.length > 0 && currentSize + changeSize + overhead > BROADCAST_MAX_BYTES) {
-          chunks.push(current)
-          current = []
-          currentSize = 0
-        }
-        current.push(change)
-        currentSize += changeSize
-      }
-      if (current.length > 0) chunks.push(current)
-
-      console.warn(`Broadcast payload ${(byteSize / 1024).toFixed(1)}KB exceeds limit, splitting into ${chunks.length} chunks`)
-      for (const chunk of chunks) {
-        channel.send({
-          type: 'broadcast',
-          event: 'board:sync',
-          payload: { changes: chunk, sender_id: userId },
-        })
-      }
-    }
-  }, [channel, userId])
-
-  // Broadcast batching: coalesce outbound changes with flush-on-idle strategy.
-  // A short idle timer (5ms) flushes quickly for single changes; a max timer (50ms)
-  // caps latency during bursts.
-  const pendingBroadcastRef = useRef<BoardChange[]>([])
-  const broadcastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const broadcastIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const flushBroadcast = useCallback(() => {
-    if (broadcastTimerRef.current) { clearTimeout(broadcastTimerRef.current); broadcastTimerRef.current = null }
-    if (broadcastIdleTimerRef.current) { clearTimeout(broadcastIdleTimerRef.current); broadcastIdleTimerRef.current = null }
-    if (pendingBroadcastRef.current.length === 0) return
-    const coalesced = coalesceBroadcastQueue(pendingBroadcastRef.current)
-    pendingBroadcastRef.current = []
-    if (coalesced.length > 0) {
-      broadcastChanges(coalesced)
-    }
-  }, [broadcastChanges])
-
-  const queueBroadcast = useCallback((changes: BoardChange[]) => {
-    const stamped = changes.map(c => ({ ...c, timestamp: c.timestamp ?? Date.now() }))
-    pendingBroadcastRef.current.push(...stamped)
-
-    // Clear any existing idle timer
-    if (broadcastIdleTimerRef.current) {
-      clearTimeout(broadcastIdleTimerRef.current)
-    }
-
-    // Set the max timer once per batch window
-    if (!broadcastTimerRef.current) {
-      broadcastTimerRef.current = setTimeout(flushBroadcast, BROADCAST_MAX_MS)
-    }
-
-    // Set a short idle timer — flushes early if no more changes arrive
-    broadcastIdleTimerRef.current = setTimeout(flushBroadcast, BROADCAST_IDLE_MS)
-  }, [flushBroadcast])
-
-  // CRDT helper: tick clock, stamp changed fields, record clocks locally.
-  // Returns the stamped clocks (or undefined if CRDT is disabled).
-  const stampChange = useCallback((objectId: string, changedFields: string[]): FieldClocks | undefined => {
-    if (!CRDT_ENABLED) return undefined
-    hlcRef.current = tickHLC(hlcRef.current)
-    const clocks = stampFields(changedFields, hlcRef.current)
-    const existing = fieldClocksRef.current.get(objectId)
-    fieldClocksRef.current.set(objectId, existing ? mergeClocks(existing, clocks) : clocks)
-    return clocks
-  }, [])
-
-  // CRDT helper: stamp all fields of a new object
-  const stampCreate = useCallback((objectId: string, obj: Partial<BoardObject>): FieldClocks | undefined => {
-    if (!CRDT_ENABLED) return undefined
-    hlcRef.current = tickHLC(hlcRef.current)
-    const fields = Object.keys(obj).filter(k => k !== 'id' && k !== 'board_id' && k !== 'created_by' && k !== 'created_at' && k !== 'updated_at')
-    const clocks = stampFields(fields, hlcRef.current)
-    fieldClocksRef.current.set(objectId, clocks)
-    return clocks
-  }, [])
-
-  // Cleanup broadcast and receive timers on unmount
-  useEffect(() => {
-    return () => {
-      if (broadcastTimerRef.current) {
-        clearTimeout(broadcastTimerRef.current)
-        broadcastTimerRef.current = null
-      }
-      if (broadcastIdleTimerRef.current) {
-        clearTimeout(broadcastIdleTimerRef.current)
-        broadcastIdleTimerRef.current = null
-      }
-      if (incomingTimerRef.current) {
-        clearTimeout(incomingTimerRef.current)
-        incomingTimerRef.current = null
-      }
-    }
-  }, [])
-
-  // Listen for incoming object sync broadcasts.
-  // Receive-side batching: collect incoming changes over a short window (10ms)
-  // and apply them in a single setObjects call to reduce render churn.
-  const incomingBatchRef = useRef<BoardChange[]>([])
-  const incomingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const RECEIVE_BATCH_MS = 10
-
-  const applyIncomingBatch = useCallback(() => {
-    incomingTimerRef.current = null
-    const batch = incomingBatchRef.current
-    if (batch.length === 0) return
-    incomingBatchRef.current = []
-
-    setObjects(prev => {
-      const next = new Map(prev)
-      for (const change of batch) {
-        switch (change.action) {
-          case 'create':
-            next.set(change.object.id, change.object as BoardObject)
-            if (CRDT_ENABLED && change.clocks) {
-              const existing = fieldClocksRef.current.get(change.object.id)
-              fieldClocksRef.current.set(
-                change.object.id,
-                existing ? mergeClocks(existing, change.clocks) : change.clocks
-              )
-            }
-            break
-          case 'update': {
-            const existing = next.get(change.object.id)
-            if (!existing) break
-
-            if (CRDT_ENABLED && change.clocks) {
-              const localClocks = fieldClocksRef.current.get(change.object.id) ?? {}
-              const { merged, clocks: newClocks, changed } = mergeFields(
-                existing as unknown as Record<string, unknown>,
-                localClocks,
-                change.object as unknown as Record<string, unknown>,
-                change.clocks,
-              )
-              if (changed) {
-                next.set(change.object.id, merged as unknown as BoardObject)
-                fieldClocksRef.current.set(change.object.id, newClocks)
-              }
-            } else {
-              next.set(change.object.id, { ...existing, ...change.object })
-            }
-            break
-          }
-          case 'delete': {
-            if (CRDT_ENABLED && change.clocks?._deleted) {
-              const objectClocks = fieldClocksRef.current.get(change.object.id) ?? {}
-              if (shouldDeleteWin(change.clocks._deleted, objectClocks)) {
-                next.delete(change.object.id)
-              }
-            } else {
-              next.delete(change.object.id)
-              fieldClocksRef.current.delete(change.object.id)
-            }
-            break
-          }
-        }
-      }
-      return next
-    })
-  }, [])
-
-  useEffect(() => {
-    if (!channel) return
-
-    const handler = ({ payload }: { payload: { changes: BoardChange[]; sender_id: string } }) => {
-      if (payload.sender_id === userId) return
-
-      // Advance local HLC from any remote clocks (synchronous, safe outside batch)
-      if (CRDT_ENABLED) {
-        for (const change of payload.changes) {
-          if (change.clocks) {
-            for (const remoteClock of Object.values(change.clocks)) {
-              hlcRef.current = receiveHLC(hlcRef.current, remoteClock)
-            }
-          }
-        }
-      }
-
-      // Collect into batch; flush after short coalescing window
-      incomingBatchRef.current.push(...payload.changes)
-      if (!incomingTimerRef.current) {
-        incomingTimerRef.current = setTimeout(applyIncomingBatch, RECEIVE_BATCH_MS)
-      }
-    }
-
-    channel.on('broadcast', { event: 'board:sync' }, handler)
-
-    // No cleanup needed — Supabase channel listeners are removed when the
-    // channel itself is removed (in useRealtimeChannel's cleanup).
-  }, [channel, userId, applyIncomingBatch])
+  // Broadcast batching + CRDT stamping (extracted to useBroadcast)
+  const { queueBroadcast, flushBroadcast, stampChange, stampCreate } = useBroadcast({
+    channel, userId, setObjects, fieldClocksRef, hlcRef,
+  })
 
   // Helper: get max z_index
   const getMaxZIndex = useCallback(() => {

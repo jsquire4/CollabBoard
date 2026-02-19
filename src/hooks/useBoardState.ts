@@ -225,6 +225,10 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     if (!channel) return
     if ((channel as unknown as { state: string }).state !== 'joined') return
 
+    // sender_id is self-reported by the client. The channel uses `private: true`
+    // so only authenticated users can join, but a malicious client could still
+    // spoof another user's ID. This only affects cosmetic display (cursor color,
+    // remote selection label) — all data mutations go through Supabase RLS.
     const payload = { changes, sender_id: userId }
     const serialized = JSON.stringify(payload)
     const byteSize = new TextEncoder().encode(serialized).byteLength

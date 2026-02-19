@@ -500,7 +500,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
       preDragRef.current = new Map()
     }
 
-    // Check frame containment for lines/arrows after drag
+    // Deferred to next tick so React commits the position update first —
+    // checkFrameContainment reads final coordinates from the objects Map.
     setTimeout(() => checkFrameContainment(id), 0)
   }, [canEdit, updateObjectDragEnd, undoStack, checkFrameContainment, computeAllAnchors, resolveSnap, markActivity])
 

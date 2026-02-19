@@ -12,14 +12,15 @@ export async function fetchBoardsGrouped(): Promise<{
   if (!user) return { myBoards: [], sharedWithMe: [] }
 
   // Accept any pending invites for this user's email
-  await acceptPendingInvites(user.id, user.email!)
+  if (user.email) {
+    await acceptPendingInvites(user.id, user.email)
+  }
 
   // Fetch boards with role via board_members join
   const { data, error } = await supabase
     .from('board_members')
     .select('role, boards(id, name, created_by, created_at, updated_at)')
     .eq('user_id', user.id)
-    .order('added_at', { ascending: false })
     .limit(200)
 
   if (error) {
@@ -93,13 +94,15 @@ async function acceptPendingInvites(userId: string, email: string) {
       logger.warn({ message: 'Failed to accept invite', operation: 'acceptPendingInvites', userId, error: upsertError })
     }
 
-    // Delete the invite
-    const { error: deleteError } = await supabase
-      .from('board_invites')
-      .delete()
-      .eq('id', invite.id)
-    if (deleteError) {
-      logger.warn({ message: 'Failed to delete processed invite', operation: 'acceptPendingInvites', userId, error: deleteError })
+    if (!upsertError) {
+      // Delete the invite
+      const { error: deleteError } = await supabase
+        .from('board_invites')
+        .delete()
+        .eq('id', invite.id)
+      if (deleteError) {
+        logger.warn({ message: 'Failed to delete processed invite', operation: 'acceptPendingInvites', userId, error: deleteError })
+      }
     }
   }
 }

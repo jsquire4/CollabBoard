@@ -22,10 +22,16 @@ export async function retryWithRollback({
   logError,
   maxRetries = 2,
 }: RetryOptions): Promise<boolean> {
+  let lastError: { message: string } | undefined
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    const result = await operation()
-    if (!result.error) return true
-    logError?.(result.error, attempt)
+    try {
+      const result = await operation()
+      if (!result.error) return true
+      lastError = result.error
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err))
+    }
+    logError?.(lastError!, attempt)
     if (attempt < maxRetries) {
       // Brief pause before retry
       await new Promise(r => setTimeout(r, 200 * attempt))

@@ -16,6 +16,9 @@ import { useGroupActions } from '@/hooks/board/useGroupActions'
 import { useClipboardActions } from '@/hooks/board/useClipboardActions'
 import { useConnectorActions } from '@/hooks/board/useConnectorActions'
 import { createClient } from '@/lib/supabase/client'
+import { fireAndRetry } from '@/lib/retryWithRollback'
+import { logger } from '@/lib/logger'
+import { toast } from 'sonner'
 import { BoardObject, BoardObjectType } from '@/types/board'
 import { BoardRole } from '@/types/sharing'
 import { BoardTopBar } from './BoardTopBar'
@@ -135,6 +138,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const supabaseRef = useRef(createClient())
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connected')
 
+  const notify = useCallback((msg: string) => toast.error(msg), [])
+
   const updateBoardSettings = useCallback((updates: { grid_size?: number; grid_subdivisions?: number; grid_visible?: boolean; snap_to_grid?: boolean; grid_style?: string; canvas_color?: string; grid_color?: string; subdivision_color?: string }) => {
     if (updates.grid_size !== undefined) setGridSize(updates.grid_size)
     if (updates.grid_subdivisions !== undefined) setGridSubdivisions(updates.grid_subdivisions)
@@ -144,9 +149,13 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     if (updates.canvas_color !== undefined) setCanvasColor(updates.canvas_color)
     if (updates.grid_color !== undefined) setGridColor(updates.grid_color)
     if (updates.subdivision_color !== undefined) setSubdivisionColor(updates.subdivision_color)
-    // Persist to DB (fire-and-forget)
-    supabaseRef.current.from('boards').update(updates).eq('id', boardId).then()
-  }, [boardId])
+    // Persist to DB (fire-and-forget with retry)
+    fireAndRetry({
+      operation: () => supabaseRef.current.from('boards').update(updates).eq('id', boardId),
+      logError: (err) => logger.error({ message: 'Failed to save board settings', operation: 'updateBoardSettings', boardId, error: err }),
+      onError: (msg) => notify(msg),
+    })
+  }, [boardId, notify])
 
   const undoStack = useUndoStack()
   const MAX_RECENT_COLORS = 6
@@ -177,7 +186,9 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     if (!channel) return
 
     const attemptReconnect = () => {
-      if (reconnectAttemptRef.current >= MAX_RECONNECT_ATTEMPTS) {
+      // Bug 3 fix: increment first, then guard — so all MAX_RECONNECT_ATTEMPTS fire
+      reconnectAttemptRef.current += 1
+      if (reconnectAttemptRef.current > MAX_RECONNECT_ATTEMPTS) {
         setConnectionStatus('disconnected')
         return
       }
@@ -187,9 +198,10 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         reconnectTimerRef.current = null
       }
       setConnectionStatus('reconnecting')
-      const delay = Math.min(1000 * Math.pow(2, reconnectAttemptRef.current), 16000)
-      reconnectAttemptRef.current += 1
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttemptRef.current - 1), 16000)
       reconnectTimerRef.current = setTimeout(() => {
+        // Bug 1 fix: unsubscribe first to transition 'errored' → 'closed' before re-subscribing
+        channel.unsubscribe()
         channel.subscribe()
       }, delay)
     }
@@ -209,12 +221,15 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           hasConnectedRef.current = true
         }
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        setConnectionStatus('disconnected')
+        // Bug 4 fix: go straight to reconnecting — skip the transient 'disconnected' state
+        // 'disconnected' is only set inside attemptReconnect when all attempts are exhausted
         attemptReconnect()
       }
     })
 
     return () => {
+      // Bug 2 fix: unsubscribe the channel to prevent stacked callbacks on effect re-runs
+      channel.unsubscribe()
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current)
         reconnectTimerRef.current = null

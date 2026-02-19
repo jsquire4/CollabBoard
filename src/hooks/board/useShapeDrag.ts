@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import Konva from 'konva'
+import { BoardObject } from '@/types/board'
 import { useBoardContext } from '@/contexts/BoardContext'
 import { snapToGrid } from '@/components/board/shapeUtils'
 import { shapeRegistry } from '@/components/board/shapeRegistry'
@@ -11,6 +12,7 @@ interface UseShapeDragDeps {
   stageRef: React.RefObject<Konva.Stage | null>
   stagePos: { x: number; y: number }
   stageScale: number
+  objectsRef: React.RefObject<Map<string, BoardObject>>
   onDragStart?: (id: string) => void
   onDragEnd: (id: string, x: number, y: number) => void
   onDragMove?: (id: string, x: number, y: number) => void
@@ -21,10 +23,11 @@ interface UseShapeDragDeps {
 
 export function useShapeDrag({
   shapeRefs, stageRef, stagePos, stageScale,
+  objectsRef,
   onDragStart: onDragStartProp, onDragEnd, onDragMove, onMoveGroupChildren,
   onCheckFrameContainment, onCursorMove,
 }: UseShapeDragDeps) {
-  const { objects, canEdit, snapToGrid: snapToGridEnabled, gridSize, gridSubdivisions } = useBoardContext()
+  const { canEdit, snapToGrid: snapToGridEnabled, gridSize, gridSubdivisions } = useBoardContext()
 
   // Grid snap dragBoundFunc — passed to shapes for Konva-level drag constraint
   const shapeDragBoundFunc = useMemo(() => {
@@ -43,7 +46,7 @@ export function useShapeDrag({
   // Handle drag move: update local state + broadcast, no DB write
   const handleShapeDragMove = useCallback((id: string, x: number, y: number) => {
     if (!canEdit || !onDragMove) return
-    const obj = objects.get(id)
+    const obj = objectsRef.current.get(id)
     if (!obj) return
 
     // Apply grid snapping if enabled
@@ -82,16 +85,33 @@ export function useShapeDrag({
     if (obj.type === 'frame') {
       onMoveGroupChildren(id, dx, dy, true)
     }
-  }, [canEdit, objects, onDragMove, onMoveGroupChildren, onCursorMove, stagePos, stageScale, snapToGridEnabled, gridSize, gridSubdivisions, shapeRefs, stageRef])
+  }, [canEdit, objectsRef, onDragMove, onMoveGroupChildren, onCursorMove, stagePos, stageScale, snapToGridEnabled, gridSize, gridSubdivisions, shapeRefs, stageRef])
+
+  // Timeout ref for deferred frame-containment check — cleared on unmount
+  const dragEndTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    return () => {
+      if (dragEndTimeoutRef.current !== null) {
+        clearTimeout(dragEndTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // Handle drag end with frame containment check and group child movement
   const handleShapeDragEnd = useCallback((id: string, x: number, y: number) => {
     if (!canEdit) return
-    const obj = objects.get(id)
+    const obj = objectsRef.current.get(id)
     if (!obj) return
 
-    const finalX = snapToGridEnabled ? snapToGrid(x, gridSize, gridSubdivisions) : x
-    const finalY = snapToGridEnabled ? snapToGrid(y, gridSize, gridSubdivisions) : y
+    const def = shapeRegistry.get(obj.type)
+    const rawX = snapToGridEnabled ? snapToGrid(x, gridSize, gridSubdivisions) : x
+    const rawY = snapToGridEnabled ? snapToGrid(y, gridSize, gridSubdivisions) : y
+
+    // centerOrigin shapes (e.g. circles) store top-left position but Konva
+    // reports the centre as the drag coordinate — subtract the offset to align
+    // with the stored coordinate system, matching the correction in handleShapeDragMove.
+    const finalX = def?.centerOrigin ? rawX - obj.width / 2 : rawX
+    const finalY = def?.centerOrigin ? rawY - obj.height / 2 : rawY
 
     const dx = finalX - obj.x
     const dy = finalY - obj.y
@@ -105,9 +125,15 @@ export function useShapeDrag({
 
     // Check frame containment for non-frame objects
     if (obj.type !== 'frame' && obj.type !== 'group') {
-      setTimeout(() => onCheckFrameContainment(id), 0)
+      if (dragEndTimeoutRef.current !== null) {
+        clearTimeout(dragEndTimeoutRef.current)
+      }
+      dragEndTimeoutRef.current = setTimeout(() => {
+        dragEndTimeoutRef.current = null
+        onCheckFrameContainment(id)
+      }, 0)
     }
-  }, [canEdit, objects, onDragEnd, onMoveGroupChildren, onCheckFrameContainment, snapToGridEnabled, gridSize, gridSubdivisions])
+  }, [canEdit, objectsRef, onDragEnd, onMoveGroupChildren, onCheckFrameContainment, snapToGridEnabled, gridSize, gridSubdivisions])
 
   return { handleShapeDragStart, handleShapeDragMove, handleShapeDragEnd, shapeDragBoundFunc }
 }

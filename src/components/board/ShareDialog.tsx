@@ -93,7 +93,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
         }, { onConflict: 'board_id,user_id' })
 
       if (error) {
-        setInviteStatus(`Error: ${error.message}`)
+        setInviteStatus('Failed to send invite. Please try again.')
       } else {
         setInviteStatus(`Added ${email} as ${inviteRole}`)
         setInviteEmail('')
@@ -116,7 +116,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
         }, { onConflict: 'board_id,email' })
 
       if (error) {
-        setInviteStatus(`Error: ${error.message}`)
+        setInviteStatus('Failed to send invite. Please try again.')
       } else {
         setInviteStatus(`Invited ${email} (pending signup)`)
         setInviteEmail('')
@@ -126,6 +126,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
   }
 
   async function handleRoleChange(memberId: string, memberUserId: string, newRole: BoardRole) {
+    if (userRole !== 'owner' && userRole !== 'manager') return
     // Ownership transfer
     if (newRole === 'owner') {
       setTransferTarget(memberId)
@@ -161,6 +162,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
   }
 
   async function handleRemoveMember(memberId: string) {
+    if (userRole !== 'owner' && userRole !== 'manager') return
     const { error } = await supabase
       .from('board_members')
       .delete()
@@ -174,6 +176,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
   }
 
   async function handleDeleteInvite(inviteId: string) {
+    if (userRole !== 'owner' && userRole !== 'manager') return
     const { error } = await supabase
       .from('board_invites')
       .delete()
@@ -237,7 +240,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
         : 'bg-transparent text-slate-600 hover:bg-slate-100'
     }`
 
-  const getRoleOptions = (currentRole: BoardRole) => {
+  const getRoleOptions = () => {
     const options = [...ROLE_OPTIONS]
     if (isOwner) {
       options.unshift({ value: 'owner', label: 'Owner (transfer)' })
@@ -307,7 +310,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                             onChange={e => handleRoleChange(member.id, member.user_id, e.target.value as BoardRole)}
                             className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
                           >
-                            {getRoleOptions(member.role).map(opt => (
+                            {getRoleOptions().map(opt => (
                               <option key={opt.value} value={opt.value}>{opt.label}</option>
                             ))}
                           </select>

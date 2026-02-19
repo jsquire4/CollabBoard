@@ -172,6 +172,7 @@ export function Canvas({
 
   const { handleShapeDragStart, handleShapeDragMove, handleShapeDragEnd, shapeDragBoundFunc } = useShapeDrag({
     shapeRefs, stageRef, stagePos, stageScale,
+    objectsRef,
     onDragStart: onDragStartProp, onDragEnd, onDragMove,
     onMoveGroupChildren, onCheckFrameContainment, onCursorMove,
   })

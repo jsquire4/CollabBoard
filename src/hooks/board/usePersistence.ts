@@ -112,7 +112,7 @@ export function usePersistence({
     if (CRDT_ENABLED) {
       fieldClocksRef.current = clocksMap
     }
-  }, [boardId])
+  }, [boardId, log, notify])
 
   // ── Reconcile on reconnect (CRDT Phase 3) ─────────────────────
 
@@ -182,7 +182,7 @@ export function usePersistence({
     }
 
     await loadObjects()
-  }, [boardId, loadObjects])
+  }, [boardId, loadObjects, log])
 
   // ── Add ─────────────────────────────────────────────────────────
 
@@ -526,6 +526,10 @@ export function usePersistence({
             : { ...childInsert, id: obj.id }
           fireAndRetry({
             operation: () => supabase.from('board_objects').insert(childRow),
+            rollback: () => {
+              setObjects(prev => { const next = new Map(prev); next.delete(obj.id); return next })
+            },
+            onError: () => notify('Failed to duplicate'),
             logError: (err) => log.error({ message: 'Failed to save duplicated child', operation: 'duplicateObject', objectId: obj.id, error: err }),
           })
         }
@@ -560,7 +564,7 @@ export function usePersistence({
         if (error) log.warn({ message: 'Failed to update z_index', operation: 'persistZIndexBatch', error })
       }
     })
-  }, [])
+  }, [log])
 
   // ── Drag (no DB) ──────────────────────────────────────────────
 
@@ -641,6 +645,12 @@ export function usePersistence({
       } catch { return null }
     }
 
+    // Capture rollback snapshot BEFORE the optimistic update (descendants holds pre-move state)
+    const snapshot = new Map<string, BoardObject>()
+    for (const d of descendants) {
+      snapshot.set(d.id, { ...d })
+    }
+
     for (const d of descendants) {
       const hasEndpoints = d.x2 != null && d.y2 != null
       const fields = hasEndpoints ? ['x', 'y', 'x2', 'y2'] : ['x', 'y']
@@ -670,11 +680,19 @@ export function usePersistence({
     queueBroadcast(changes)
 
     if (!skipDb) {
+      // Build an id -> change lookup so the DB patch uses the same final values
+      // computed in the changes array (avoids re-deriving from potentially stale d.x / d.y)
+      const changeById = new Map<string, Partial<BoardObject> & { id: string }>()
+      for (const c of changes) {
+        changeById.set(c.object.id, c.object as Partial<BoardObject> & { id: string })
+      }
+
       Promise.all(descendants.map(d => {
-        const patch: Record<string, unknown> = { x: d.x + dx, y: d.y + dy, updated_at: now }
-        if (d.x2 != null) patch.x2 = d.x2 + dx
-        if (d.y2 != null) patch.y2 = d.y2 + dy
-        if (d.waypoints) patch.waypoints = translateWaypoints(d.waypoints)
+        const change = changeById.get(d.id)!
+        const patch: Record<string, unknown> = { x: change.x, y: change.y, updated_at: now }
+        if (change.x2 != null) patch.x2 = change.x2
+        if (change.y2 != null) patch.y2 = change.y2
+        if (change.waypoints !== undefined) patch.waypoints = change.waypoints
         if (CRDT_ENABLED) {
           patch.field_clocks = fieldClocksRef.current.get(d.id) ?? {}
           patch.deleted_at = null
@@ -686,6 +704,12 @@ export function usePersistence({
           for (const { error } of results) {
             if (error) log.error({ message: 'Failed to update child position', operation: 'moveGroupChildren', error })
           }
+          // Rollback optimistic update on DB failure
+          setObjects(prev => {
+            const next = new Map(prev)
+            for (const [sid, obj] of snapshot) next.set(sid, obj)
+            return next
+          })
           notify('Failed to save group move')
         }
       })

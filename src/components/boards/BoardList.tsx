@@ -149,6 +149,12 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
           const { error: chunkError } = await supabase.from('board_objects').insert(copies.slice(i, i + CHUNK_SIZE))
           if (chunkError) {
             toast.error('Failed to duplicate board objects')
+            try {
+              await supabase.from('board_objects').delete().eq('board_id', newBoard.id)
+              await supabase.from('boards').delete().eq('id', newBoard.id)
+            } catch {
+              // Cleanup failed — orphaned board may remain
+            }
             return
           }
         }

@@ -11,6 +11,7 @@ import { HLC, createHLC, tickHLC } from '@/lib/crdt/hlc'
 import { FieldClocks } from '@/lib/crdt/merge'
 import { useBroadcast, BoardChange, CRDT_ENABLED } from '@/hooks/board/useBroadcast'
 import { usePersistence } from '@/hooks/board/usePersistence'
+import { fireAndRetry } from '@/lib/retryWithRollback'
 import { useRemoteSelection } from '@/hooks/board/useRemoteSelection'
 import { toast } from 'sonner'
 import { createBoardLogger } from '@/lib/logger'
@@ -467,19 +468,31 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       })),
     ])
 
+    // Rollback helper: undo the optimistic setObjects for this group operation
+    const rollbackGroup = () => {
+      setObjects(prev => {
+        const next = new Map(prev)
+        next.delete(groupId)
+        for (const obj of selectedObjs) {
+          const existing = next.get(obj.id)
+          if (existing) next.set(obj.id, { ...existing, parent_id: obj.parent_id, updated_at: obj.updated_at })
+        }
+        return next
+      })
+    }
+
     // Persist: insert group first, then update children
     const { id: _id, created_at: _ca, updated_at: _ua, field_clocks: _fc, deleted_at: _da, ...insertData } = groupObj
     const insertRow = CRDT_ENABLED
       ? { ...insertData, id: groupId, field_clocks: fieldClocksRef.current.get(groupId) ?? {} }
       : { ...insertData, id: groupId }
-    const { error: insertError } = await supabase
-      .from('board_objects')
-      .insert(insertRow)
-    if (insertError) {
-      log.error({ message: 'Failed to save group', operation: 'groupSelected', objectId: groupId, error: insertError })
-      notify('Failed to create group')
-      return null
-    }
+    const groupInsertOk = await fireAndRetry({
+      operation: () => supabase.from('board_objects').insert(insertRow),
+      rollback: rollbackGroup,
+      onError: () => notify('Failed to create group'),
+      logError: (err) => log.error({ message: 'Failed to save group', operation: 'groupSelected', objectId: groupId, error: err }),
+    })
+    if (!groupInsertOk) return null
 
     await Promise.all(selectedObjs.map(obj => {
       const childUpdate: Record<string, unknown> = { parent_id: groupId, updated_at: now }
@@ -487,16 +500,19 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
         childUpdate.field_clocks = fieldClocksRef.current.get(obj.id) ?? {}
         childUpdate.deleted_at = null
       }
-      return supabase
-        .from('board_objects')
-        .update(childUpdate)
-        .eq('id', obj.id)
-        .then(({ error }: { error: { message: string } | null }) => {
-          if (error) {
-            log.error({ message: 'Failed to update child parent_id', operation: 'groupSelected', error })
-            notify('Failed to update group member')
-          }
-        })
+      return fireAndRetry({
+        operation: () => supabase.from('board_objects').update(childUpdate).eq('id', obj.id),
+        rollback: () => {
+          setObjects(prev => {
+            const next = new Map(prev)
+            const existing = next.get(obj.id)
+            if (existing) next.set(obj.id, { ...existing, parent_id: obj.parent_id, updated_at: obj.updated_at })
+            return next
+          })
+        },
+        onError: () => notify('Failed to update group member'),
+        logError: (err) => log.error({ message: 'Failed to update child parent_id', operation: 'groupSelected', error: err }),
+      })
     }))
 
     return groupObj
@@ -517,33 +533,34 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
         return next
       })
 
+      // Rollback: restore the group object if the DB operation fails
+      const rollbackUngroup = () => {
+        setObjects(prev => {
+          const next = new Map(prev)
+          next.set(id, obj)
+          return next
+        })
+      }
+
       if (CRDT_ENABLED) {
         hlcRef.current = tickHLC(hlcRef.current)
         const deleteClock = hlcRef.current
         queueBroadcast([{ action: 'delete', object: { id } as BoardObject, clocks: { _deleted: deleteClock } }])
-        supabase
-          .from('board_objects')
-          .update({ deleted_at: new Date().toISOString() })
-          .eq('id', id)
-          .then(({ error }: { error: { message: string } | null }) => {
-            if (error) {
-              log.error({ message: 'Failed to soft-delete group', operation: 'ungroupSelected', objectId: id, error })
-              notify('Failed to ungroup')
-            }
-          })
+        fireAndRetry({
+          operation: () => supabase.from('board_objects').update({ deleted_at: new Date().toISOString() }).eq('id', id),
+          rollback: rollbackUngroup,
+          onError: () => notify('Failed to ungroup'),
+          logError: (err) => log.error({ message: 'Failed to soft-delete group', operation: 'ungroupSelected', objectId: id, error: err }),
+        })
       } else {
         fieldClocksRef.current.delete(id)
         queueBroadcast([{ action: 'delete', object: { id } as BoardObject }])
-        supabase
-          .from('board_objects')
-          .delete()
-          .eq('id', id)
-          .then(({ error }: { error: { message: string } | null }) => {
-            if (error) {
-              log.error({ message: 'Failed to delete group', operation: 'ungroupSelected', objectId: id, error })
-              notify('Failed to ungroup')
-            }
-          })
+        fireAndRetry({
+          operation: () => supabase.from('board_objects').delete().eq('id', id),
+          rollback: rollbackUngroup,
+          onError: () => notify('Failed to ungroup'),
+          logError: (err) => log.error({ message: 'Failed to delete group', operation: 'ungroupSelected', objectId: id, error: err }),
+        })
       }
     }
     setSelectedIds(new Set())

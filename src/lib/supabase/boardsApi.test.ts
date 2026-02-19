@@ -25,7 +25,7 @@ function chain(resolveValue: { data?: unknown; error?: { message: string } | nul
   const c = {
     select: vi.fn(() => c),
     eq: vi.fn(() => c),
-    order: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve(resolveValue)) })),
+    order: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve(resolveValue)) })),  // kept for generic chain
     single: vi.fn(() => Promise.resolve(resolveValue)),
     upsert: vi.fn(() => Promise.resolve({})),
     delete: vi.fn(() => c),
@@ -61,7 +61,7 @@ describe('boardsApi', () => {
           return {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
-                order: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve({ data: null, error: { message: 'DB error' } })) })),
+                limit: vi.fn(() => Promise.resolve({ data: null, error: { message: 'DB error' } })),
               })),
             })),
           }
@@ -119,7 +119,7 @@ describe('boardsApi', () => {
           return {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
-                order: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve({ data: boardData, error: null })) })),
+                limit: vi.fn(() => Promise.resolve({ data: boardData, error: null })),
               })),
             })),
           }
@@ -170,7 +170,7 @@ describe('boardsApi', () => {
           return {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
-                order: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve({ data: boardData, error: null })) })),
+                limit: vi.fn(() => Promise.resolve({ data: boardData, error: null })),
               })),
             })),
           }
@@ -204,23 +204,21 @@ describe('boardsApi', () => {
           return {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
-                order: vi.fn(() => ({
-                  limit: vi.fn(() => Promise.resolve({
-                    data: [
-                      { role: 'owner', boards: null },
-                      {
-                        role: 'owner',
-                        boards: {
-                          id: 'b1',
-                          name: 'Valid',
-                          created_by: 'u1',
-                          created_at: '2026-01-01T00:00:00Z',
-                          updated_at: '2026-01-01T00:00:00Z',
-                        },
+                limit: vi.fn(() => Promise.resolve({
+                  data: [
+                    { role: 'owner', boards: null },
+                    {
+                      role: 'owner',
+                      boards: {
+                        id: 'b1',
+                        name: 'Valid',
+                        created_by: 'u1',
+                        created_at: '2026-01-01T00:00:00Z',
+                        updated_at: '2026-01-01T00:00:00Z',
                       },
-                    ],
-                    error: null,
-                  })),
+                    },
+                  ],
+                  error: null,
                 })),
               })),
             })),
@@ -289,7 +287,7 @@ describe('boardsApi', () => {
           return {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
-                order: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve({ data: boardData, error: null })) })),
+                limit: vi.fn(() => Promise.resolve({ data: boardData, error: null })),
               })),
             })),
             upsert: vi.fn(() => Promise.resolve({})),
@@ -382,7 +380,7 @@ describe('boardsApi', () => {
           return {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
-                order: vi.fn(() => ({ limit: limitFn })),
+                limit: limitFn,
               })),
             })),
           }

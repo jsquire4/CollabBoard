@@ -289,6 +289,7 @@ interface CanvasProps {
   onWaypointDragEnd?: (id: string, waypointIndex: number, x: number, y: number) => void
   onWaypointInsert?: (id: string, afterSegmentIndex: number) => void
   onWaypointDelete?: (id: string, waypointIndex: number) => void
+  autoRoutePointsRef?: React.MutableRefObject<Map<string, number[]>>
 }
 
 export function Canvas({
@@ -330,6 +331,7 @@ export function Canvas({
   onWaypointDragEnd,
   onWaypointInsert,
   onWaypointDelete,
+  autoRoutePointsRef,
 }: CanvasProps) {
   const canEdit = userRole !== 'viewer'
   const { stagePos, setStagePos, stageScale, handleWheel, zoomIn, zoomOut, resetZoom } = useCanvas()
@@ -1157,6 +1159,31 @@ export function Canvas({
     return () => ro.disconnect()
   }, [])
 
+  // Auto-route cache: keyed by connector ID, stores { cacheKey, points }.
+  // Recomputes only when the connector or connected shapes' positions change.
+  const autoRouteCacheRef = useRef<Map<string, { key: string; points: number[] | null }>>(new Map())
+
+  const getAutoRoutePoints = useCallback((obj: BoardObject): number[] | null => {
+    // Build a cache key from the connector's relevant fields + connected shape positions
+    const startShape = obj.connect_start_id ? objects.get(obj.connect_start_id) : null
+    const endShape = obj.connect_end_id ? objects.get(obj.connect_end_id) : null
+    const cacheKey = [
+      obj.x, obj.y, obj.x2, obj.y2,
+      obj.connect_start_id, obj.connect_start_anchor,
+      obj.connect_end_id, obj.connect_end_anchor,
+      obj.waypoints,
+      startShape?.x, startShape?.y, startShape?.width, startShape?.height, startShape?.rotation,
+      endShape?.x, endShape?.y, endShape?.width, endShape?.height, endShape?.rotation,
+    ].join(',')
+
+    const cached = autoRouteCacheRef.current.get(obj.id)
+    if (cached && cached.key === cacheKey) return cached.points
+
+    const points = computeAutoRoute(obj, objects)
+    autoRouteCacheRef.current.set(obj.id, { key: cacheKey, points })
+    return points
+  }, [objects])
+
   // Viewport culling: only render objects within the visible canvas area (+ margin)
   const visibleObjects = useMemo(() => {
     const margin = 200 // extra canvas-space pixels to avoid pop-in at edges
@@ -1312,7 +1339,15 @@ export function Canvas({
         )
       case 'line':
       case 'arrow': {
-        const autoRoutePoints = computeAutoRoute(obj, objects)
+        const autoRoutePoints = getAutoRoutePoints(obj)
+        // Populate ref so BoardClient can use auto-route points for waypoint insertion
+        if (autoRoutePointsRef) {
+          if (autoRoutePoints) {
+            autoRoutePointsRef.current.set(obj.id, autoRoutePoints)
+          } else {
+            autoRoutePointsRef.current.delete(obj.id)
+          }
+        }
         return (
           <VectorShape
             key={obj.id}

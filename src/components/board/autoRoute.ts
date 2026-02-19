@@ -13,6 +13,8 @@ export function computeAutoRoute(
   // Only auto-route when both ends are connected and no manual waypoints
   if (!connector.connect_start_id || !connector.connect_end_id) return null
   if (connector.waypoints) return null
+  // Self-loop: both ends on same shape — don't auto-route (produces interior paths)
+  if (connector.connect_start_id === connector.connect_end_id) return null
 
   const startShape = objects.get(connector.connect_start_id)
   const endShape = objects.get(connector.connect_end_id)
@@ -64,10 +66,14 @@ export function computeAutoRoute(
 type Direction = 'up' | 'down' | 'left' | 'right'
 
 function getExitDirection(anchor: { x: number; y: number; id: string }, shape: BoardObject): Direction {
-  const cx = shape.x + shape.width / 2
-  const cy = shape.y + shape.height / 2
+  // Compute rotated center: rotation origin is (shape.x, shape.y), center offset is (w/2, h/2)
+  const rot = ((shape.rotation ?? 0) * Math.PI) / 180
+  const halfW = shape.width / 2
+  const halfH = shape.height / 2
+  const cx = shape.x + halfW * Math.cos(rot) - halfH * Math.sin(rot)
+  const cy = shape.y + halfW * Math.sin(rot) + halfH * Math.cos(rot)
 
-  // Use relative position of anchor to shape center
+  // Use relative position of anchor to rotated shape center
   const dx = anchor.x - cx
   const dy = anchor.y - cy
 

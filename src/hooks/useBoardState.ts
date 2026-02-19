@@ -1303,12 +1303,28 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
 
     const now = new Date().toISOString()
     const changes: BoardChange[] = []
+    // Helper: translate absolute waypoints by (dx, dy)
+    const translateWaypoints = (wp: string | null | undefined): string | null => {
+      if (!wp) return null
+      try {
+        const pts: number[] = JSON.parse(wp)
+        if (!Array.isArray(pts) || pts.length < 2 || pts.length % 2 !== 0) return null
+        const translated: number[] = []
+        for (let i = 0; i < pts.length; i += 2) {
+          translated.push(pts[i] + dx, pts[i + 1] + dy)
+        }
+        return JSON.stringify(translated)
+      } catch { return null }
+    }
+
     for (const d of descendants) {
       const hasEndpoints = d.x2 != null && d.y2 != null
       const fields = hasEndpoints ? ['x', 'y', 'x2', 'y2'] : ['x', 'y']
+      if (d.waypoints) fields.push('waypoints')
       const clocks = stampChange(d.id, fields)
       const update: Partial<BoardObject> & { id: string } = { id: d.id, x: d.x + dx, y: d.y + dy }
       if (hasEndpoints) { update.x2 = d.x2! + dx; update.y2 = d.y2! + dy }
+      if (d.waypoints) { update.waypoints = translateWaypoints(d.waypoints) }
       changes.push({ action: 'update', object: update, clocks })
     }
 
@@ -1320,6 +1336,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
           const updated = { ...existing, x: existing.x + dx, y: existing.y + dy, updated_at: now }
           if (existing.x2 != null) updated.x2 = existing.x2 + dx
           if (existing.y2 != null) updated.y2 = existing.y2 + dy
+          if (existing.waypoints) updated.waypoints = translateWaypoints(existing.waypoints)
           next.set(d.id, updated)
         }
       }
@@ -1333,6 +1350,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
         const patch: Record<string, unknown> = { x: d.x + dx, y: d.y + dy, updated_at: now }
         if (d.x2 != null) patch.x2 = d.x2 + dx
         if (d.y2 != null) patch.y2 = d.y2 + dy
+        if (d.waypoints) patch.waypoints = translateWaypoints(d.waypoints)
         if (CRDT_ENABLED) {
           patch.field_clocks = fieldClocksRef.current.get(d.id) ?? {}
           patch.deleted_at = null

@@ -67,12 +67,11 @@ export const VectorShape = memo(function VectorShape({
   const handleClick = () => onSelect(object.id)
   const handleLineDragStart = () => onDragStart?.(object.id)
 
-  const handleLineDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
-    if (!onEndpointDragMove) return
+  // Shared logic for whole-line drag: compute snapped offset and build updates
+  const computeLineDragUpdates = (e: Konva.KonvaEventObject<DragEvent>): Partial<BoardObject> => {
     const node = e.target
     let offsetX = node.x()
     let offsetY = node.y()
-    // Apply grid snap to the start position, derive snapped offset
     if (dragBoundFunc) {
       const snapped = dragBoundFunc({ x: object.x + offsetX, y: object.y + offsetY })
       offsetX = snapped.x - object.x
@@ -81,62 +80,30 @@ export const VectorShape = memo(function VectorShape({
     node.x(0)
     node.y(0)
 
-    // When whole-dragging a line with waypoints, move all waypoints too
+    const updates: Partial<BoardObject> = {
+      x: object.x + offsetX,
+      y: object.y + offsetY,
+      x2: x2 + offsetX,
+      y2: y2 + offsetY,
+    }
     if (hasManualWaypoints) {
       const newWaypoints: number[] = []
       for (let i = 0; i < manualWaypoints.length; i += 2) {
         newWaypoints.push(manualWaypoints[i] + offsetX, manualWaypoints[i + 1] + offsetY)
       }
-      onEndpointDragMove(object.id, {
-        x: object.x + offsetX,
-        y: object.y + offsetY,
-        x2: x2 + offsetX,
-        y2: y2 + offsetY,
-        waypoints: JSON.stringify(newWaypoints),
-      })
-    } else {
-      onEndpointDragMove(object.id, {
-        x: object.x + offsetX,
-        y: object.y + offsetY,
-        x2: x2 + offsetX,
-        y2: y2 + offsetY,
-      })
+      updates.waypoints = JSON.stringify(newWaypoints)
     }
+    return updates
+  }
+
+  const handleLineDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (!onEndpointDragMove) return
+    onEndpointDragMove(object.id, computeLineDragUpdates(e))
   }
 
   const handleLineDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!onEndpointDragEnd) return
-    const node = e.target
-    let offsetX = node.x()
-    let offsetY = node.y()
-    if (dragBoundFunc) {
-      const snapped = dragBoundFunc({ x: object.x + offsetX, y: object.y + offsetY })
-      offsetX = snapped.x - object.x
-      offsetY = snapped.y - object.y
-    }
-    node.x(0)
-    node.y(0)
-
-    if (hasManualWaypoints) {
-      const newWaypoints: number[] = []
-      for (let i = 0; i < manualWaypoints.length; i += 2) {
-        newWaypoints.push(manualWaypoints[i] + offsetX, manualWaypoints[i + 1] + offsetY)
-      }
-      onEndpointDragEnd(object.id, {
-        x: object.x + offsetX,
-        y: object.y + offsetY,
-        x2: x2 + offsetX,
-        y2: y2 + offsetY,
-        waypoints: JSON.stringify(newWaypoints),
-      })
-    } else {
-      onEndpointDragEnd(object.id, {
-        x: object.x + offsetX,
-        y: object.y + offsetY,
-        x2: x2 + offsetX,
-        y2: y2 + offsetY,
-      })
-    }
+    onEndpointDragEnd(object.id, computeLineDragUpdates(e))
   }
 
   // Start anchor drag (updates x, y — keeps x2/y2 fixed)
@@ -185,9 +152,6 @@ export const VectorShape = memo(function VectorShape({
         shadowOffsetY: isSelected ? 0 : shadowProps.shadowOffsetY,
       }
     : shadowProps
-
-  // Waypoint count (number of intermediate points, not start/end)
-  const waypointCount = hasManualWaypoints ? manualWaypoints.length / 2 : routePoints.length / 2
 
   return (
     <Group
@@ -358,10 +322,20 @@ export const VectorShape = memo(function VectorShape({
       )}
     </Group>
   )
-}, (prev: VectorShapeProps, next: VectorShapeProps) => (
-  prev.object === next.object &&
-  prev.isSelected === next.isSelected &&
-  prev.editable === next.editable &&
-  prev.variant === next.variant &&
-  prev.autoRoutePoints === next.autoRoutePoints
-))
+}, (prev: VectorShapeProps, next: VectorShapeProps) => {
+  if (
+    prev.object !== next.object ||
+    prev.isSelected !== next.isSelected ||
+    prev.editable !== next.editable ||
+    prev.variant !== next.variant
+  ) return false
+  // Shallow array comparison for autoRoutePoints (new array each render)
+  const a = prev.autoRoutePoints
+  const b = next.autoRoutePoints
+  if (a === b) return true
+  if (!a || !b || a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
+})

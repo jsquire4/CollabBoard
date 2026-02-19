@@ -20,7 +20,7 @@ import { GroupBreadcrumb } from './GroupBreadcrumb'
 import { getInitialVertexPoints, isVectorType } from './shapeUtils'
 import { shapeRegistry } from './shapeRegistry'
 import { getShapeAnchors, findNearestAnchor, AnchorPoint } from './anchorPoints'
-import { parseWaypoints } from './autoRoute'
+import { parseWaypoints, computeAutoRoute } from './autoRoute'
 import type { ShapePreset } from './shapePresets'
 import { scaleCustomPoints } from './shapePresets'
 
@@ -42,14 +42,15 @@ const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canv
 function pickBestAnchor(
   connector: BoardObject,
   endpoint: 'start' | 'end',
-  anchors: AnchorPoint[]
+  anchors: AnchorPoint[],
+  otherEndpoint?: { x: number; y: number }
 ): { x: number; y: number; anchorId: string } | null {
   if (anchors.length === 0) return null
   // Self-loop guard: don't re-select if both ends connect to the same shape
   if (connector.connect_start_id && connector.connect_start_id === connector.connect_end_id) return null
-  // Reference = the OTHER endpoint
-  const refX = endpoint === 'start' ? (connector.x2 ?? connector.x + connector.width) : connector.x
-  const refY = endpoint === 'start' ? (connector.y2 ?? connector.y + connector.height) : connector.y
+  // Reference = the OTHER endpoint (use provided coords if available to avoid stale reads)
+  const refX = otherEndpoint?.x ?? (endpoint === 'start' ? (connector.x2 ?? connector.x + connector.width) : connector.x)
+  const refY = otherEndpoint?.y ?? (endpoint === 'start' ? (connector.y2 ?? connector.y + connector.height) : connector.y)
   // Find nearest anchor with no distance limit
   const best = findNearestAnchor(anchors, refX, refY, Infinity)
   if (!best) return null
@@ -174,7 +175,15 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
       return next.length > MAX_RECENT_COLORS ? next.slice(0, MAX_RECENT_COLORS) : next
     })
   }, [])
-  const preDragRef = useRef<Map<string, { x: number; y: number; x2?: number | null; y2?: number | null; parent_id: string | null }>>(new Map())
+  const preDragRef = useRef<Map<string, { x: number; y: number; x2?: number | null; y2?: number | null; parent_id: string | null; waypoints?: string | null; connect_start_id?: string | null; connect_end_id?: string | null; connect_start_anchor?: string | null; connect_end_anchor?: string | null }>>(new Map())
+  // Clear stale preDragRef if drag is interrupted (e.g. window blur mid-drag)
+  useEffect(() => {
+    const handleBlur = () => { preDragRef.current = new Map() }
+    window.addEventListener('blur', handleBlur)
+    return () => window.removeEventListener('blur', handleBlur)
+  }, [])
+  // Auto-route points ref: populated by Canvas during render, used by handleWaypointInsert
+  const autoRoutePointsRef = useRef<Map<string, number[]>>(new Map())
 
   // Subscribe LAST — after all hooks have registered their .on() listeners.
   const hasConnectedRef = useRef(false)
@@ -229,14 +238,19 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         return { type: 'update', patches: inversePatches }
       }
       case 'move': {
-        const inversePatches: { id: string; before: { x: number; y: number; x2?: number | null; y2?: number | null; parent_id: string | null } }[] = []
+        const inversePatches: typeof entry.patches = []
         for (const patch of entry.patches) {
           const current = objects.get(patch.id)
           if (!current) continue
-          inversePatches.push({ id: patch.id, before: { x: current.x, y: current.y, x2: current.x2, y2: current.y2, parent_id: current.parent_id } })
+          inversePatches.push({ id: patch.id, before: { x: current.x, y: current.y, x2: current.x2, y2: current.y2, parent_id: current.parent_id, waypoints: current.waypoints, connect_start_id: current.connect_start_id, connect_end_id: current.connect_end_id, connect_start_anchor: current.connect_start_anchor, connect_end_anchor: current.connect_end_anchor } })
           const updates: Partial<BoardObject> = { x: patch.before.x, y: patch.before.y, parent_id: patch.before.parent_id }
           if (patch.before.x2 !== undefined) updates.x2 = patch.before.x2
           if (patch.before.y2 !== undefined) updates.y2 = patch.before.y2
+          if (patch.before.waypoints !== undefined) updates.waypoints = patch.before.waypoints
+          if (patch.before.connect_start_id !== undefined) updates.connect_start_id = patch.before.connect_start_id
+          if (patch.before.connect_end_id !== undefined) updates.connect_end_id = patch.before.connect_end_id
+          if (patch.before.connect_start_anchor !== undefined) updates.connect_start_anchor = patch.before.connect_start_anchor
+          if (patch.before.connect_end_anchor !== undefined) updates.connect_end_anchor = patch.before.connect_end_anchor
           updateObject(patch.id, updates)
         }
         return { type: 'move', patches: inversePatches }
@@ -355,23 +369,22 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     setActivePreset(null)
   }, [canEdit, addObject, undoStack, activePreset, markActivity, selectObject])
 
-  const handleDragStart = useCallback((id: string) => {
-    if (!canEdit) return
-    markActivity()
-    const obj = objects.get(id)
-    if (!obj) return
-    const map = new Map<string, { x: number; y: number; x2?: number | null; y2?: number | null; parent_id: string | null }>()
-    map.set(id, { x: obj.x, y: obj.y, x2: obj.x2, y2: obj.y2, parent_id: obj.parent_id })
-    if (obj.type === 'frame') {
-      for (const d of getDescendants(id)) {
-        map.set(d.id, { x: d.x, y: d.y, x2: d.x2, y2: d.y2, parent_id: d.parent_id })
+  // --- Connection index: maps shapeId → connectors attached to it ---
+  // Ref-based: only rebuilds when connection fields actually change, not on every position update.
+  const connectionIndexRef = useRef<Map<string, Array<{ connectorId: string; endpoint: 'start' | 'end' }>>>(new Map())
+  const connectionSigRef = useRef('')
+  const connectionIndex = useMemo(() => {
+    // Build a signature from connector IDs + their connection fields
+    const sigParts: string[] = []
+    for (const [id, obj] of objects) {
+      if (!isVectorType(obj.type)) continue
+      if (obj.connect_start_id || obj.connect_end_id) {
+        sigParts.push(`${id}:${obj.connect_start_id ?? ''}:${obj.connect_end_id ?? ''}`)
       }
     }
-    preDragRef.current = map
-  }, [canEdit, objects, getDescendants, markActivity])
+    const sig = sigParts.join('|')
+    if (sig === connectionSigRef.current) return connectionIndexRef.current
 
-  // --- Connection index: maps shapeId → connectors attached to it ---
-  const connectionIndex = useMemo(() => {
     const index = new Map<string, Array<{ connectorId: string; endpoint: 'start' | 'end' }>>()
     for (const [id, obj] of objects) {
       if (!isVectorType(obj.type)) continue
@@ -386,81 +399,112 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         index.set(obj.connect_end_id, list)
       }
     }
+    connectionIndexRef.current = index
+    connectionSigRef.current = sig
     return index
   }, [objects])
+
+  const handleDragStart = useCallback((id: string) => {
+    if (!canEdit) return
+    markActivity()
+    const obj = objects.get(id)
+    if (!obj) return
+    // Merge into existing map — multi-select drag fires handleDragStart per shape
+    const map = preDragRef.current
+    map.set(id, { x: obj.x, y: obj.y, x2: obj.x2, y2: obj.y2, parent_id: obj.parent_id, waypoints: obj.waypoints })
+    if (obj.type === 'frame') {
+      for (const d of getDescendants(id)) {
+        map.set(d.id, { x: d.x, y: d.y, x2: d.x2, y2: d.y2, parent_id: d.parent_id, waypoints: d.waypoints })
+      }
+    }
+    // Also capture connected connectors so their waypoints can be restored on undo
+    if (!isVectorType(obj.type)) {
+      const connections = connectionIndex.get(id)
+      if (connections) {
+        for (const { connectorId } of connections) {
+          if (map.has(connectorId)) continue
+          const conn = objects.get(connectorId)
+          if (!conn) continue
+          map.set(connectorId, { x: conn.x, y: conn.y, x2: conn.x2, y2: conn.y2, parent_id: conn.parent_id, waypoints: conn.waypoints, connect_start_id: conn.connect_start_id, connect_end_id: conn.connect_end_id, connect_start_anchor: conn.connect_start_anchor, connect_end_anchor: conn.connect_end_anchor })
+        }
+      }
+    }
+  }, [canEdit, objects, getDescendants, connectionIndex, markActivity])
+
+  // Helper: update all connectors attached to a shape after it moves/transforms.
+  // commitAnchor=true writes connect_*_anchor on the "best" path (for dragEnd/transformEnd).
+  const followConnectors = useCallback((
+    shapeId: string,
+    anchors: AnchorPoint[],
+    updateFn: (id: string, updates: Partial<BoardObject>) => void,
+    commitAnchor: boolean
+  ) => {
+    const anchorMap = new Map(anchors.map(a => [a.id, a]))
+    const connections = connectionIndex.get(shapeId)
+    if (!connections) return
+    for (const { connectorId, endpoint } of connections) {
+      const connector = objects.get(connectorId)
+      if (!connector) continue
+      // Self-loop connectors: both ends on same shape — update both endpoints using existing anchors
+      if (connector.connect_start_id && connector.connect_start_id === connector.connect_end_id) {
+        const updates: Partial<BoardObject> = { waypoints: null }
+        const startAnchorId = connector.connect_start_anchor
+        const endAnchorId = connector.connect_end_anchor
+        if (startAnchorId) {
+          const a = anchorMap.get(startAnchorId)
+          if (a) { updates.x = a.x; updates.y = a.y }
+        }
+        if (endAnchorId) {
+          const a = anchorMap.get(endAnchorId)
+          if (a) { updates.x2 = a.x; updates.y2 = a.y }
+        }
+        updateFn(connectorId, updates)
+        continue
+      }
+      const otherEnd = endpoint === 'start'
+        ? { x: connector.x2 ?? connector.x + connector.width, y: connector.y2 ?? connector.y + connector.height }
+        : { x: connector.x, y: connector.y }
+      const best = pickBestAnchor(connector, endpoint, anchors, otherEnd)
+      if (!best) {
+        // Fallback to existing anchor
+        const anchorId = endpoint === 'start' ? connector.connect_start_anchor : connector.connect_end_anchor
+        if (!anchorId) continue
+        const anchor = anchorMap.get(anchorId)
+        if (!anchor) continue
+        if (endpoint === 'start') {
+          updateFn(connectorId, { x: anchor.x, y: anchor.y, waypoints: null })
+        } else {
+          updateFn(connectorId, { x2: anchor.x, y2: anchor.y, waypoints: null })
+        }
+      } else if (endpoint === 'start') {
+        const extra: Partial<BoardObject> = commitAnchor ? { connect_start_anchor: best.anchorId } : {}
+        updateFn(connectorId, { x: best.x, y: best.y, waypoints: null, ...extra })
+      } else {
+        const extra: Partial<BoardObject> = commitAnchor ? { connect_end_anchor: best.anchorId } : {}
+        updateFn(connectorId, { x2: best.x, y2: best.y, waypoints: null, ...extra })
+      }
+    }
+  }, [objects, connectionIndex])
 
   const handleDragMove = useCallback((id: string, x: number, y: number) => {
     if (!canEdit) return
     markActivity()
     updateObjectDrag(id, { x, y })
-    // Auto-follow: update connectors attached to this shape
     const obj = objects.get(id)
     if (obj && !isVectorType(obj.type)) {
-      // Compute anchors with the *new* position
-      const movedObj = { ...obj, x, y }
-      const anchors = getShapeAnchors(movedObj)
-      const anchorMap = new Map(anchors.map(a => [a.id, a]))
-      const connections = connectionIndex.get(id)
-      if (connections) {
-        for (const { connectorId, endpoint } of connections) {
-          const connector = objects.get(connectorId)
-          if (!connector) continue
-          const best = pickBestAnchor(connector, endpoint, anchors)
-          if (!best) {
-            // Fallback to existing anchor
-            const anchorId = endpoint === 'start' ? connector.connect_start_anchor : connector.connect_end_anchor
-            if (!anchorId) continue
-            const anchor = anchorMap.get(anchorId)
-            if (!anchor) continue
-            if (endpoint === 'start') {
-              updateObjectDrag(connectorId, { x: anchor.x, y: anchor.y })
-            } else {
-              updateObjectDrag(connectorId, { x2: anchor.x, y2: anchor.y })
-            }
-          } else if (endpoint === 'start') {
-            updateObjectDrag(connectorId, { x: best.x, y: best.y })
-          } else {
-            updateObjectDrag(connectorId, { x2: best.x, y2: best.y })
-          }
-        }
-      }
+      const anchors = getShapeAnchors({ ...obj, x, y })
+      followConnectors(id, anchors, updateObjectDrag, false)
     }
-  }, [canEdit, updateObjectDrag, objects, connectionIndex, markActivity])
+  }, [canEdit, updateObjectDrag, objects, followConnectors, markActivity])
 
   const handleDragEnd = useCallback((id: string, x: number, y: number) => {
     if (!canEdit) return
     markActivity()
     updateObjectDragEnd(id, { x, y })
-    // Auto-follow connectors on drag end — with smart anchor re-selection
     const obj = objects.get(id)
     if (obj && !isVectorType(obj.type)) {
-      const movedObj = { ...obj, x, y }
-      const anchors = getShapeAnchors(movedObj)
-      const anchorMap = new Map(anchors.map(a => [a.id, a]))
-      const connections = connectionIndex.get(id)
-      if (connections) {
-        for (const { connectorId, endpoint } of connections) {
-          const connector = objects.get(connectorId)
-          if (!connector) continue
-          const best = pickBestAnchor(connector, endpoint, anchors)
-          if (!best) {
-            // Fallback to existing anchor
-            const anchorId = endpoint === 'start' ? connector.connect_start_anchor : connector.connect_end_anchor
-            if (!anchorId) continue
-            const anchor = anchorMap.get(anchorId)
-            if (!anchor) continue
-            if (endpoint === 'start') {
-              updateObjectDragEnd(connectorId, { x: anchor.x, y: anchor.y })
-            } else {
-              updateObjectDragEnd(connectorId, { x2: anchor.x, y2: anchor.y })
-            }
-          } else if (endpoint === 'start') {
-            updateObjectDragEnd(connectorId, { x: best.x, y: best.y, connect_start_anchor: best.anchorId })
-          } else {
-            updateObjectDragEnd(connectorId, { x2: best.x, y2: best.y, connect_end_anchor: best.anchorId })
-          }
-        }
-      }
+      const anchors = getShapeAnchors({ ...obj, x, y })
+      followConnectors(id, anchors, updateObjectDragEnd, true)
     }
 
     if (preDragRef.current.size > 0) {
@@ -468,7 +512,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
       undoStack.push({ type: 'move', patches })
       preDragRef.current = new Map()
     }
-  }, [canEdit, updateObjectDragEnd, undoStack, objects, connectionIndex, markActivity])
+  }, [canEdit, updateObjectDragEnd, undoStack, objects, followConnectors, markActivity])
 
   // Compute all anchor points for snap-to-anchor (excludes given connector id)
   const computeAllAnchors = useCallback((excludeId: string): { anchors: AnchorPoint[]; shapeMap: Map<string, { anchors: AnchorPoint[]; obj: BoardObject }> } => {
@@ -539,6 +583,14 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     if (!canEdit) return
     markActivity()
 
+    // Capture pre-mutation state for undo (endpoint circles don't fire onDragStart)
+    if (preDragRef.current.size === 0) {
+      const obj = objects.get(id)
+      if (obj) {
+        preDragRef.current.set(id, { x: obj.x, y: obj.y, x2: obj.x2, y2: obj.y2, parent_id: obj.parent_id, waypoints: obj.waypoints, connect_start_id: obj.connect_start_id, connect_end_id: obj.connect_end_id, connect_start_anchor: obj.connect_start_anchor, connect_end_anchor: obj.connect_end_anchor })
+      }
+    }
+
     const { anchors, shapeMap } = computeAllAnchors(id)
     const hasStart = updates.x !== undefined && updates.y !== undefined
     const hasEnd = updates.x2 != null && updates.y2 != null
@@ -587,7 +639,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     // Deferred to next tick so React commits the position update first —
     // checkFrameContainment reads final coordinates from the objects Map.
     setTimeout(() => checkFrameContainment(id), 0)
-  }, [canEdit, updateObjectDragEnd, undoStack, checkFrameContainment, computeAllAnchors, resolveSnap, markActivity])
+  }, [canEdit, objects, updateObjectDragEnd, undoStack, checkFrameContainment, computeAllAnchors, resolveSnap, markActivity])
 
   const handleUpdateText = useCallback((id: string, text: string) => {
     if (!canEdit) return
@@ -624,37 +676,12 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
       undoStack.push({ type: 'update', patches: [{ id, before }] })
     }
     updateObject(id, updates)
-    // Auto-follow connectors after transform — with smart anchor re-selection
+    // Auto-follow connectors after transform
     if (!isVectorType(obj?.type ?? '')) {
-      const transformedObj = { ...obj!, ...updates }
-      const anchors = getShapeAnchors(transformedObj)
-      const anchorMap = new Map(anchors.map(a => [a.id, a]))
-      const connections = connectionIndex.get(id)
-      if (connections) {
-        for (const { connectorId, endpoint } of connections) {
-          const connector = objects.get(connectorId)
-          if (!connector) continue
-          const best = pickBestAnchor(connector, endpoint, anchors)
-          if (!best) {
-            // Fallback to existing anchor
-            const anchorId = endpoint === 'start' ? connector.connect_start_anchor : connector.connect_end_anchor
-            if (!anchorId) continue
-            const anchor = anchorMap.get(anchorId)
-            if (!anchor) continue
-            if (endpoint === 'start') {
-              updateObject(connectorId, { x: anchor.x, y: anchor.y })
-            } else {
-              updateObject(connectorId, { x2: anchor.x, y2: anchor.y })
-            }
-          } else if (endpoint === 'start') {
-            updateObject(connectorId, { x: best.x, y: best.y, connect_start_anchor: best.anchorId })
-          } else {
-            updateObject(connectorId, { x2: best.x, y2: best.y, connect_end_anchor: best.anchorId })
-          }
-        }
-      }
+      const anchors = getShapeAnchors({ ...obj!, ...updates })
+      followConnectors(id, anchors, updateObject, true)
     }
-  }, [canEdit, objects, updateObject, undoStack, connectionIndex, markActivity])
+  }, [canEdit, objects, updateObject, undoStack, followConnectors, markActivity])
 
   // --- Waypoint CRUD handlers ---
 
@@ -680,20 +707,23 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     if (!obj) return
     const waypoints = parseWaypoints(obj.waypoints)
     const before: Partial<BoardObject> = { waypoints: obj.waypoints }
-    // Build list of all points: start, waypoints, end
+    // Build list of all points: start, intermediate, end
     const x2 = obj.x2 ?? obj.x + obj.width
     const y2 = obj.y2 ?? obj.y + obj.height
-    const allPts: number[] = [obj.x, obj.y, ...waypoints, x2, y2]
+    // Use auto-route points when no manual waypoints exist (fall back to live computation for culled connectors)
+    const intermediate = waypoints.length > 0 ? waypoints : (autoRoutePointsRef.current.get(id) ?? computeAutoRoute(obj, objects) ?? [])
+    const allPts: number[] = [obj.x, obj.y, ...intermediate, x2, y2]
     // afterSegmentIndex is the segment index (0 = start→first, etc.)
     // Insert midpoint of segment at allPts[segIdx*2] → allPts[(segIdx+1)*2]
     const i = afterSegmentIndex * 2
+    if (i + 3 >= allPts.length) return // guard against out-of-bounds
     const midX = (allPts[i] + allPts[i + 2]) / 2
     const midY = (allPts[i + 1] + allPts[i + 3]) / 2
-    const newWaypoints = [...waypoints]
-    // Insert at position afterSegmentIndex (in waypoints array, not allPts)
-    newWaypoints.splice(afterSegmentIndex * 2, 0, midX, midY)
+    // When inserting on an auto-routed connector, materialize all auto-route points as manual waypoints
+    const baseWaypoints = waypoints.length > 0 ? [...waypoints] : [...intermediate]
+    baseWaypoints.splice(afterSegmentIndex * 2, 0, midX, midY)
     undoStack.push({ type: 'update', patches: [{ id, before }] })
-    updateObject(id, { waypoints: JSON.stringify(newWaypoints) })
+    updateObject(id, { waypoints: JSON.stringify(baseWaypoints) })
   }, [canEdit, objects, updateObject, undoStack, markActivity])
 
   const handleWaypointDelete = useCallback((id: string, waypointIndex: number) => {
@@ -1332,6 +1362,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
               onWaypointDragEnd={handleWaypointDragEnd}
               onWaypointInsert={handleWaypointInsert}
               onWaypointDelete={handleWaypointDelete}
+              autoRoutePointsRef={autoRoutePointsRef}
             />
           </CanvasErrorBoundary>
         </div>

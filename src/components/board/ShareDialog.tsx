@@ -95,13 +95,18 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
       }
     } else {
       // User doesn't exist — create a pending invite
+      const currentUser = (await supabase.auth.getUser()).data.user
+      if (!currentUser) {
+        setInviteStatus('Error: Session expired. Please refresh and try again.')
+        return
+      }
       const { error } = await supabase
         .from('board_invites')
         .upsert({
           board_id: boardId,
           email,
           role: inviteRole,
-          invited_by: (await supabase.auth.getUser()).data.user!.id,
+          invited_by: currentUser.id,
         }, { onConflict: 'board_id,email' })
 
       if (error) {

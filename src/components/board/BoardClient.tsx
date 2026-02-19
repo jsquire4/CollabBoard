@@ -189,12 +189,14 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
         return snapshots.length > 0 ? { type: 'delete', objects: snapshots } : null
       }
       case 'group': {
+        const groupSnapshot = objects.get(entry.groupId)
+        if (!groupSnapshot) return null
         for (const childId of entry.childIds) {
           const prevParent = entry.previousParentIds.get(childId) ?? null
           updateObject(childId, { parent_id: prevParent })
         }
         deleteObject(entry.groupId)
-        return { type: 'ungroup', groupSnapshot: objects.get(entry.groupId)!, childIds: entry.childIds }
+        return { type: 'ungroup', groupSnapshot, childIds: entry.childIds }
       }
       case 'ungroup': {
         addObjectWithId(entry.groupSnapshot)
@@ -507,13 +509,9 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     markActivity()
     const obj = objects.get(id)
     if (!obj) return
-    // Enforce character limits: sticky notes unlimited, all other shapes 256
-    const UNLIMITED = new Set(['sticky_note'])
-    let limited = text
-    if (!UNLIMITED.has(obj.type)) {
-      const max = 256
-      limited = text.slice(0, max)
-    }
+    // Enforce character limits: sticky notes 10,000 (matches DB), other shapes 256
+    const max = obj.type === 'sticky_note' ? 10000 : 256
+    const limited = text.slice(0, max)
     updateObject(id, { text: limited })
   }, [canEdit, objects, updateObject, markActivity])
 
@@ -931,7 +929,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
       return obj && shapeRegistry.has(obj.type)
     })
     if (!id) return
-    const obj = objects.get(id)!
+    const obj = objects.get(id)
+    if (!obj) return
     // If shape doesn't have custom_points yet, compute and persist them
     if (!obj.custom_points) {
       const pts = getInitialVertexPoints(obj)

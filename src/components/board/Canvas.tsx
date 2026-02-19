@@ -24,10 +24,10 @@ const TRIPLE_CLICK_TEXT_TYPES = new Set(shapeRegistry.keys())
 const SHAPE_TEXT_CHAR_LIMIT = 256
 const FRAME_TITLE_CHAR_LIMIT = 256
 const STICKY_TITLE_CHAR_LIMIT = 256
-const UNLIMITED_TEXT_TYPES = new Set(['sticky_note'])
+const STICKY_TEXT_CHAR_LIMIT = 10000
 
 function getTextCharLimit(type: string): number | undefined {
-  if (UNLIMITED_TEXT_TYPES.has(type)) return undefined
+  if (type === 'sticky_note') return STICKY_TEXT_CHAR_LIMIT
   if (type === 'frame') return FRAME_TITLE_CHAR_LIMIT
   return SHAPE_TEXT_CHAR_LIMIT
 }

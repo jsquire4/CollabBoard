@@ -94,6 +94,56 @@ describe('autoRoute', () => {
       expect(Array.isArray(waypoints)).toBe(true)
       expect(waypoints!.length).toBeGreaterThanOrEqual(2)
     })
+
+    it('returns L-route for shapes facing each other horizontally', () => {
+      const connector = makeLine({
+        connect_start_id: 'a',
+        connect_end_id: 'b',
+        connect_start_anchor: 'midpoint-1',
+        connect_end_anchor: 'midpoint-3',
+      })
+      const objects = objectsMap(
+        makeRectangle({ id: 'a', x: 0, y: 50, width: 100, height: 100 }),
+        makeRectangle({ id: 'b', x: 300, y: 50, width: 100, height: 100 })
+      )
+      const waypoints = computeAutoRoute(connector, objects)
+      expect(waypoints).not.toBeNull()
+      expect(waypoints!.length).toBe(4)
+      expect(waypoints![0]).toBe(waypoints![2])
+    })
+
+    it('returns L-route for shapes facing each other vertically', () => {
+      const connector = makeLine({
+        connect_start_id: 'a',
+        connect_end_id: 'b',
+        connect_start_anchor: 'midpoint-2',
+        connect_end_anchor: 'midpoint-0',
+      })
+      const objects = objectsMap(
+        makeRectangle({ id: 'a', x: 50, y: 0, width: 100, height: 100 }),
+        makeRectangle({ id: 'b', x: 50, y: 250, width: 100, height: 100 })
+      )
+      const waypoints = computeAutoRoute(connector, objects)
+      expect(waypoints).not.toBeNull()
+      expect(waypoints!.length).toBe(4)
+      expect(waypoints![1]).toBe(waypoints![3])
+    })
+
+    it('returns Z-route for perpendicular shapes', () => {
+      const connector = makeLine({
+        connect_start_id: 'a',
+        connect_end_id: 'b',
+        connect_start_anchor: 'midpoint-1',
+        connect_end_anchor: 'midpoint-0',
+      })
+      const objects = objectsMap(
+        makeRectangle({ id: 'a', x: 0, y: 100, width: 100, height: 100 }),
+        makeRectangle({ id: 'b', x: 200, y: 0, width: 100, height: 100 })
+      )
+      const waypoints = computeAutoRoute(connector, objects)
+      expect(waypoints).not.toBeNull()
+      expect(waypoints!.length).toBe(6)
+    })
   })
 
   describe('snapAngle45', () => {

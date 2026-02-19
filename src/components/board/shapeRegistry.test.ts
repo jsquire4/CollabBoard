@@ -82,4 +82,46 @@ describe('shapeRegistry', () => {
     const pts = def.getPoints!(120, 120, obj)
     expect(pts.length).toBe(10)
   })
+
+  it('triangle getTextInset returns valid rect', () => {
+    const def = shapeRegistry.get('triangle')!
+    const inset = def.getTextInset(100, 90, 4)
+    expect(inset.x).toBeGreaterThanOrEqual(0)
+    expect(inset.y).toBeGreaterThanOrEqual(0)
+    expect(inset.width).toBeGreaterThanOrEqual(0)
+    expect(inset.height).toBeGreaterThanOrEqual(0)
+  })
+
+  it('chevron getTextInset returns valid rect', () => {
+    const def = shapeRegistry.get('chevron')!
+    const inset = def.getTextInset(100, 87, 4)
+    expect(inset.x).toBeGreaterThanOrEqual(0)
+    expect(inset.y).toBeGreaterThanOrEqual(0)
+    expect(inset.width).toBeGreaterThanOrEqual(0)
+    expect(inset.height).toBeGreaterThanOrEqual(0)
+  })
+
+  it('parallelogram getTextInset returns valid rect', () => {
+    const def = shapeRegistry.get('parallelogram')!
+    const inset = def.getTextInset(140, 80, 4)
+    expect(inset.x).toBeGreaterThanOrEqual(0)
+    expect(inset.y).toBeGreaterThanOrEqual(0)
+    expect(inset.width).toBeGreaterThanOrEqual(0)
+    expect(inset.height).toBeGreaterThanOrEqual(0)
+  })
+
+  it('ngon getTextInset returns valid rect', () => {
+    const def = shapeRegistry.get('ngon')!
+    const inset = def.getTextInset(120, 120, 4)
+    expect(inset.x).toBeGreaterThanOrEqual(0)
+    expect(inset.y).toBeGreaterThanOrEqual(0)
+    expect(inset.width).toBeGreaterThanOrEqual(0)
+    expect(inset.height).toBeGreaterThanOrEqual(0)
+  })
+
+  it('shapeRegistry.has returns false for unregistered types', () => {
+    expect(shapeRegistry.has('sticky_note')).toBe(false)
+    expect(shapeRegistry.has('frame')).toBe(false)
+    expect(shapeRegistry.has('line')).toBe(false)
+  })
 })

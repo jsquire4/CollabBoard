@@ -18,6 +18,14 @@ export default defineConfig({
         'src/lib/supabase/client.ts',
         'src/**/*.test.{ts,tsx}',
         'src/test/**',
+        // 100% imperative Konva/DOM — no testable pure logic
+        'src/hooks/board/useRemoteCursors.ts',
+        'src/hooks/board/useRightClickPan.ts',
+        // NOTE: useStageInteractions.ts is intentionally NOT excluded despite
+        // low coverage (~20%). Its pure helpers (findShapeIdFromNode, geometry)
+        // are tested (19 tests), but the bulk of the file is imperative Konva
+        // Stage event wiring (mouse/wheel/touch handlers) that requires a real
+        // Konva Stage to exercise — same category as the two hooks above.
       ],
     },
   },

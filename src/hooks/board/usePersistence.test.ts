@@ -143,6 +143,49 @@ describe('usePersistence', () => {
     expect(map.get('r1')).toBeDefined()
   })
 
+  it('loadObjects does not call setObjects when fetch errors', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const chain = chainMock({ data: null, error: { message: 'Failed to load' } })
+    mockFrom.mockReturnValue(chain)
+    const setObjects = vi.fn()
+
+    const { result } = renderHook(() => usePersistence(makeDeps({ setObjects })))
+
+    await act(async () => {
+      await result.current.loadObjects()
+    })
+
+    expect(setObjects).not.toHaveBeenCalled()
+    consoleSpy.mockRestore()
+  })
+
+  it('loadObjects calls setObjects with empty map when data is empty', async () => {
+    const chain = chainMock({ data: [], error: null })
+    mockFrom.mockReturnValue(chain)
+    const setObjects = vi.fn()
+
+    const { result } = renderHook(() => usePersistence(makeDeps({ setObjects })))
+
+    await act(async () => {
+      await result.current.loadObjects()
+    })
+
+    expect(setObjects).toHaveBeenCalledWith(expect.any(Map))
+    const map = setObjects.mock.calls[0][0] as Map<string, BoardObject>
+    expect(map.size).toBe(0)
+  })
+
+  it('reconcileOnReconnect returns without error when CRDT disabled', async () => {
+    const chain = chainMock({ data: [], error: null })
+    mockFrom.mockReturnValue(chain)
+    const { result } = renderHook(() => usePersistence(makeDeps()))
+
+    await act(async () => {
+      await result.current.reconcileOnReconnect()
+    })
+    // No throw
+  })
+
   it('addObject creates object with correct defaults and calls insert', () => {
     const chain = chainMock({ error: null })
     mockFrom.mockReturnValue(chain)
@@ -187,6 +230,7 @@ describe('usePersistence', () => {
   })
 
   it('addObject rolls back on insert failure', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const chain = chainMock({ error: { message: 'insert failed' } })
     mockFrom.mockReturnValue(chain)
     const setObjects = vi.fn()
@@ -197,6 +241,7 @@ describe('usePersistence', () => {
       // Should have been called twice: once for optimistic add, once for rollback
       expect(setObjects).toHaveBeenCalledTimes(2)
     })
+    consoleSpy.mockRestore()
   })
 
   it('addObjectWithId uses upsert', () => {
@@ -603,5 +648,158 @@ describe('usePersistence', () => {
       expect.stringContaining('Board object limit reached')
     )
     consoleSpy.mockRestore()
+  })
+
+  it('addObject error path clears fieldClocksRef entry', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const chain = chainMock({ error: { message: 'insert failed' } })
+    mockFrom.mockReturnValue(chain)
+    const fieldClocksRef = { current: new Map<string, FieldClocks>() }
+    const setObjects = vi.fn()
+    const { result } = renderHook(() => usePersistence(makeDeps({ setObjects, fieldClocksRef })))
+
+    let obj: BoardObject | null = null
+    act(() => { obj = result.current.addObject('rectangle', 0, 0) })
+
+    await waitFor(() => {
+      // Rollback should delete the fieldClocks entry for the new object
+      expect(fieldClocksRef.current.has(obj!.id)).toBe(false)
+    })
+    consoleSpy.mockRestore()
+  })
+
+  it('updateObject error path restores previous object', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const chain = chainMock({ error: { message: 'update failed' } })
+    mockFrom.mockReturnValue(chain)
+    const original = makeRectangle({ id: 'r1', x: 100, y: 200 })
+    const setObjects = vi.fn()
+    const deps = makeDeps({
+      setObjects,
+      objectsRef: { current: objectsMap(original) },
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    act(() => { result.current.updateObject('r1', { x: 50 }) })
+
+    // First call is optimistic update, second call should be rollback
+    await waitFor(() => {
+      expect(setObjects).toHaveBeenCalledTimes(2)
+    })
+    // Invoke the rollback updater and verify it restores original
+    const rollbackUpdater = setObjects.mock.calls[1][0]
+    const rollbackResult = rollbackUpdater(new Map([['r1', { ...original, x: 50 }]]))
+    expect(rollbackResult.get('r1')!.x).toBe(100)
+    consoleSpy.mockRestore()
+  })
+
+  it('moveGroupChildren translates valid waypoints JSON', () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const child = makeLine({ id: 'l1', parent_id: 'g1', x: 10, y: 10, x2: 100, y2: 100 })
+    child.waypoints = JSON.stringify([20, 30, 40, 50])
+    const setObjects = vi.fn()
+    const queueBroadcast = vi.fn()
+    const deps = makeDeps({
+      setObjects,
+      queueBroadcast,
+      getDescendants: vi.fn(() => [child]),
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    act(() => { result.current.moveGroupChildren('g1', 5, 10) })
+
+    // Check the broadcast contains translated waypoints
+    const changes = queueBroadcast.mock.calls[0][0]
+    expect(changes[0].object.waypoints).toBe(JSON.stringify([25, 40, 45, 60]))
+  })
+
+  it('moveGroupChildren returns null for invalid waypoints JSON', () => {
+    const chain = chainMock({ error: null })
+    mockFrom.mockReturnValue(chain)
+    const child = makeLine({ id: 'l1', parent_id: 'g1', x: 10, y: 10, x2: 100, y2: 100 })
+    child.waypoints = 'not-json'
+    const setObjects = vi.fn()
+    const queueBroadcast = vi.fn()
+    const deps = makeDeps({
+      setObjects,
+      queueBroadcast,
+      getDescendants: vi.fn(() => [child]),
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    act(() => { result.current.moveGroupChildren('g1', 5, 10) })
+
+    const changes = queueBroadcast.mock.calls[0][0]
+    expect(changes[0].object.waypoints).toBeNull()
+  })
+
+  it('moveGroupChildren DB failure logs error', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const chain = chainMock({ error: { message: 'db fail' } })
+    mockFrom.mockReturnValue(chain)
+    const child = makeRectangle({ id: 'c1', parent_id: 'g1', x: 10, y: 10 })
+    const setObjects = vi.fn()
+    const deps = makeDeps({
+      setObjects,
+      getDescendants: vi.fn(() => [child]),
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    act(() => { result.current.moveGroupChildren('g1', 5, 10) })
+
+    // Wait for the Promise.all to resolve
+    await waitFor(() => {
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to update child position:',
+        'db fail'
+      )
+    })
+    consoleSpy.mockRestore()
+  })
+
+  it('reconcileOnReconnect DB fetch error returns early', async () => {
+    // Enable CRDT for this test
+    const crdtModule = await import('@/hooks/board/useBroadcast')
+    const originalCRDT = crdtModule.CRDT_ENABLED
+    Object.defineProperty(crdtModule, 'CRDT_ENABLED', { value: true, writable: true, configurable: true })
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const chain = chainMock({ data: null, error: { message: 'fetch failed' } })
+    mockFrom.mockReturnValue(chain)
+    const setObjects = vi.fn()
+    const deps = makeDeps({ setObjects })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    await act(async () => { await result.current.reconcileOnReconnect() })
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      'Failed to fetch DB state for reconciliation:',
+      'fetch failed'
+    )
+    // loadObjects should NOT have been called after error
+    // (setObjects is only called by loadObjects, not by reconcile error path)
+    expect(setObjects).not.toHaveBeenCalled()
+    consoleSpy.mockRestore()
+    Object.defineProperty(crdtModule, 'CRDT_ENABLED', { value: originalCRDT, writable: true, configurable: true })
+  })
+
+  it('reconcileOnReconnect with no local wins skips merge function call', async () => {
+    const crdtModule = await import('@/hooks/board/useBroadcast')
+    const originalCRDT = crdtModule.CRDT_ENABLED
+    Object.defineProperty(crdtModule, 'CRDT_ENABLED', { value: true, writable: true, configurable: true })
+
+    // DB returns same clocks as local — no wins
+    const chain = chainMock({ data: [{ id: 'r1', field_clocks: {} }], error: null })
+    mockFrom.mockReturnValue(chain)
+    const supabase = mockSupabase()
+    const deps = makeDeps({ supabase })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    await act(async () => { await result.current.reconcileOnReconnect() })
+
+    // functions.invoke should NOT have been called since there are no local wins
+    expect(supabase.functions.invoke).not.toHaveBeenCalled()
+    Object.defineProperty(crdtModule, 'CRDT_ENABLED', { value: originalCRDT, writable: true, configurable: true })
   })
 })

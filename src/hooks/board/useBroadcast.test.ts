@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { coalesceBroadcastQueue, useBroadcast, UseBroadcastDeps, BoardChange } from './useBroadcast'
-import { BoardObject } from '@/types/board'
+import type { BoardObject } from '@/types/board'
 import { createHLC } from '@/lib/crdt/hlc'
 import { FieldClocks } from '@/lib/crdt/merge'
 
@@ -265,6 +265,105 @@ describe('useBroadcast', () => {
     expect(setObjects).toHaveBeenCalledTimes(1)
   })
 
+  it('incoming create adds object to map', () => {
+    const on = vi.fn()
+    const setObjects = vi.fn()
+    const channel = { send: vi.fn(), on, state: 'joined' } as any
+    renderHook(() => useBroadcast(makeDeps({ channel, setObjects })))
+
+    const handler = on.mock.calls.find((c: any[]) => c[1]?.event === 'board:sync')?.[2]
+
+    act(() => {
+      handler({
+        payload: {
+          changes: [{
+            action: 'create',
+            object: { id: 'new1', type: 'rectangle', x: 50, y: 60, width: 100, height: 80 } as any,
+          }],
+          sender_id: 'user-2',
+        },
+      })
+      vi.advanceTimersByTime(10)
+    })
+
+    const updater = setObjects.mock.calls[0][0]
+    const prev = new Map<string, BoardObject>()
+    const next = updater(prev)
+    expect(next.get('new1')).toBeDefined()
+    expect(next.get('new1')!.x).toBe(50)
+    expect(next.get('new1')!.y).toBe(60)
+  })
+
+  it('incoming update merges into existing object', () => {
+    const on = vi.fn()
+    const setObjects = vi.fn()
+    const channel = { send: vi.fn(), on, state: 'joined' } as any
+    renderHook(() => useBroadcast(makeDeps({ channel, setObjects })))
+
+    const handler = on.mock.calls.find((c: any[]) => c[1]?.event === 'board:sync')?.[2]
+    const existing = { id: 'a', type: 'rectangle' as const, x: 0, y: 0, width: 100, height: 80 } as BoardObject
+
+    act(() => {
+      handler({
+        payload: {
+          changes: [{ action: 'update', object: { id: 'a', x: 99, y: 88 } }],
+          sender_id: 'user-2',
+        },
+      })
+      vi.advanceTimersByTime(10)
+    })
+
+    const updater = setObjects.mock.calls[0][0]
+    const prev = new Map([['a', existing]])
+    const next = updater(prev)
+    expect(next.get('a')!.x).toBe(99)
+    expect(next.get('a')!.y).toBe(88)
+    expect(next.get('a')!.width).toBe(100)
+  })
+
+  it('incoming delete removes object from map', () => {
+    const on = vi.fn()
+    const setObjects = vi.fn()
+    const channel = { send: vi.fn(), on, state: 'joined' } as any
+    renderHook(() => useBroadcast(makeDeps({ channel, setObjects })))
+
+    const handler = on.mock.calls.find((c: any[]) => c[1]?.event === 'board:sync')?.[2]
+    const existing = { id: 'a', type: 'rectangle' as const, x: 0, y: 0 } as BoardObject
+
+    act(() => {
+      handler({
+        payload: { changes: [{ action: 'delete', object: { id: 'a' } }], sender_id: 'user-2' },
+      })
+      vi.advanceTimersByTime(10)
+    })
+
+    const updater = setObjects.mock.calls[0][0]
+    const prev = new Map([['a', existing]])
+    const next = updater(prev)
+    expect(next.has('a')).toBe(false)
+  })
+
+  it('incoming update on non-existent object is ignored', () => {
+    const on = vi.fn()
+    const setObjects = vi.fn()
+    const channel = { send: vi.fn(), on, state: 'joined' } as any
+    renderHook(() => useBroadcast(makeDeps({ channel, setObjects })))
+
+    const handler = on.mock.calls.find((c: any[]) => c[1]?.event === 'board:sync')?.[2]
+
+    act(() => {
+      handler({
+        payload: { changes: [{ action: 'update', object: { id: 'missing', x: 99 } }], sender_id: 'user-2' },
+      })
+      vi.advanceTimersByTime(10)
+    })
+
+    const updater = setObjects.mock.calls[0][0]
+    const prev = new Map<string, BoardObject>()
+    const next = updater(prev)
+    expect(next.size).toBe(0)
+  })
+
   it('stampChange returns undefined when CRDT is disabled', () => {
     const { result } = renderHook(() => useBroadcast(makeDeps()))
     const clocks = result.current.stampChange('obj1', ['x', 'y'])
@@ -295,5 +394,91 @@ describe('useBroadcast', () => {
 
     // Should not have sent — timers were cleaned up
     expect(send).not.toHaveBeenCalled()
+  })
+
+  it('broadcastChanges chunks payload exceeding BROADCAST_MAX_BYTES', () => {
+    const send = vi.fn()
+    const channel = { send, on: vi.fn(), state: 'joined' } as any
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { result } = renderHook(() => useBroadcast(makeDeps({ channel })))
+
+    // Create a payload that exceeds 64KB — each change has a large text field
+    const bigText = 'x'.repeat(10000)
+    const changes: BoardChange[] = Array.from({ length: 10 }, (_, i) => ({
+      action: 'update' as const,
+      object: { id: `obj-${i}`, text: bigText } as any,
+    }))
+
+    act(() => {
+      // Directly call flushBroadcast after queuing to trigger broadcastChanges
+      result.current.queueBroadcast(changes)
+      result.current.flushBroadcast()
+    })
+
+    // Should have been called multiple times (chunked)
+    expect(send.mock.calls.length).toBeGreaterThan(1)
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('exceeds limit')
+    )
+    consoleSpy.mockRestore()
+  })
+
+  it('broadcastChanges skips send when channel not joined', () => {
+    const send = vi.fn()
+    const channel = { send, on: vi.fn(), state: 'leaving' } as any
+    const { result } = renderHook(() => useBroadcast(makeDeps({ channel })))
+
+    act(() => {
+      result.current.queueBroadcast([{ action: 'update', object: { id: 'a', x: 10 } as any }])
+      result.current.flushBroadcast()
+    })
+
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('queueBroadcast coalesce timer fires after idle timeout', () => {
+    const send = vi.fn()
+    const channel = { send, on: vi.fn(), state: 'joined' } as any
+    const { result } = renderHook(() => useBroadcast(makeDeps({ channel })))
+
+    act(() => {
+      result.current.queueBroadcast([{ action: 'update', object: { id: 'a', x: 10 } as any }])
+    })
+
+    // At 4ms — idle timer (5ms) hasn't fired yet
+    act(() => { vi.advanceTimersByTime(4) })
+    expect(send).not.toHaveBeenCalled()
+
+    // At 5ms — idle timer fires
+    act(() => { vi.advanceTimersByTime(1) })
+    expect(send).toHaveBeenCalledTimes(1)
+  })
+
+  it('coalesceBroadcastQueue: delete after create removes both entries', () => {
+    const changes: BoardChange[] = [
+      { action: 'create', object: { id: 'a', type: 'rectangle', x: 0 } as any },
+      { action: 'update', object: { id: 'a', x: 50 } as any },
+      { action: 'delete', object: { id: 'a' } as any },
+    ]
+    const result = coalesceBroadcastQueue(changes)
+    // Create + updates + delete should all cancel out
+    expect(result).toHaveLength(0)
+  })
+
+  it('coalesceBroadcastQueue: multiple updates merge clocks', () => {
+    const clock1 = { x: { ts: 100, c: 0, n: 'u1' } }
+    const clock2 = { y: { ts: 101, c: 0, n: 'u1' } }
+    const clock3 = { width: { ts: 102, c: 0, n: 'u1' } }
+    const changes: BoardChange[] = [
+      { action: 'update', object: { id: 'a', x: 10 } as any, clocks: clock1 },
+      { action: 'update', object: { id: 'a', y: 20 } as any, clocks: clock2 },
+      { action: 'update', object: { id: 'a', width: 100 } as any, clocks: clock3 },
+    ]
+    const result = coalesceBroadcastQueue(changes)
+    expect(result).toHaveLength(1)
+    expect(result[0].clocks).toBeDefined()
+    expect(result[0].clocks!.x).toEqual(clock1.x)
+    expect(result[0].clocks!.y).toEqual(clock2.y)
+    expect(result[0].clocks!.width).toEqual(clock3.width)
   })
 })

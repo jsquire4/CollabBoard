@@ -51,6 +51,34 @@ describe('anchorPoints', () => {
       expect(anchors.length).toBeGreaterThan(0)
       expect(anchors[0]!.id).toBe('center')
     })
+
+    it('falls through when custom_points is invalid JSON', () => {
+      const obj = makeRectangle({
+        id: 'r1',
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+        custom_points: 'not valid json',
+      })
+      const anchors = getShapeAnchors(obj)
+      expect(anchors.some(a => a.id === 'center')).toBe(true)
+      expect(anchors.some(a => a.id === 'vertex-0')).toBe(true)
+    })
+
+    it('returns anchors for circle shape', () => {
+      const circle = makeCircle({ id: 'c1', x: 0, y: 0, width: 100, height: 100 })
+      const anchors = getShapeAnchors(circle)
+      expect(anchors.some(a => a.id === 'center')).toBe(true)
+      expect(anchors.length).toBeGreaterThan(1)
+    })
+
+    it('returns anchors for sticky_note shape', () => {
+      const sticky = makeObject({ type: 'sticky_note', id: 's1', x: 0, y: 0, width: 200, height: 200 })
+      const anchors = getShapeAnchors(sticky)
+      expect(anchors.some(a => a.id === 'center')).toBe(true)
+      expect(anchors.some(a => a.id === 'midpoint-0')).toBe(true)
+    })
   })
 
   describe('findNearestAnchor', () => {

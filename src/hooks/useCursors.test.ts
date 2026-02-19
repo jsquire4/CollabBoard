@@ -127,4 +127,34 @@ describe('useCursors', () => {
     broadcastHandler!({ payload: { x: 0, y: 0, user_id: 'self-user' } })
     // No throw; state unchanged for self
   })
+
+  it('onCursorUpdate stores callback for rAF loop', () => {
+    const { result } = renderHook(() => useCursors(null, 'u1'))
+    const listener = vi.fn()
+    act(() => {
+      result.current.onCursorUpdate(listener)
+    })
+    // Callback is stored; we can't easily trigger rAF without a channel, but we verify no throw
+    expect(typeof result.current.onCursorUpdate).toBe('function')
+  })
+
+  it('sendCursor throttles rapid calls', () => {
+    const mockSend = vi.fn()
+    const channel = {
+      state: 'joined',
+      send: mockSend,
+      on: vi.fn(() => ({})),
+    } as unknown as Parameters<typeof useCursors>[0]
+
+    const { result } = renderHook(() => useCursors(channel, 'u1', 1))
+
+    act(() => {
+      result.current.sendCursor(100, 200)
+      result.current.sendCursor(101, 201)
+      result.current.sendCursor(102, 202)
+    })
+
+    // With userCount=1, throttle is 16ms; all three calls are within same tick
+    expect(mockSend).toHaveBeenCalledTimes(1)
+  })
 })

@@ -131,4 +131,118 @@ describe('usePresence', () => {
     expect(result.current.onlineUsers).toHaveLength(1)
     expect(result.current.onlineUsers[0]!.user_id).toBe('other')
   })
+
+  it('updatePresence calls channel.track with new status after trackPresence', () => {
+    const mockTrack = vi.fn()
+    const channel = {
+      state: 'joined',
+      track: mockTrack,
+      untrack: vi.fn(),
+      on: vi.fn(() => ({})),
+      presenceState: vi.fn(() => ({})),
+    } as unknown as Parameters<typeof usePresence>[0]
+
+    const { result } = renderHook(() =>
+      usePresence(channel, 'u1', 'editor', 'Alice')
+    )
+
+    act(() => {
+      result.current.trackPresence()
+    })
+    expect(mockTrack).toHaveBeenCalledWith(expect.objectContaining({ status: 'active' }))
+
+    act(() => {
+      result.current.updatePresence('idle')
+    })
+    expect(mockTrack).toHaveBeenCalledWith(expect.objectContaining({ status: 'idle' }))
+  })
+
+  it('updatePresence does nothing when channel not joined', () => {
+    const mockTrack = vi.fn()
+    const channel = {
+      state: 'closed',
+      track: mockTrack,
+      on: vi.fn(() => ({})),
+    } as unknown as Parameters<typeof usePresence>[0]
+
+    const { result } = renderHook(() =>
+      usePresence(channel, 'u1', 'editor', 'Alice')
+    )
+
+    act(() => {
+      result.current.trackPresence()
+    })
+    act(() => {
+      result.current.updatePresence('idle')
+    })
+    expect(mockTrack).not.toHaveBeenCalled()
+  })
+
+  it('handleJoin adds new presences to onlineUsers', () => {
+    let joinHandler: ((args: { newPresences: { user_id: string; display_name: string; color: string; role: string }[] }) => void) | null = null
+    const mockOn = vi.fn((_event: string, opts: { event?: string }, handler?: (a: unknown) => void) => {
+      if (opts?.event === 'join' && handler) joinHandler = handler as typeof joinHandler
+      return {}
+    })
+
+    const channel = {
+      state: 'joined',
+      track: vi.fn(),
+      untrack: vi.fn(),
+      on: mockOn,
+      presenceState: vi.fn(() => ({})),
+    } as unknown as Parameters<typeof usePresence>[0]
+
+    const { result } = renderHook(() =>
+      usePresence(channel, 'u1', 'editor', 'Self')
+    )
+
+    act(() => {
+      joinHandler!({
+        newPresences: [{
+          user_id: 'new-user',
+          display_name: 'New User',
+          color: '#FF0000',
+          role: 'editor',
+        }],
+      })
+    })
+
+    expect(result.current.onlineUsers).toHaveLength(1)
+    expect(result.current.onlineUsers[0]!.user_id).toBe('new-user')
+  })
+
+  it('handleLeave removes presences from onlineUsers', () => {
+    let joinHandler: ((args: { newPresences: { user_id: string; display_name: string; color: string; role: string }[] }) => void) | null = null
+    let leaveHandler: ((args: { leftPresences: { user_id: string }[] }) => void) | null = null
+    const mockOn = vi.fn((_event: string, opts: { event?: string }, handler?: (a: unknown) => void) => {
+      if (opts?.event === 'join' && handler) joinHandler = handler as typeof joinHandler
+      if (opts?.event === 'leave' && handler) leaveHandler = handler as typeof leaveHandler
+      return {}
+    })
+
+    const channel = {
+      state: 'joined',
+      track: vi.fn(),
+      untrack: vi.fn(),
+      on: mockOn,
+      presenceState: vi.fn(() => ({})),
+    } as unknown as Parameters<typeof usePresence>[0]
+
+    const { result } = renderHook(() =>
+      usePresence(channel, 'u1', 'editor', 'Self')
+    )
+
+    act(() => {
+      joinHandler!({
+        newPresences: [{ user_id: 'to-remove', display_name: 'Remove Me', color: '#000', role: 'viewer' }],
+      })
+    })
+    expect(result.current.onlineUsers).toHaveLength(1)
+
+    act(() => {
+      leaveHandler!({ leftPresences: [{ user_id: 'to-remove' }] })
+    })
+    expect(result.current.onlineUsers).toHaveLength(0)
+  })
 })

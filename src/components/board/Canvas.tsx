@@ -7,13 +7,13 @@ import { useCanvas } from '@/hooks/useCanvas'
 import { useModifierKeys } from '@/hooks/useShiftKey'
 import { BoardObject, BoardObjectType } from '@/types/board'
 import { useBoardContext } from '@/contexts/BoardContext'
+import { useStageInteractions } from '@/hooks/board/useStageInteractions'
 import { StickyNote } from './StickyNote'
 import { FrameShape } from './FrameShape'
 import { GenericShape } from './GenericShape'
 import { VectorShape } from './VectorShape'
 import { shapeRegistry } from './shapeRegistry'
 import { isVectorType, snapToGrid } from './shapeUtils'
-import { getShapeAnchors, findNearestAnchor, AnchorPoint } from './anchorPoints'
 import { computeAutoRoute } from './autoRoute'
 import { ContextMenu } from './ContextMenu'
 import { ZoomControls } from './ZoomControls'
@@ -328,6 +328,21 @@ export function Canvas({
   const cursorLayerRef = useRef<Konva.Layer>(null)
   const cursorNodesRef = useRef<Map<string, Konva.Group>>(new Map())
   const shapeRefs = useRef<Map<string, Konva.Node>>(new Map())
+
+  // ── Stage interaction state machine (draw, marquee, anchor hints) ──
+  const {
+    handleStageMouseDown, handleStageMouseMove, handleStageMouseUp,
+    marquee, drawPreview, linePreview, hoveredAnchors, connectorHint,
+    connectorHintDrawingRef, drawSnapStartRef,
+    isDrawing, drawStart, drawIsLineRef,
+    marqueeJustCompletedRef, drawJustCompletedRef,
+    setDrawPreview, setLinePreview, setConnectorHint,
+  } = useStageInteractions({
+    stageRef, stagePos, stageScale, shapeRefs,
+    onDrawShape, onSelectObjects, onDrawLineFromAnchor,
+    onCursorMove, onActivity,
+  })
+
   // Snapshot of each node's width/height at transform start — prevents feedback loops
   // when onTransformMove updates state and the next tick reads stale dimensions.
   const transformOriginRef = useRef<Map<string, { width: number; height: number }>>(new Map())
@@ -455,54 +470,6 @@ export function Canvas({
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; objectId: string } | null>(null)
-
-  // Marquee selection state
-  const [marquee, setMarquee] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
-  const marqueeRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null)
-  const marqueeStart = useRef<{ x: number; y: number } | null>(null)
-  const isMarqueeActive = useRef(false)
-
-  // Draw-to-create state
-  const drawStart = useRef<{ x: number; y: number } | null>(null)
-  const isDrawing = useRef(false)
-  const [drawPreview, setDrawPreview] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
-  const drawIsLineRef = useRef(false)
-  const [linePreview, setLinePreview] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
-
-  // Anchor preview state for line/arrow tool hover
-  const [hoveredAnchors, setHoveredAnchors] = useState<AnchorPoint[] | null>(null)
-  const drawSnapStartRef = useRef<{ shapeId: string; anchorId: string; x: number; y: number } | null>(null)
-  // Connector hint state for selection mode (floating connect button)
-  const [connectorHint, setConnectorHint] = useState<{ shapeId: string; anchor: AnchorPoint } | null>(null)
-  // When true, we're drawing a connector from the hint button (not via tool palette)
-  const connectorHintDrawingRef = useRef(false)
-
-  // Walk up a Konva node's parent chain to find its shape ID in shapeRefs
-  const findShapeIdFromNode = (node: Konva.Node): string | null => {
-    let current: Konva.Node | null = node
-    const stage = stageRef.current
-    while (current && current !== stage) {
-      const id = Array.from(shapeRefs.current.entries()).find(([, n]) => n === current)?.[0]
-      if (id) return id
-      current = current.parent
-    }
-    return null
-  }
-
-  // Ref for throttling hover detection by distance moved
-  const lastHoverCheckRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
-
-  // Refs to access grid settings inside callbacks without adding to deps
-  const snapToGridEnabledRef = useRef(snapToGridEnabled)
-  snapToGridEnabledRef.current = snapToGridEnabled
-  const gridSizeRef = useRef(gridSize)
-  gridSizeRef.current = gridSize
-  const gridSubdivisionsRef = useRef(gridSubdivisions)
-  gridSubdivisionsRef.current = gridSubdivisions
-
-  // Ref to access objects inside callbacks without adding to deps
-  const objectsRef = useRef(objects)
-  objectsRef.current = objects
 
   // Ref callback for shape registration
   const handleShapeRef = useCallback((id: string, node: Konva.Node | null) => {
@@ -794,14 +761,6 @@ export function Canvas({
     return () => cancelAnimationFrame(rafId)
   }, [pendingEditId, onPendingEditConsumed, startGeometricTextEdit])
 
-  // Track whether a marquee just completed, so the click handler doesn't
-  // immediately clear the selection (click fires after mousedown+mouseup).
-  const marqueeJustCompletedRef = useRef(false)
-
-  // Track whether a draw just completed, so the click handler doesn't
-  // immediately clear the selection or tool.
-  const drawJustCompletedRef = useRef(false)
-
   const handleStageClick = useCallback((e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (marqueeJustCompletedRef.current) {
       marqueeJustCompletedRef.current = false
@@ -933,275 +892,6 @@ export function Canvas({
     // Suppress context menu if user panned (moved mouse while right-clicking)
     if (didPanRef.current) return
   }, [])
-
-  // Marquee selection (left-click on empty area)
-  const handleStageMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-    // Right-click is handled by the manual pan listener — ignore here
-    if (e.evt.button === 2) return
-
-    onActivity?.()
-
-    // Only left-click
-    if (e.evt.button !== 0) return
-    const stage = stageRef.current
-    if (!stage) return
-
-    const isOnStage = e.target === e.target.getStage()
-    const isLineTool = activeTool === 'line' || activeTool === 'arrow'
-
-    // For non-line tools, require empty area click (except line/arrow tools which snap to anchors)
-    if (!isOnStage && !isLineTool) return
-
-    const pos = stage.getPointerPosition()
-    if (!pos) return
-
-    const canvasX = (pos.x - stagePos.x) / stageScale
-    const canvasY = (pos.y - stagePos.y) / stageScale
-
-    // Draw mode takes priority over marquee
-    if (activeTool) {
-      let sx = snapToGridEnabledRef.current ? snapToGrid(canvasX, gridSizeRef.current, gridSubdivisionsRef.current) : canvasX
-      let sy = snapToGridEnabledRef.current ? snapToGrid(canvasY, gridSizeRef.current, gridSubdivisionsRef.current) : canvasY
-
-      // Check if we clicked near an anchor on a hovered shape
-      drawSnapStartRef.current = null
-      if ((activeTool === 'line' || activeTool === 'arrow') && hoveredAnchors) {
-        const nearest = findNearestAnchor(hoveredAnchors, canvasX, canvasY, 20)
-        if (nearest) {
-          // Find which shape owns this anchor
-          for (const [objId, obj] of objectsRef.current) {
-            if (isVectorType(obj.type) || obj.type === 'group' || obj.deleted_at) continue
-            const anchors = getShapeAnchors(obj)
-            if (anchors.some(a => a.id === nearest.id && Math.abs(a.x - nearest.x) < 0.1 && Math.abs(a.y - nearest.y) < 0.1)) {
-              drawSnapStartRef.current = { shapeId: objId, anchorId: nearest.id, x: nearest.x, y: nearest.y }
-              sx = nearest.x
-              sy = nearest.y
-              break
-            }
-          }
-        }
-      }
-
-      drawStart.current = { x: sx, y: sy }
-      isDrawing.current = true
-      drawIsLineRef.current = (activeTool === 'line' || activeTool === 'arrow')
-      setDrawPreview({ x: sx, y: sy, width: 0, height: 0 })
-      return
-    }
-
-    if (e.target !== e.target.getStage()) return
-
-    marqueeStart.current = { x: canvasX, y: canvasY }
-    isMarqueeActive.current = true
-    const rect = { x: canvasX, y: canvasY, width: 0, height: 0 }
-    marqueeRef.current = rect
-    setMarquee(rect)
-  }, [stagePos, stageScale, activeTool, onActivity, hoveredAnchors])
-
-  const handleStageMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-    const stage = stageRef.current
-    if (!stage) return
-    const pos = stage.getPointerPosition()
-    if (!pos) return
-
-    const canvasX = (pos.x - stagePos.x) / stageScale
-    const canvasY = (pos.y - stagePos.y) / stageScale
-
-    // Broadcast cursor position for remote users (skip during marquee/draw)
-    if (onCursorMove && !isMarqueeActive.current && !isDrawing.current) {
-      onCursorMove(canvasX, canvasY)
-    }
-
-    // Line/arrow tool: show anchor dots on hovered shape
-    const isLineTool = activeTool === 'line' || activeTool === 'arrow'
-    if (isLineTool && !isDrawing.current) {
-      // Throttle hover detection: skip if pointer hasn't moved at least 8px since last check
-      const hoverDx = pos.x - lastHoverCheckRef.current.x
-      const hoverDy = pos.y - lastHoverCheckRef.current.y
-      const hoverDistSq = hoverDx * hoverDx + hoverDy * hoverDy
-      if (hoverDistSq >= 64) {
-        lastHoverCheckRef.current = { x: pos.x, y: pos.y }
-
-        const hit = stage.getIntersection(pos)
-        const hitTarget = hit ?? null
-        const shapeId = hitTarget ? findShapeIdFromNode(hitTarget) : null
-
-        if (shapeId) {
-          const obj = objectsRef.current.get(shapeId)
-          if (obj && !isVectorType(obj.type) && obj.type !== 'group') {
-            const anchors = getShapeAnchors(obj).filter(a => a.id !== 'center')
-            setHoveredAnchors(anchors.length > 0 ? anchors : null)
-          } else {
-            setHoveredAnchors(null)
-          }
-        } else {
-          setHoveredAnchors(null)
-        }
-      }
-    } else if (!isLineTool && hoveredAnchors) {
-      setHoveredAnchors(null)
-    }
-
-    // Selection mode: connector hint on hover near shape edge
-    if (!activeTool && !isDrawing.current && !isMarqueeActive.current && selectedIds.size === 0) {
-      // Throttle hover detection: skip if pointer hasn't moved at least 8px since last check
-      const hoverDx = pos.x - lastHoverCheckRef.current.x
-      const hoverDy = pos.y - lastHoverCheckRef.current.y
-      const hoverDistSq = hoverDx * hoverDx + hoverDy * hoverDy
-      if (hoverDistSq >= 64) {
-        lastHoverCheckRef.current = { x: pos.x, y: pos.y }
-
-        const hit = stage.getIntersection(pos)
-        const hitTarget = hit ?? null
-        const shapeId = hitTarget ? findShapeIdFromNode(hitTarget) : null
-
-        if (shapeId) {
-          const obj = objectsRef.current.get(shapeId)
-          if (obj && !isVectorType(obj.type) && obj.type !== 'group') {
-            const anchors = getShapeAnchors(obj).filter(a => a.id !== 'center')
-            const nearest = findNearestAnchor(anchors, canvasX, canvasY, 30)
-            if (nearest) {
-              setConnectorHint({ shapeId, anchor: nearest })
-            } else {
-              setConnectorHint(null)
-            }
-          } else {
-            setConnectorHint(null)
-          }
-        } else {
-          setConnectorHint(null)
-        }
-      }
-    } else if (connectorHint && (activeTool || selectedIds.size > 0)) {
-      setConnectorHint(null)
-    }
-
-    // Draw preview update
-    if (isDrawing.current && drawStart.current) {
-      const cx = snapToGridEnabledRef.current ? snapToGrid(canvasX, gridSizeRef.current, gridSubdivisionsRef.current) : canvasX
-      const cy = snapToGridEnabledRef.current ? snapToGrid(canvasY, gridSizeRef.current, gridSubdivisionsRef.current) : canvasY
-      if (drawIsLineRef.current) {
-        setLinePreview({ x1: drawStart.current.x, y1: drawStart.current.y, x2: cx, y2: cy })
-        setDrawPreview(null)
-      } else {
-        const x = Math.min(drawStart.current.x, cx)
-        const y = Math.min(drawStart.current.y, cy)
-        const width = Math.abs(cx - drawStart.current.x)
-        const height = Math.abs(cy - drawStart.current.y)
-        setDrawPreview({ x, y, width, height })
-        setLinePreview(null)
-      }
-      return
-    }
-
-    if (!isMarqueeActive.current || !marqueeStart.current) return
-
-    const x = Math.min(marqueeStart.current.x, canvasX)
-    const y = Math.min(marqueeStart.current.y, canvasY)
-    const width = Math.abs(canvasX - marqueeStart.current.x)
-    const height = Math.abs(canvasY - marqueeStart.current.y)
-
-    const rect = { x, y, width, height }
-    marqueeRef.current = rect
-    setMarquee(rect)
-  }, [stagePos, stageScale, onCursorMove, activeTool, selectedIds])
-
-  const handleStageMouseUp = useCallback(() => {
-    onActivity?.()
-    // Finalize draw-to-create (or connector hint drawing)
-    const effectiveTool = connectorHintDrawingRef.current ? 'line' as BoardObjectType : activeTool
-    if (isDrawing.current && drawStart.current && effectiveTool && onDrawShape) {
-      const stage = stageRef.current
-      const pos = stage?.getPointerPosition()
-      if (pos) {
-        const rawX = (pos.x - stagePos.x) / stageScale
-        const rawY = (pos.y - stagePos.y) / stageScale
-        const canvasX = snapToGridEnabledRef.current ? snapToGrid(rawX, gridSizeRef.current, gridSubdivisionsRef.current) : rawX
-        const canvasY = snapToGridEnabledRef.current ? snapToGrid(rawY, gridSizeRef.current, gridSubdivisionsRef.current) : rawY
-
-        const snap = drawSnapStartRef.current
-        if (snap && onDrawLineFromAnchor && (effectiveTool === 'line' || effectiveTool === 'arrow')) {
-          // Line drawn from an anchor point — pass screen coords for palette positioning
-          const screenEndX = canvasX * stageScale + stagePos.x
-          const screenEndY = canvasY * stageScale + stagePos.y
-          onDrawLineFromAnchor(effectiveTool, snap.shapeId, snap.anchorId, snap.x, snap.y, canvasX, canvasY, screenEndX, screenEndY)
-        } else {
-          const x = Math.min(drawStart.current.x, canvasX)
-          const y = Math.min(drawStart.current.y, canvasY)
-          const width = Math.abs(canvasX - drawStart.current.x)
-          const height = Math.abs(canvasY - drawStart.current.y)
-
-          if (width >= 5 && height >= 5) {
-            onDrawShape(effectiveTool, x, y, width, height)
-          } else {
-            // Click without drag — create at click point with default dimensions
-            onDrawShape(effectiveTool, drawStart.current.x, drawStart.current.y, 0, 0)
-          }
-        }
-      }
-
-      isDrawing.current = false
-      drawStart.current = null
-      drawSnapStartRef.current = null
-      connectorHintDrawingRef.current = false
-      drawIsLineRef.current = false
-      setDrawPreview(null)
-      setLinePreview(null)
-      setHoveredAnchors(null)
-      drawJustCompletedRef.current = true
-      return
-    }
-
-    if (!isMarqueeActive.current) return
-
-    // Read from ref (always current) instead of React state (may be stale)
-    const m = marqueeRef.current
-    if (m && m.width > 2 && m.height > 2) {
-      const selected: string[] = []
-      for (const obj of sortedObjects) {
-        if (obj.type === 'group') continue
-        if (activeGroupId && obj.parent_id !== activeGroupId) continue
-
-        // For vector types, compute AABB from endpoints
-        let objLeft: number, objTop: number, objRight: number, objBottom: number
-        if (isVectorType(obj.type)) {
-          const ex2 = obj.x2 ?? obj.x + obj.width
-          const ey2 = obj.y2 ?? obj.y + obj.height
-          objLeft = Math.min(obj.x, ex2)
-          objTop = Math.min(obj.y, ey2)
-          objRight = Math.max(obj.x, ex2)
-          objBottom = Math.max(obj.y, ey2)
-        } else {
-          objLeft = obj.x
-          objTop = obj.y
-          objRight = obj.x + obj.width
-          objBottom = obj.y + obj.height
-        }
-        const marqRight = m.x + m.width
-        const marqBottom = m.y + m.height
-
-        const intersects =
-          objLeft < marqRight &&
-          objRight > m.x &&
-          objTop < marqBottom &&
-          objBottom > m.y
-
-        if (intersects) {
-          selected.push(obj.id)
-        }
-      }
-      if (selected.length > 0) {
-        onSelectObjects(selected)
-        // Prevent the subsequent click event from clearing the selection
-        marqueeJustCompletedRef.current = true
-      }
-    }
-
-    isMarqueeActive.current = false
-    marqueeStart.current = null
-    marqueeRef.current = null
-    setMarquee(null)
-  }, [sortedObjects, activeGroupId, onSelectObjects, activeTool, onDrawShape, stagePos, stageScale, onActivity, onDrawLineFromAnchor])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })

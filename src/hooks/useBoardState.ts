@@ -216,7 +216,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       setSelectedIds(new Set([id]))
       setActiveGroupId(null)
     }
-  }, [objects, activeGroupId, getTopLevelAncestor])
+  }, [objects, getTopLevelAncestor])
 
   const selectObjects = useCallback((ids: string[]) => {
     setSelectedIds(new Set(ids))

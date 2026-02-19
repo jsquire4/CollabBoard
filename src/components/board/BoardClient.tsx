@@ -30,6 +30,7 @@ import { shapeRegistry } from './shapeRegistry'
 import { getShapeAnchors } from './anchorPoints'
 import type { ShapePreset } from './shapePresets'
 import { scaleCustomPoints } from './shapePresets'
+import { BoardProvider, BoardContextValue } from '@/contexts/BoardContext'
 
 // Konva is client-only — must disable SSR
 const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canvas })), {
@@ -580,7 +581,29 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     }
   }, [selectedIds, objects])
 
+  // ── Board context (read-only shared state for child components) ──
+  const boardContextValue: BoardContextValue = useMemo(() => ({
+    objects, selectedIds, activeGroupId, sortedObjects, remoteSelections,
+    getChildren, getDescendants,
+    userId, userRole, canEdit,
+    activeTool,
+    onlineUsers,
+    isObjectLocked,
+    gridSize, gridSubdivisions, gridVisible, snapToGrid, gridStyle,
+    canvasColor, gridColor, subdivisionColor, uiDarkMode,
+  }), [
+    objects, selectedIds, activeGroupId, sortedObjects, remoteSelections,
+    getChildren, getDescendants,
+    userId, userRole, canEdit,
+    activeTool,
+    onlineUsers,
+    isObjectLocked,
+    gridSize, gridSubdivisions, gridVisible, snapToGrid, gridStyle,
+    canvasColor, gridColor, subdivisionColor, uiDarkMode,
+  ])
+
   return (
+    <BoardProvider value={boardContextValue}>
     <div className="relative flex h-screen flex-col">
       <BoardTopBar
         boardId={boardId}
@@ -752,5 +775,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         />
       )}
     </div>
+    </BoardProvider>
   )
 }

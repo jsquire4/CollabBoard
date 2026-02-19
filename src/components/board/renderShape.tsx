@@ -25,6 +25,8 @@ export interface ShapeCallbacks {
   onWaypointDelete?: (id: string, waypointIndex: number) => void
   getAutoRoutePoints: (obj: BoardObject) => number[] | null
   autoRoutePointsRef?: React.MutableRefObject<Map<string, number[]>>
+  handleStartCellEdit?: (id: string, textNode: Konva.Text, row: number, col: number) => void
+  handleTableDataChange?: (id: string, tableData: string) => void
 }
 
 export interface ShapeState {
@@ -33,6 +35,7 @@ export interface ShapeState {
   canEdit: boolean
   editingId: string | null
   editingField?: 'title' | 'text'
+  editingCellCoords?: { row: number; col: number } | null
 }
 
 export function renderShape(

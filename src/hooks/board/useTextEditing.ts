@@ -31,6 +31,7 @@ export interface UseTextEditingDeps {
   onUpdateTitle: (id: string, title: string) => void
   onEditingChange?: (isEditing: boolean) => void
   onActivity?: () => void
+  onUpdateTableCell?: (id: string, row: number, col: number, text: string) => void
   pendingEditId?: string | null
   onPendingEditConsumed?: () => void
   tryEnterGroup: (id: string) => boolean
@@ -43,6 +44,7 @@ export function useTextEditing({
   stageRef, shapeRefs,
   onUpdateText, onUpdateTitle,
   onEditingChange, onActivity,
+  onUpdateTableCell,
   pendingEditId, onPendingEditConsumed,
   tryEnterGroup,
 }: UseTextEditingDeps) {
@@ -50,6 +52,7 @@ export function useTextEditing({
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingField, setEditingField] = useState<'text' | 'title'>('text')
+  const [editingCellCoords, setEditingCellCoords] = useState<{ row: number; col: number } | null>(null)
   const [textareaStyle, setTextareaStyle] = useState<React.CSSProperties>({})
   const [editText, setEditText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -116,6 +119,128 @@ export function useTextEditing({
     })
   }, [objects, stageScale, canEdit, tryEnterGroup, onActivity])
 
+  const handleFinishEdit = useCallback(() => {
+    if (editingId) {
+      if (editingCellCoords) {
+        onUpdateTableCell?.(editingId, editingCellCoords.row, editingCellCoords.col, editText)
+        setEditingCellCoords(null)
+      } else if (editingField === 'title') {
+        onUpdateTitle(editingId, editText.slice(0, STICKY_TITLE_CHAR_LIMIT))
+      } else {
+        onUpdateText(editingId, editText)
+      }
+      setEditingId(null)
+    }
+  }, [editingId, editingField, editingCellCoords, editText, onUpdateText, onUpdateTitle, onUpdateTableCell])
+
+  const handleStartCellEdit = useCallback((id: string, textNode: Konva.Text, row: number, col: number) => {
+    if (!canEdit) return
+    onActivity?.()
+
+    const stage = stageRef.current
+    if (!stage) return
+
+    const obj = objects.get(id)
+    if (!obj) return
+
+    const textRect = textNode.getClientRect()
+
+    setEditingId(id)
+    setEditingField('text')
+    setEditingCellCoords({ row, col })
+
+    // Get cell text from table_data
+    let initialText = ''
+    if (obj.table_data) {
+      try {
+        const data = typeof obj.table_data === 'string' ? JSON.parse(obj.table_data) : obj.table_data
+        const colId = data.columns?.[col]?.id
+        initialText = data.rows?.[row]?.cells?.[colId]?.text ?? ''
+      } catch { /* empty */ }
+    }
+    setEditText(initialText)
+
+    setTextareaStyle({
+      position: 'absolute',
+      top: `${textRect.y}px`,
+      left: `${textRect.x}px`,
+      width: `${textRect.width}px`,
+      height: `${textRect.height}px`,
+      fontSize: `${(obj.font_size || 14) * stageScale}px`,
+      fontFamily: obj.font_family || 'sans-serif',
+      fontWeight: 'normal',
+      fontStyle: 'normal',
+      textAlign: 'left',
+      padding: '0px',
+      margin: '0px',
+      border: 'none',
+      outline: 'none',
+      resize: 'none',
+      background: 'transparent',
+      color: obj.text_color ?? '#000000',
+      overflow: 'hidden',
+      lineHeight: '1.2',
+      zIndex: 100,
+    })
+  }, [objects, stageScale, canEdit, onActivity])
+
+  const handleCellKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!editingId || !editingCellCoords) return
+
+    const obj = objects.get(editingId)
+    if (!obj?.table_data) return
+
+    let data: { columns: { id: string }[]; rows: { cells: Record<string, { text: string }> }[] }
+    try {
+      data = typeof obj.table_data === 'string' ? JSON.parse(obj.table_data) : obj.table_data
+    } catch { return }
+
+    let direction: 'right' | 'left' | 'down' | 'up' | null = null
+    if (e.key === 'Tab' && !e.shiftKey) { direction = 'right'; e.preventDefault() }
+    else if (e.key === 'Tab' && e.shiftKey) { direction = 'left'; e.preventDefault() }
+    else if (e.key === 'Enter' && !e.shiftKey) { direction = 'down'; e.preventDefault() }
+    else if (e.key === 'Escape') {
+      handleFinishEdit()
+      return
+    }
+
+    if (!direction) return
+
+    // Import nextCell inline to avoid circular deps — just do the navigation math
+    const { row, col } = editingCellCoords
+    const lastRow = data.rows.length - 1
+    const lastCol = data.columns.length - 1
+    let next: { row: number; col: number } | null = null
+
+    if (direction === 'right') {
+      if (col < lastCol) next = { row, col: col + 1 }
+      else if (row < lastRow) next = { row: row + 1, col: 0 }
+    } else if (direction === 'left') {
+      if (col > 0) next = { row, col: col - 1 }
+      else if (row > 0) next = { row: row - 1, col: lastCol }
+    } else if (direction === 'down') {
+      if (row < lastRow) next = { row: row + 1, col }
+    } else if (direction === 'up') {
+      if (row > 0) next = { row: row - 1, col }
+    }
+
+    // Save current cell first
+    if (onUpdateTableCell) {
+      onUpdateTableCell(editingId, editingCellCoords.row, editingCellCoords.col, editText)
+    }
+
+    if (next) {
+      // Navigate to next cell
+      setEditingCellCoords(next)
+      const colId = data.columns[next.col]?.id
+      const cellText = data.rows[next.row]?.cells?.[colId]?.text ?? ''
+      setEditText(cellText)
+    } else {
+      // At boundary, finish editing
+      handleFinishEdit()
+    }
+  }, [editingId, editingCellCoords, objects, editText, onUpdateTableCell, handleFinishEdit])
+
   // Double-click handler for non-text shapes — only enters group, records for triple-click
   const handleShapeDoubleClick = useCallback((id: string) => {
     if (tryEnterGroup(id)) return
@@ -142,17 +267,6 @@ export function useTextEditing({
       }, 50)
     }
   }, [objects, canEdit, handleStartEdit, onUpdateText])
-
-  const handleFinishEdit = useCallback(() => {
-    if (editingId) {
-      if (editingField === 'title') {
-        onUpdateTitle(editingId, editText.slice(0, STICKY_TITLE_CHAR_LIMIT))
-      } else {
-        onUpdateText(editingId, editText)
-      }
-      setEditingId(null)
-    }
-  }, [editingId, editingField, editText, onUpdateText, onUpdateTitle])
 
   // ── Effects ────────────────────────────────────────────────────────
 
@@ -222,13 +336,16 @@ export function useTextEditing({
   return {
     editingId,
     editingField,
+    editingCellCoords,
     editText,
     setEditText,
     textareaStyle,
     textareaRef,
     handleStartEdit,
+    handleStartCellEdit,
     handleFinishEdit,
     handleShapeDoubleClick,
+    handleCellKeyDown,
     startGeometricTextEdit,
     lastDblClickRef,
   }

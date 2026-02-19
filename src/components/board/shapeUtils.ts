@@ -1,6 +1,7 @@
 import Konva from 'konva'
 import { BoardObject, BoardObjectType } from '@/types/board'
 import { shapeRegistry } from './shapeRegistry'
+import { parseTableData, serializeTableData, distributeScale, getTableWidth, getTableHeight } from '@/lib/table/tableUtils'
 
 /** Default grid size in canvas units. */
 export const GRID_SIZE = 40
@@ -126,6 +127,16 @@ export function handleShapeTransformEnd(
       }
       updates.custom_points = JSON.stringify(scaled)
     } catch { /* keep existing */ }
+  }
+  // Table: distribute scale to columns/rows and recompute dimensions
+  if (object.type === 'table' && object.table_data && (scaleX !== 1 || scaleY !== 1)) {
+    const data = parseTableData(object.table_data)
+    if (data) {
+      const scaled = distributeScale(data, scaleX, scaleY)
+      updates.table_data = serializeTableData(scaled)
+      updates.width = getTableWidth(scaled)
+      updates.height = getTableHeight(scaled)
+    }
   }
   onTransformEnd(object.id, updates)
 }

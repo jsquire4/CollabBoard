@@ -5,6 +5,7 @@ import { renderHook, act } from '@testing-library/react'
 import { useTextEditing, UseTextEditingDeps, getTextCharLimit, STICKY_TITLE_CHAR_LIMIT } from './useTextEditing'
 import { BoardObject } from '@/types/board'
 import { createMockStage } from '@/test/mocks/konva'
+import { makeTable } from '@/test/boardObjectFactory'
 
 function makeDeps(overrides?: Partial<UseTextEditingDeps>): UseTextEditingDeps {
   return {
@@ -201,6 +202,149 @@ describe('useTextEditing', () => {
       const { result } = renderHook(() => useTextEditing(makeDeps({ objects, canEdit: false, onUpdateText })))
       act(() => result.current.startGeometricTextEdit('obj-1'))
       expect(onUpdateText).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('cell editing', () => {
+    function makeTableObj() {
+      const tableData = JSON.stringify({
+        columns: [
+          { id: 'c1', name: 'Col 1', width: 120 },
+          { id: 'c2', name: 'Col 2', width: 120 },
+        ],
+        rows: [
+          { id: 'r1', height: 32, cells: { c1: { text: 'A' }, c2: { text: 'B' } } },
+          { id: 'r2', height: 32, cells: { c1: { text: 'C' }, c2: { text: 'D' } } },
+        ],
+      })
+      return { id: 'tbl-1', type: 'table' as const, table_data: tableData, font_size: 14 } as BoardObject
+    }
+
+    it('handleStartCellEdit sets editingId and editingCellCoords', () => {
+      const tbl = makeTableObj()
+      const objects = new Map([['tbl-1', tbl]])
+      const stageRef = { current: createMockStage() } as unknown as React.RefObject<Konva.Stage | null>
+      const { result } = renderHook(() => useTextEditing(makeDeps({ objects, stageRef })))
+
+      const mockTextNode = { getClientRect: () => ({ x: 10, y: 20, width: 120, height: 32 }) }
+      act(() => result.current.handleStartCellEdit('tbl-1', mockTextNode as never, 0, 1))
+
+      expect(result.current.editingId).toBe('tbl-1')
+      expect(result.current.editingCellCoords).toEqual({ row: 0, col: 1 })
+      expect(result.current.editText).toBe('B')
+    })
+
+    it('handleStartCellEdit is no-op when canEdit is false', () => {
+      const tbl = makeTableObj()
+      const objects = new Map([['tbl-1', tbl]])
+      const { result } = renderHook(() => useTextEditing(makeDeps({ objects, canEdit: false })))
+
+      const mockTextNode = { getClientRect: () => ({ x: 0, y: 0, width: 100, height: 30 }) }
+      act(() => result.current.handleStartCellEdit('tbl-1', mockTextNode as never, 0, 0))
+
+      expect(result.current.editingId).toBeNull()
+      expect(result.current.editingCellCoords).toBeNull()
+    })
+
+    it('handleFinishEdit calls onUpdateTableCell when editingCellCoords is set', () => {
+      const tbl = makeTableObj()
+      const objects = new Map([['tbl-1', tbl]])
+      const stageRef = { current: createMockStage() } as unknown as React.RefObject<Konva.Stage | null>
+      const onUpdateTableCell = vi.fn()
+      const { result } = renderHook(() => useTextEditing(makeDeps({ objects, stageRef, onUpdateTableCell })))
+
+      const mockTextNode = { getClientRect: () => ({ x: 0, y: 0, width: 100, height: 30 }) }
+      act(() => result.current.handleStartCellEdit('tbl-1', mockTextNode as never, 1, 0))
+      act(() => result.current.setEditText('Updated'))
+      act(() => result.current.handleFinishEdit())
+
+      expect(onUpdateTableCell).toHaveBeenCalledWith('tbl-1', 1, 0, 'Updated')
+      expect(result.current.editingId).toBeNull()
+      expect(result.current.editingCellCoords).toBeNull()
+    })
+
+    it('handleFinishEdit clears editingCellCoords', () => {
+      const tbl = makeTableObj()
+      const objects = new Map([['tbl-1', tbl]])
+      const stageRef = { current: createMockStage() } as unknown as React.RefObject<Konva.Stage | null>
+      const { result } = renderHook(() => useTextEditing(makeDeps({ objects, stageRef })))
+
+      const mockTextNode = { getClientRect: () => ({ x: 0, y: 0, width: 100, height: 30 }) }
+      act(() => result.current.handleStartCellEdit('tbl-1', mockTextNode as never, 0, 0))
+      expect(result.current.editingCellCoords).not.toBeNull()
+
+      act(() => result.current.handleFinishEdit())
+      expect(result.current.editingCellCoords).toBeNull()
+    })
+
+    it('handleCellKeyDown with Tab navigates right', () => {
+      const tbl = makeTableObj()
+      const objects = new Map([['tbl-1', tbl]])
+      const stageRef = { current: createMockStage() } as unknown as React.RefObject<Konva.Stage | null>
+      const onUpdateTableCell = vi.fn()
+      const { result } = renderHook(() => useTextEditing(makeDeps({ objects, stageRef, onUpdateTableCell })))
+
+      const mockTextNode = { getClientRect: () => ({ x: 0, y: 0, width: 100, height: 30 }) }
+      act(() => result.current.handleStartCellEdit('tbl-1', mockTextNode as never, 0, 0))
+      expect(result.current.editingCellCoords).toEqual({ row: 0, col: 0 })
+
+      const event = { key: 'Tab', shiftKey: false, preventDefault: vi.fn() } as unknown as React.KeyboardEvent<HTMLTextAreaElement>
+      act(() => result.current.handleCellKeyDown(event))
+
+      expect(onUpdateTableCell).toHaveBeenCalledWith('tbl-1', 0, 0, 'A')
+      expect(result.current.editingCellCoords).toEqual({ row: 0, col: 1 })
+      expect(result.current.editText).toBe('B')
+    })
+
+    it('handleCellKeyDown with Shift+Tab navigates left', () => {
+      const tbl = makeTableObj()
+      const objects = new Map([['tbl-1', tbl]])
+      const stageRef = { current: createMockStage() } as unknown as React.RefObject<Konva.Stage | null>
+      const onUpdateTableCell = vi.fn()
+      const { result } = renderHook(() => useTextEditing(makeDeps({ objects, stageRef, onUpdateTableCell })))
+
+      const mockTextNode = { getClientRect: () => ({ x: 0, y: 0, width: 100, height: 30 }) }
+      act(() => result.current.handleStartCellEdit('tbl-1', mockTextNode as never, 0, 1))
+
+      const event = { key: 'Tab', shiftKey: true, preventDefault: vi.fn() } as unknown as React.KeyboardEvent<HTMLTextAreaElement>
+      act(() => result.current.handleCellKeyDown(event))
+
+      expect(result.current.editingCellCoords).toEqual({ row: 0, col: 0 })
+      expect(result.current.editText).toBe('A')
+    })
+
+    it('handleCellKeyDown with Enter navigates down', () => {
+      const tbl = makeTableObj()
+      const objects = new Map([['tbl-1', tbl]])
+      const stageRef = { current: createMockStage() } as unknown as React.RefObject<Konva.Stage | null>
+      const onUpdateTableCell = vi.fn()
+      const { result } = renderHook(() => useTextEditing(makeDeps({ objects, stageRef, onUpdateTableCell })))
+
+      const mockTextNode = { getClientRect: () => ({ x: 0, y: 0, width: 100, height: 30 }) }
+      act(() => result.current.handleStartCellEdit('tbl-1', mockTextNode as never, 0, 0))
+
+      const event = { key: 'Enter', shiftKey: false, preventDefault: vi.fn() } as unknown as React.KeyboardEvent<HTMLTextAreaElement>
+      act(() => result.current.handleCellKeyDown(event))
+
+      expect(result.current.editingCellCoords).toEqual({ row: 1, col: 0 })
+      expect(result.current.editText).toBe('C')
+    })
+
+    it('handleCellKeyDown with Escape finishes editing', () => {
+      const tbl = makeTableObj()
+      const objects = new Map([['tbl-1', tbl]])
+      const stageRef = { current: createMockStage() } as unknown as React.RefObject<Konva.Stage | null>
+      const onUpdateTableCell = vi.fn()
+      const { result } = renderHook(() => useTextEditing(makeDeps({ objects, stageRef, onUpdateTableCell })))
+
+      const mockTextNode = { getClientRect: () => ({ x: 0, y: 0, width: 100, height: 30 }) }
+      act(() => result.current.handleStartCellEdit('tbl-1', mockTextNode as never, 0, 0))
+
+      const event = { key: 'Escape', shiftKey: false, preventDefault: vi.fn() } as unknown as React.KeyboardEvent<HTMLTextAreaElement>
+      act(() => result.current.handleCellKeyDown(event))
+
+      expect(result.current.editingId).toBeNull()
+      expect(result.current.editingCellCoords).toBeNull()
     })
   })
 })

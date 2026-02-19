@@ -9,7 +9,7 @@ import {
   handleShapeTransformEnd,
   getInitialVertexPoints,
 } from './shapeUtils'
-import { makeRectangle, makeCircle, makeLine, makeObject, resetFactory } from '@/test/boardObjectFactory'
+import { makeRectangle, makeCircle, makeLine, makeObject, makeTable, resetFactory } from '@/test/boardObjectFactory'
 
 describe('shapeUtils', () => {
   beforeEach(() => resetFactory())
@@ -275,6 +275,80 @@ describe('shapeUtils', () => {
       expect(onTransformEnd).toHaveBeenCalledWith('r1', expect.not.objectContaining({
         custom_points: expect.anything(),
       }))
+    })
+
+    it('distributes scale to table columns and rows', () => {
+      const tableData = JSON.stringify({
+        columns: [
+          { id: 'c1', name: 'Col 1', width: 100 },
+          { id: 'c2', name: 'Col 2', width: 100 },
+        ],
+        rows: [
+          { id: 'r1', height: 40, cells: { c1: { text: '' }, c2: { text: '' } } },
+        ],
+      })
+      const obj = makeTable({ id: 'tbl-1', width: 200, height: 72, table_data: tableData })
+      const onTransformEnd = vi.fn()
+
+      const scaleX = vi.fn((v?: number) => (v === undefined ? 1.5 : undefined))
+      const scaleY = vi.fn((v?: number) => (v === undefined ? 2 : undefined))
+      const mockNode = {
+        scaleX,
+        scaleY,
+        x: vi.fn(() => 50),
+        y: vi.fn(() => 60),
+        rotation: vi.fn(() => 0),
+      }
+
+      const e = { target: mockNode } as unknown as Parameters<typeof handleShapeTransformEnd>[0]
+      handleShapeTransformEnd(e, obj, onTransformEnd)
+
+      const call = onTransformEnd.mock.calls[0]
+      expect(call[0]).toBe('tbl-1')
+      const updates = call[1]
+      expect(updates.table_data).toBeDefined()
+      const newData = JSON.parse(updates.table_data as string)
+      // 100 * 1.5 = 150 for each column
+      expect(newData.columns[0].width).toBe(150)
+      expect(newData.columns[1].width).toBe(150)
+      // 40 * 2 = 80
+      expect(newData.rows[0].height).toBe(80)
+      // Width should be sum of column widths
+      expect(updates.width).toBe(300)
+    })
+
+    it('clamps table column widths and row heights to minimums during scale', () => {
+      const tableData = JSON.stringify({
+        columns: [
+          { id: 'c1', name: 'Col 1', width: 60 },
+        ],
+        rows: [
+          { id: 'r1', height: 30, cells: { c1: { text: '' } } },
+        ],
+      })
+      const obj = makeTable({ id: 'tbl-2', width: 60, height: 62, table_data: tableData })
+      const onTransformEnd = vi.fn()
+
+      // Scale down small enough to hit minimums
+      const scaleX = vi.fn((v?: number) => (v === undefined ? 0.3 : undefined))
+      const scaleY = vi.fn((v?: number) => (v === undefined ? 0.3 : undefined))
+      const mockNode = {
+        scaleX,
+        scaleY,
+        x: vi.fn(() => 0),
+        y: vi.fn(() => 0),
+        rotation: vi.fn(() => 0),
+      }
+
+      const e = { target: mockNode } as unknown as Parameters<typeof handleShapeTransformEnd>[0]
+      handleShapeTransformEnd(e, obj, onTransformEnd)
+
+      const updates = onTransformEnd.mock.calls[0][1]
+      const newData = JSON.parse(updates.table_data as string)
+      // 60 * 0.3 = 18, clamped to MIN_COL_WIDTH (40)
+      expect(newData.columns[0].width).toBe(40)
+      // 30 * 0.3 = 9, clamped to MIN_ROW_HEIGHT (24)
+      expect(newData.rows[0].height).toBe(24)
     })
   })
 

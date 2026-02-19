@@ -70,9 +70,9 @@ function MenuItem({
 }
 
 const STROKE_PRESETS = [
-  { stroke_width: 1, stroke_dash: undefined, label: 'Thin' },
-  { stroke_width: 2, stroke_dash: undefined, label: 'Medium' },
-  { stroke_width: 4, stroke_dash: undefined, label: 'Thick' },
+  { stroke_width: 1, stroke_dash: '[]', label: 'Thin' },
+  { stroke_width: 2, stroke_dash: '[]', label: 'Medium' },
+  { stroke_width: 4, stroke_dash: '[]', label: 'Thick' },
   { stroke_width: 2, stroke_dash: '[8,4]', label: 'Dashed' },
   { stroke_width: 2, stroke_dash: '[2,2]', label: 'Dotted' },
 ]
@@ -299,7 +299,7 @@ export function ContextMenu({
                     onClose()
                   }}
                   className={`rounded px-2 py-1 text-xs font-medium transition ${
-                    currentStrokeWidth === p.stroke_width && currentStrokeDash === p.stroke_dash
+                    currentStrokeWidth === p.stroke_width && (currentStrokeDash ?? '[]') === p.stroke_dash
                       ? 'bg-indigo-100 text-indigo-700'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}

@@ -68,6 +68,17 @@ export function useStageInteractions({
   const [connectorHint, setConnectorHint] = useState<{ shapeId: string; anchor: AnchorPoint } | null>(null)
   const connectorHintDrawingRef = useRef(false)
 
+  // ── Refs to avoid stale closures in handleStageMouseMove ────────
+
+  const hoveredAnchorsRef = useRef(hoveredAnchors)
+  hoveredAnchorsRef.current = hoveredAnchors
+  const connectorHintRef = useRef(connectorHint)
+  connectorHintRef.current = connectorHint
+  const selectedIdsRef = useRef(selectedIds)
+  selectedIdsRef.current = selectedIds
+  const activeToolRef = useRef(activeTool)
+  activeToolRef.current = activeTool
+
   // ── Throttle ref for hover detection ─────────────────────────────
 
   const lastHoverCheckRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
@@ -109,8 +120,8 @@ export function useStageInteractions({
       let sy = snapToGridEnabledRef.current ? snapToGrid(canvasY, gridSizeRef.current, gridSubdivisionsRef.current) : canvasY
 
       drawSnapStartRef.current = null
-      if ((activeTool === 'line' || activeTool === 'arrow') && hoveredAnchors) {
-        const nearest = findNearestAnchor(hoveredAnchors, canvasX, canvasY, 20)
+      if ((activeTool === 'line' || activeTool === 'arrow') && hoveredAnchorsRef.current) {
+        const nearest = findNearestAnchor(hoveredAnchorsRef.current, canvasX, canvasY, 20)
         if (nearest) {
           for (const [objId, obj] of objectsRef.current) {
             if (isVectorType(obj.type) || obj.type === 'group' || obj.deleted_at) continue
@@ -139,7 +150,7 @@ export function useStageInteractions({
     const rect = { x: canvasX, y: canvasY, width: 0, height: 0 }
     marqueeRef.current = rect
     setMarquee(rect)
-  }, [stagePos, stageScale, activeTool, onActivity, hoveredAnchors])
+  }, [stagePos, stageScale, activeTool, onActivity])
 
   // ── handleStageMouseMove ─────────────────────────────────────────
 
@@ -158,7 +169,7 @@ export function useStageInteractions({
     }
 
     // Line/arrow tool: show anchor dots on hovered shape
-    const isLineTool = activeTool === 'line' || activeTool === 'arrow'
+    const isLineTool = activeToolRef.current === 'line' || activeToolRef.current === 'arrow'
     if (isLineTool && !isDrawing.current) {
       const hoverDx = pos.x - lastHoverCheckRef.current.x
       const hoverDy = pos.y - lastHoverCheckRef.current.y
@@ -182,12 +193,12 @@ export function useStageInteractions({
           setHoveredAnchors(null)
         }
       }
-    } else if (!isLineTool && hoveredAnchors) {
+    } else if (!isLineTool && hoveredAnchorsRef.current) {
       setHoveredAnchors(null)
     }
 
     // Selection mode: connector hint on hover near shape edge
-    if (!activeTool && !isDrawing.current && !isMarqueeActive.current && selectedIds.size === 0) {
+    if (!activeToolRef.current && !isDrawing.current && !isMarqueeActive.current && selectedIdsRef.current.size === 0) {
       const hoverDx = pos.x - lastHoverCheckRef.current.x
       const hoverDy = pos.y - lastHoverCheckRef.current.y
       const hoverDistSq = hoverDx * hoverDx + hoverDy * hoverDy
@@ -215,7 +226,7 @@ export function useStageInteractions({
           setConnectorHint(null)
         }
       }
-    } else if (connectorHint && (activeTool || selectedIds.size > 0)) {
+    } else if (connectorHintRef.current && (activeToolRef.current || selectedIdsRef.current.size > 0)) {
       setConnectorHint(null)
     }
 
@@ -247,7 +258,7 @@ export function useStageInteractions({
     const rect = { x, y, width, height }
     marqueeRef.current = rect
     setMarquee(rect)
-  }, [stagePos, stageScale, onCursorMove, activeTool, selectedIds])
+  }, [stagePos, stageScale, onCursorMove])
 
   // ── handleStageMouseUp ───────────────────────────────────────────
 

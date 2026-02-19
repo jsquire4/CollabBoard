@@ -1,14 +1,14 @@
 import Konva from 'konva'
 import { BoardObject } from '@/types/board'
 
-export interface TextInset {
+interface TextInset {
   x: number
   y: number
   width: number
   height: number
 }
 
-export type RenderStrategy = 'rect' | 'circle' | 'polygon'
+type RenderStrategy = 'rect' | 'circle' | 'polygon'
 
 export interface ShapeDefinition {
   strategy: RenderStrategy

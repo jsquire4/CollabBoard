@@ -1,3 +1,5 @@
+'use client'
+
 import { useCallback, useMemo } from 'react'
 import Konva from 'konva'
 import { useBoardContext } from '@/contexts/BoardContext'

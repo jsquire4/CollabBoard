@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef } from 'react'
 import type { FontStyle } from '@/types/board'
 import { useClickOutside } from '@/hooks/useClickOutside'
 

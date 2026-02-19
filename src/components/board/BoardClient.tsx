@@ -334,14 +334,15 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         return { type: 'ungroup', groupSnapshot, childIds: entry.childIds }
       }
       case 'ungroup': {
-        addObjectWithId(entry.groupSnapshot)
-        for (const childId of entry.childIds) {
-          updateObject(childId, { parent_id: entry.groupSnapshot.id })
-        }
+        // Capture current parent_ids BEFORE mutating, to avoid stale closure reads
         const previousParentIds = new Map<string, string | null>()
         for (const childId of entry.childIds) {
           const child = objects.get(childId)
           previousParentIds.set(childId, child?.parent_id ?? null)
+        }
+        addObjectWithId(entry.groupSnapshot)
+        for (const childId of entry.childIds) {
+          updateObject(childId, { parent_id: entry.groupSnapshot.id })
         }
         return { type: 'group', groupId: entry.groupSnapshot.id, childIds: entry.childIds, previousParentIds }
       }
@@ -489,12 +490,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     updateObject(id, { title: title.slice(0, 256) })
   }, [canEdit, updateObject, markActivity])
 
-  const handleTransformMove = useCallback((id: string, updates: Partial<BoardObject>) => {
-    if (!canEdit) return
-    markActivity()
-    updateObjectDrag(id, updates)
-  }, [canEdit, updateObjectDrag, markActivity])
-
   const handleTransformEnd = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
     markActivity()
@@ -576,8 +571,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
       cornerRadius: obj.corner_radius ?? (obj.type === 'rectangle' ? 6 : 0),
       isRectangle: obj.type === 'rectangle',
       isLine: obj.type === 'line' || obj.type === 'arrow',
-      markerStart: obj.marker_start ?? 'none',
-      markerEnd: obj.marker_end ?? (obj.type === 'arrow' ? 'arrow' : 'none'),
     }
   }, [selectedIds, objects])
 
@@ -683,7 +676,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
               onUpdateText={handleUpdateText}
               onUpdateTitle={handleUpdateTitle}
               onTransformEnd={handleTransformEnd}
-              onTransformMove={handleTransformMove}
               onDelete={handleDelete}
               onDuplicate={handleDuplicate}
               onCopy={handleCopy}
@@ -700,8 +692,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
               onStrokeStyleChange={handleStrokeStyleChange}
               onOpacityChange={handleOpacityChange}
               onMarkerChange={handleMarkerChange}
-              selectedMarkerStart={selectedStyleInfo.markerStart}
-              selectedMarkerEnd={selectedStyleInfo.markerEnd}
               onEndpointDragMove={handleEndpointDragMove}
               onEndpointDragEnd={handleEndpointDragEnd}
               onUndo={performUndo}

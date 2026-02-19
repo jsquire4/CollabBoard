@@ -4,7 +4,7 @@ import React, { useRef, useCallback, useEffect, useMemo } from 'react'
 import { Stage, Layer, Transformer, Rect as KonvaRect, Group as KonvaGroup, Line as KonvaLine, Circle as KonvaCircle } from 'react-konva'
 import Konva from 'konva'
 import { useCanvas } from '@/hooks/useCanvas'
-import { useModifierKeys } from '@/hooks/useShiftKey'
+import { useModifierKeys } from '@/hooks/useModifierKeys'
 import { BoardObject, BoardObjectType } from '@/types/board'
 import { useBoardContext } from '@/contexts/BoardContext'
 import { useStageInteractions } from '@/hooks/board/useStageInteractions'
@@ -41,7 +41,6 @@ interface CanvasProps {
   onUpdateText: (id: string, text: string) => void
   onUpdateTitle: (id: string, title: string) => void
   onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
-  onTransformMove?: (id: string, updates: Partial<BoardObject>) => void
   onDelete: () => void
   onDuplicate: () => void
   onCopy?: () => void
@@ -58,8 +57,6 @@ interface CanvasProps {
   onStrokeStyleChange?: (updates: { stroke_color?: string | null; stroke_width?: number; stroke_dash?: string }) => void
   onOpacityChange?: (opacity: number) => void
   onMarkerChange?: (updates: { marker_start?: string; marker_end?: string }) => void
-  selectedMarkerStart?: string
-  selectedMarkerEnd?: string
   onDragStart?: (id: string) => void
   onUndo?: () => void
   onRedo?: () => void
@@ -99,15 +96,13 @@ interface CanvasProps {
 export function Canvas({
   onDrawShape, onCancelTool,
   onSelect, onSelectObjects, onClearSelection, onEnterGroup, onExitGroup,
-  onDragEnd, onDragMove, onUpdateText, onUpdateTitle, onTransformEnd, onTransformMove,
+  onDragEnd, onDragMove, onUpdateText, onUpdateTitle, onTransformEnd,
   onDelete, onDuplicate, onCopy, onPaste, onColorChange,
   onBringToFront, onBringForward, onSendBackward, onSendToBack,
   onGroup, onUngroup, canGroup, canUngroup,
   onStrokeStyleChange,
   onOpacityChange,
   onMarkerChange,
-  selectedMarkerStart,
-  selectedMarkerEnd,
   onDragStart: onDragStartProp,
   onUndo, onRedo,
   onCheckFrameContainment, onMoveGroupChildren,
@@ -144,6 +139,8 @@ export function Canvas({
   const stageRef = useRef<Konva.Stage>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const shapeRefs = useRef<Map<string, Konva.Node>>(new Map())
+  const objectsRef = useRef(objects)
+  objectsRef.current = objects
 
   // ── Extracted hooks ────────────────────────────────────────────────
 
@@ -186,9 +183,6 @@ export function Canvas({
     didPanRef, onActivity,
   })
 
-  // Snapshot of each node's width/height at transform start — prevents feedback loops
-  // when onTransformMove updates state and the next tick reads stale dimensions.
-  const transformOriginRef = useRef<Map<string, { width: number; height: number }>>(new Map())
   const { shiftHeld, ctrlHeld } = useModifierKeys()
 
   // Expand group IDs in selectedIds to their visible children (for Transformer attachment).
@@ -278,7 +272,7 @@ export function Canvas({
 
         // For single circle selection, constrain ratio
         if (nodes.length === 1) {
-          const obj = objects.get(Array.from(effectiveNodeIds)[0])
+          const obj = objectsRef.current.get(Array.from(effectiveNodeIds)[0])
           if (obj?.type === 'circle') {
             tr.keepRatio(true)
             tr.enabledAnchors(['top-left', 'top-right', 'bottom-left', 'bottom-right'])
@@ -302,7 +296,7 @@ export function Canvas({
 
     tr.nodes([])
     tr.getLayer()?.batchDraw()
-  }, [effectiveNodeIds, editingId, objects, shiftHeld])
+  }, [effectiveNodeIds, editingId, shiftHeld])
 
   const handleStageClick = useCallback((e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (marqueeJustCompletedRef.current) {
@@ -338,15 +332,6 @@ export function Canvas({
     }
     onSelect(id, { shift: shiftHeld, ctrl: ctrlHeld })
   }, [onSelect, shiftHeld, ctrlHeld, objects, startGeometricTextEdit, onActivity])
-
-  // Handle double-click on group/frame to enter it
-  const handleShapeDblClick = useCallback((id: string) => {
-    const obj = objects.get(id)
-    if (!obj) return
-    if (obj.type === 'group' || obj.type === 'frame') {
-      onEnterGroup(id)
-    }
-  }, [objects, onEnterGroup])
 
   // Auto-route cache: keyed by connector ID, stores { cacheKey, points }.
   // Recomputes only when the connector or connected shapes' positions change.
@@ -421,13 +406,14 @@ export function Canvas({
   }, [getDescendants])
 
   // Determine which groups are selected (for drop shadow visual)
-  const selectedGroupIds = new Set<string>()
-  for (const id of selectedIds) {
-    const obj = objects.get(id)
-    if (obj?.type === 'group') {
-      selectedGroupIds.add(id)
+  const selectedGroupIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const id of selectedIds) {
+      const obj = objects.get(id)
+      if (obj?.type === 'group') ids.add(id)
     }
-  }
+    return ids
+  }, [selectedIds, objects])
 
   // Shape rendering state + callbacks (stable references for renderShape)
   const shapeState: ShapeState = useMemo(() => ({
@@ -617,18 +603,6 @@ export function Canvas({
                   return _oldBox
                 }
                 return newBox
-              }}
-              onTransformStart={() => {
-                const tr = trRef.current
-                if (!tr) return
-                const origins = new Map<string, { width: number; height: number }>()
-                for (const node of tr.nodes()) {
-                  const id = Array.from(shapeRefs.current.entries()).find(([, n]) => n === node)?.[0]
-                  if (!id) continue
-                  const obj = objects.get(id)
-                  if (obj) origins.set(id, { width: obj.width, height: obj.height })
-                }
-                transformOriginRef.current = origins
               }}
               // No onTransform handler — Konva's Transformer handles the
               // visual resize natively via scale. Updating React state mid-

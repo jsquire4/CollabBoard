@@ -8,14 +8,17 @@ interface FrameShapeProps extends ShapeProps {
   isEditing?: boolean
 }
 
+// Cached offscreen canvas to avoid DOM allocation on every call
+let _measureCanvas: HTMLCanvasElement | null = null
+
 /** Measure wrapped text height using an offscreen canvas for accurate word-break metrics. */
 function measureWrappedHeight(
   text: string, fontSize: number, fontStyle: string, fontFamily: string,
   maxWidth: number, lineHeight: number
 ): number {
   if (typeof document === 'undefined') return fontSize * lineHeight
-  const canvas = document.createElement('canvas')
-  const ctx = canvas.getContext('2d')
+  if (!_measureCanvas) _measureCanvas = document.createElement('canvas')
+  const ctx = _measureCanvas.getContext('2d')
   if (!ctx) return fontSize * lineHeight
   ctx.font = `${fontStyle} ${fontSize}px ${fontFamily}`
   const words = text.split(/\s+/)

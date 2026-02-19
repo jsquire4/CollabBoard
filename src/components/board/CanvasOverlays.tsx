@@ -21,7 +21,7 @@ interface ConnectorDrawingRefs {
   setConnectorHint: (h: ConnectorHintData | null) => void
 }
 
-export interface CanvasOverlaysProps {
+interface CanvasOverlaysProps {
   // Textarea editing
   editingId: string | null
   editingField?: 'title' | 'text'

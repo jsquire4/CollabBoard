@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react'
 import Konva from 'konva'
 import { useBoardContext } from '@/contexts/BoardContext'
-import { useModifierKeys } from '@/hooks/useShiftKey'
+import { useModifierKeys } from '@/hooks/useModifierKeys'
 
 export interface ContextMenuState {
   x: number

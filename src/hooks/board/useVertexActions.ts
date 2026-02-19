@@ -1,3 +1,5 @@
+'use client'
+
 import { useCallback } from 'react'
 import { BoardObject } from '@/types/board'
 import { shapeRegistry } from '@/components/board/shapeRegistry'

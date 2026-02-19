@@ -39,7 +39,7 @@ export interface BoardWithRole {
   role: BoardRole
 }
 
-export interface BoardCardSummaryMember {
+interface BoardCardSummaryMember {
   user_id: string
   role: string
   display_name: string

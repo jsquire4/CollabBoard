@@ -76,6 +76,6 @@ export interface BoardObject {
   waypoints?: string | null
   marker_start?: string | null
   marker_end?: string | null
-  field_clocks?: Record<string, { ts: number; c: number; n: string }>
+  field_clocks?: Record<string, import('@/lib/crdt/hlc').HLC>
   deleted_at?: string | null
 }

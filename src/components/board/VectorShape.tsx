@@ -334,7 +334,12 @@ export const VectorShape = memo(function VectorShape({
     prev.object !== next.object ||
     prev.isSelected !== next.isSelected ||
     prev.editable !== next.editable ||
-    prev.variant !== next.variant
+    prev.variant !== next.variant ||
+    prev.onWaypointDragEnd !== next.onWaypointDragEnd ||
+    prev.onWaypointInsert !== next.onWaypointInsert ||
+    prev.onWaypointDelete !== next.onWaypointDelete ||
+    prev.onEndpointDragMove !== next.onEndpointDragMove ||
+    prev.onEndpointDragEnd !== next.onEndpointDragEnd
   ) return false
   // Shallow array comparison for autoRoutePoints (new array each render)
   const a = prev.autoRoutePoints

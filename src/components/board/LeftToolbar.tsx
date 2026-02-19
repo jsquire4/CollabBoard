@@ -8,7 +8,6 @@ import type { BoardObjectType, FontStyle } from '@/types/board'
 import type { ShapePreset } from './shapePresets'
 import {
   STANDALONE_PRESETS,
-  SHAPE_GROUPS,
   FRAME_PRESET,
   LINE_PRESETS,
   LINE_PLACEHOLDER_PRESETS,

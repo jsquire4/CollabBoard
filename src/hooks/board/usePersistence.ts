@@ -10,7 +10,7 @@ import { shapeRegistry } from '@/components/board/shapeRegistry'
 import { BoardChange, CRDT_ENABLED } from '@/hooks/board/useBroadcast'
 
 // Explicit column list for board_objects queries (avoids pulling large JSONB when not needed)
-export const BOARD_OBJECT_COLUMNS = [
+const BOARD_OBJECT_COLUMNS = [
   'id', 'board_id', 'type', 'x', 'y', 'x2', 'y2', 'width', 'height', 'rotation',
   'text', 'color', 'font_size', 'font_family', 'font_style',
   'stroke_width', 'stroke_dash', 'stroke_color',
@@ -22,7 +22,7 @@ export const BOARD_OBJECT_COLUMNS = [
   'z_index', 'parent_id', 'created_by', 'created_at', 'updated_at', 'deleted_at',
 ].join(',')
 
-export const BOARD_OBJECT_SELECT = CRDT_ENABLED
+const BOARD_OBJECT_SELECT = CRDT_ENABLED
   ? BOARD_OBJECT_COLUMNS + ',field_clocks'
   : BOARD_OBJECT_COLUMNS
 

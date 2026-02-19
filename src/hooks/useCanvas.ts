@@ -39,26 +39,6 @@ export function useCanvas() {
     })
   }, [])
 
-  const handleDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
-    // Only update if the stage itself was dragged (not a child)
-    if (e.target === e.target.getStage()) {
-      setStagePos({ x: e.target.x(), y: e.target.y() })
-    }
-  }, [])
-
-  // Convert screen coordinates to canvas coordinates
-  const screenToCanvas = useCallback((screenX: number, screenY: number) => {
-    return {
-      x: (screenX - stagePos.x) / stageScale,
-      y: (screenY - stagePos.y) / stageScale,
-    }
-  }, [stagePos, stageScale])
-
-  // Get center of current viewport in canvas coordinates
-  const getViewportCenter = useCallback(() => {
-    return screenToCanvas(window.innerWidth / 2, window.innerHeight / 2)
-  }, [screenToCanvas])
-
   const zoomIn = useCallback(() => {
     setStageScale(s => Math.min(s * ZOOM_SPEED, MAX_SCALE))
   }, [])
@@ -77,9 +57,6 @@ export function useCanvas() {
     setStagePos,
     stageScale,
     handleWheel,
-    handleDragEnd,
-    screenToCanvas,
-    getViewportCenter,
     zoomIn,
     zoomOut,
     resetZoom,

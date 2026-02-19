@@ -16,7 +16,6 @@ interface BoardListProps {
 export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListProps) {
   const [myBoards, setMyBoards] = useState<BoardWithRole[]>(initialMyBoards)
   const [sharedBoards, setSharedBoards] = useState<BoardWithRole[]>(initialSharedBoards)
-  const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [showNameInput, setShowNameInput] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -30,28 +29,23 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
 
   const handleCreate = async () => {
     const name = newName.trim() || 'Untitled Board'
-    setCreating(true)
     setError(null)
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
 
-      const { data, error } = await supabase
-        .from('boards')
-        .insert({ name, created_by: user.id })
-        .select()
-        .single()
+    const { data, error } = await supabase
+      .from('boards')
+      .insert({ name, created_by: user.id })
+      .select()
+      .single()
 
-      if (error) {
-        setError(`Failed to create board: ${error.message || 'Unknown error'}`)
-        return
-      }
-      setNewName('')
-      setShowNameInput(false)
-      router.push(`/board/${data.id}`)
-    } finally {
-      setCreating(false)
+    if (error) {
+      setError(`Failed to create board: ${error.message || 'Unknown error'}`)
+      return
     }
+    setNewName('')
+    setShowNameInput(false)
+    router.push(`/board/${data.id}`)
   }
 
   const handleRename = async (id: string) => {
@@ -127,10 +121,21 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
         .eq('board_id', boardId)
 
       if (sourceObjects && sourceObjects.length > 0) {
+        // Build old ID → new ID mapping so FK refs point to the new board's objects
+        const idMap = new Map<string, string>()
+        for (const obj of sourceObjects) {
+          idMap.set(obj.id, crypto.randomUUID())
+        }
+        const remap = (oldId: string | null | undefined) => oldId ? (idMap.get(oldId) ?? null) : null
+
         const copies = sourceObjects.map(({ id, created_at, updated_at, board_id, ...rest }) => ({
           ...rest,
+          id: idMap.get(id),
           board_id: newBoard.id,
           created_by: user.id,
+          parent_id: remap(rest.parent_id),
+          connect_start_id: remap(rest.connect_start_id),
+          connect_end_id: remap(rest.connect_end_id),
         }))
         await supabase.from('board_objects').insert(copies)
       }

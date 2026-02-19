@@ -24,7 +24,7 @@ export interface ShapePreset {
   autoEdit?: boolean
 }
 
-export interface ShapeGroup {
+interface ShapeGroup {
   id: string
   label: string
   /** SVG path for the group button icon (24×24 viewBox) */

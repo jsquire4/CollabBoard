@@ -17,8 +17,8 @@ const STROKE_PRESETS = [
   { width: 8, label: '8' },
 ]
 
-const DASH_PRESETS: { dash?: string; label: string }[] = [
-  { dash: undefined, label: 'Solid' },
+const DASH_PRESETS = [
+  { dash: '[]', label: 'Solid' },
   { dash: '[8,4]', label: 'Dashed' },
   { dash: '[2,2]', label: 'Dotted' },
 ]
@@ -151,7 +151,7 @@ export function StylePanel({
                   type="button"
                   onClick={() => onStrokeStyleChange({ stroke_dash: p.dash })}
                   className={`rounded px-2 py-0.5 text-xs font-medium transition ${
-                    strokeDash === p.dash ? presetActive : presetInactive
+                    (strokeDash ?? '[]') === p.dash ? presetActive : presetInactive
                   }`}
                 >
                   {p.label}

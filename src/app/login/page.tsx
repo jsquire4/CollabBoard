@@ -1,11 +1,14 @@
 'use client'
 
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { GoogleSignInButton } from '@/components/login/GoogleSignInButton'
 
 export default function LoginPage() {
   const supabase = createClient()
+  const searchParams = useSearchParams()
+  const authError = searchParams.get('error')
 
   const handleLogin = async () => {
     await supabase.auth.signInWithOAuth({
@@ -45,6 +48,12 @@ export default function LoginPage() {
               Sign in with your Google account to start collaborating
             </p>
           </div>
+
+          {authError && (
+            <p className="mt-6 rounded-lg bg-red-50 px-4 py-3 text-center text-sm text-red-700">
+              Authentication failed. Please try again.
+            </p>
+          )}
 
           <div className="mt-10">
             <GoogleSignInButton onClick={handleLogin} />

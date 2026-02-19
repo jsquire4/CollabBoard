@@ -15,8 +15,6 @@ import { useRemoteSelection } from '@/hooks/board/useRemoteSelection'
 export { coalesceBroadcastQueue } from '@/hooks/board/useBroadcast'
 export type { BoardChange } from '@/hooks/board/useBroadcast'
 
-const COLOR_PALETTE = ['#FFEB3B', '#FF9800', '#E91E63', '#9C27B0', '#2196F3', '#4CAF50']
-
 export function useBoardState(userId: string, boardId: string, userRole: BoardRole = 'viewer', channel?: RealtimeChannel | null, onlineUsers?: OnlineUser[]) {
   const [objects, setObjects] = useState<Map<string, BoardObject>>(new Map())
   const objectsRef = useRef<Map<string, BoardObject>>(objects)
@@ -121,7 +119,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
   // ── Extracted hooks ─────────────────────────────────────────────
 
   // Broadcast batching + CRDT stamping (extracted to useBroadcast)
-  const { queueBroadcast, flushBroadcast, stampChange, stampCreate } = useBroadcast({
+  const { queueBroadcast, stampChange, stampCreate } = useBroadcast({
     channel, userId, setObjects, fieldClocksRef, hlcRef,
   })
 
@@ -476,20 +474,20 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       return null
     }
 
-    for (const obj of selectedObjs) {
+    await Promise.all(selectedObjs.map(obj => {
       const childUpdate: Record<string, unknown> = { parent_id: groupId, updated_at: now }
       if (CRDT_ENABLED) {
         childUpdate.field_clocks = fieldClocksRef.current.get(obj.id) ?? {}
         childUpdate.deleted_at = null
       }
-      supabase
+      return supabase
         .from('board_objects')
         .update(childUpdate)
         .eq('id', obj.id)
         .then(({ error }: { error: { message: string } | null }) => {
           if (error) console.error('Failed to update child parent_id:', error.message)
         })
-    }
+    }))
 
     return groupObj
   }, [canEdit, selectedIds, objects, boardId, userId, queueBroadcast, stampCreate, stampChange])
@@ -629,7 +627,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     getDescendants,
     remoteSelections,
     reconcileOnReconnect,
-    COLOR_PALETTE,
     deleteObject,
     getZOrderSet,
     addObjectWithId,

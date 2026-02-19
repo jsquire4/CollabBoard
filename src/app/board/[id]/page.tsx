@@ -11,6 +11,10 @@ export default async function BoardPage({ params }: BoardPageProps) {
   const { id } = await params
   const supabase = await createClient()
 
+  // Authenticate first to prevent board ID enumeration
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) notFound()
+
   const { data: board } = await supabase
     .from('boards')
     .select('id, name, grid_size, grid_subdivisions, grid_visible, snap_to_grid, grid_style, canvas_color, grid_color, subdivision_color')
@@ -18,10 +22,6 @@ export default async function BoardPage({ params }: BoardPageProps) {
     .single()
 
   if (!board) notFound()
-
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) notFound()
 
   const userRole = await fetchBoardRole(id)
 

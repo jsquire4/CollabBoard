@@ -88,6 +88,28 @@ export function makeFrame(overrides?: Partial<BoardObject>): BoardObject {
   })
 }
 
+export function makeTable(overrides?: Partial<BoardObject>): BoardObject {
+  return makeObject({
+    type: 'table',
+    width: 360,
+    height: 128,
+    color: '#FFFFFF',
+    table_data: JSON.stringify({
+      columns: [
+        { id: 'col-1', name: 'Column 1', width: 120 },
+        { id: 'col-2', name: 'Column 2', width: 120 },
+        { id: 'col-3', name: 'Column 3', width: 120 },
+      ],
+      rows: [
+        { id: 'row-1', height: 32, cells: { 'col-1': { text: '' }, 'col-2': { text: '' }, 'col-3': { text: '' } } },
+        { id: 'row-2', height: 32, cells: { 'col-1': { text: '' }, 'col-2': { text: '' }, 'col-3': { text: '' } } },
+        { id: 'row-3', height: 32, cells: { 'col-1': { text: '' }, 'col-2': { text: '' }, 'col-3': { text: '' } } },
+      ],
+    }),
+    ...overrides,
+  })
+}
+
 /** Build an objects Map from an array */
 export function objectsMap(...objs: BoardObject[]): Map<string, BoardObject> {
   return new Map(objs.map(o => [o.id, o]))

@@ -26,6 +26,7 @@ export type BoardObjectType =
   | 'arrow'
   | 'parallelogram'
   | 'ngon'
+  | 'table'
 
 export type FontStyle = 'normal' | 'bold' | 'italic' | 'bold italic'
 
@@ -76,6 +77,7 @@ export interface BoardObject {
   waypoints?: string | null
   marker_start?: string | null
   marker_end?: string | null
+  table_data?: string | null
   field_clocks?: Record<string, import('@/lib/crdt/hlc').HLC>
   deleted_at?: string | null
 }

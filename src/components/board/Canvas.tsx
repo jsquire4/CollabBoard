@@ -8,6 +8,11 @@ import { useModifierKeys } from '@/hooks/useShiftKey'
 import { BoardObject, BoardObjectType } from '@/types/board'
 import { useBoardContext } from '@/contexts/BoardContext'
 import { useStageInteractions } from '@/hooks/board/useStageInteractions'
+import { useRemoteCursors } from '@/hooks/board/useRemoteCursors'
+import { useRightClickPan } from '@/hooks/board/useRightClickPan'
+import { useGridBackground } from '@/hooks/board/useGridBackground'
+import { useTextEditing, getTextCharLimit, STICKY_TITLE_CHAR_LIMIT } from '@/hooks/board/useTextEditing'
+import { useKeyboardShortcuts } from '@/hooks/board/useKeyboardShortcuts'
 import { StickyNote } from './StickyNote'
 import { FrameShape } from './FrameShape'
 import { GenericShape } from './GenericShape'
@@ -17,22 +22,11 @@ import { isVectorType, snapToGrid } from './shapeUtils'
 import { computeAutoRoute } from './autoRoute'
 import { ContextMenu } from './ContextMenu'
 import { ZoomControls } from './ZoomControls'
-import { RemoteCursorData } from '@/hooks/useCursors'
+import type { RemoteCursorData } from '@/hooks/useCursors'
 import { OnlineUser, getColorForUser } from '@/hooks/usePresence'
 
 // Shape types that support triple-click text editing (all registry shapes)
 const TRIPLE_CLICK_TEXT_TYPES = new Set(shapeRegistry.keys())
-// Character limits by shape type (sticky notes are unlimited)
-const SHAPE_TEXT_CHAR_LIMIT = 256
-const FRAME_TITLE_CHAR_LIMIT = 256
-const STICKY_TITLE_CHAR_LIMIT = 256
-const STICKY_TEXT_CHAR_LIMIT = 10000
-
-function getTextCharLimit(type: string): number | undefined {
-  if (type === 'sticky_note') return STICKY_TEXT_CHAR_LIMIT
-  if (type === 'frame') return FRAME_TITLE_CHAR_LIMIT
-  return SHAPE_TEXT_CHAR_LIMIT
-}
 
 // Compute the axis-aligned bounding box of a rect after rotation around its top-left corner.
 // Returns { minX, minY } of the rotated AABB — used to position the name label at the visual top.
@@ -325,11 +319,10 @@ export function Canvas({
   const { stagePos, setStagePos, stageScale, handleWheel, zoomIn, zoomOut, resetZoom } = useCanvas()
   const stageRef = useRef<Konva.Stage>(null)
   const trRef = useRef<Konva.Transformer>(null)
-  const cursorLayerRef = useRef<Konva.Layer>(null)
-  const cursorNodesRef = useRef<Map<string, Konva.Group>>(new Map())
   const shapeRefs = useRef<Map<string, Konva.Node>>(new Map())
 
-  // ── Stage interaction state machine (draw, marquee, anchor hints) ──
+  // ── Extracted hooks ────────────────────────────────────────────────
+
   const {
     handleStageMouseDown, handleStageMouseMove, handleStageMouseUp,
     marquee, drawPreview, linePreview, hoveredAnchors, connectorHint,
@@ -343,104 +336,22 @@ export function Canvas({
     onCursorMove, onActivity,
   })
 
+  const { cursorLayerRef } = useRemoteCursors({ onCursorUpdate, onlineUsers })
+
+  const { containerRef, dimensions, gridStyles } = useGridBackground({
+    stagePos, stageScale, gridSize, gridSubdivisions, gridStyle,
+    gridVisible, canvasColor, gridColor, subdivisionColor, snapToGridEnabled,
+  })
+
+  const { isPanning, didPanRef } = useRightClickPan({
+    stageRef, containerRef, setStagePos,
+    stageScale, gridSize, gridSubdivisions, gridStyle,
+  })
+
   // Snapshot of each node's width/height at transform start — prevents feedback loops
   // when onTransformMove updates state and the next tick reads stale dimensions.
   const transformOriginRef = useRef<Map<string, { width: number; height: number }>>(new Map())
-  const onlineUsersRef = useRef(onlineUsers)
-  onlineUsersRef.current = onlineUsers
   const { shiftHeld, ctrlHeld } = useModifierKeys()
-
-  // Right-click pan state (manual, bypasses Konva drag system)
-  const isPanningRef = useRef(false)
-  const didPanRef = useRef(false)  // true if mouse moved during right-click hold
-  const [isPanning, setIsPanning] = useState(false)
-  const panStartRef = useRef({ x: 0, y: 0 })
-  const stagePosAtPanStartRef = useRef({ x: 0, y: 0 })
-
-  // Imperatively update Konva cursor nodes — no React re-renders.
-  // Positions are snapped directly (same as remote shape updates) to avoid
-  // lag. The cursor broadcast is already throttled at 50ms intervals, which
-  // provides enough temporal density for smooth visual movement.
-  useEffect(() => {
-    if (!onCursorUpdate) return
-
-    onCursorUpdate((cursors: Map<string, RemoteCursorData>) => {
-      const layer = cursorLayerRef.current
-      if (!layer) return
-
-      const activeIds = new Set<string>()
-
-      for (const [uid, cursor] of cursors.entries()) {
-        activeIds.add(uid)
-        let group = cursorNodesRef.current.get(uid)
-
-        if (!group) {
-          // Create new cursor node imperatively
-          const users = onlineUsersRef.current
-          const user = users?.find(u => u.user_id === uid)
-          const color = user?.color ?? getColorForUser(uid)
-          const name = user?.display_name ?? 'User'
-
-          group = new Konva.Group({ listening: false })
-          // Traditional pointer cursor shape
-          const arrow = new Konva.Line({
-            points: [
-              0, 0,       // tip
-              0, 20,      // down left edge
-              5.5, 15.5,  // notch inward
-              10, 22,     // lower-right tail
-              12.5, 20.5, // tail right edge
-              8, 14,      // notch back
-              14, 14,     // right wing
-            ],
-            fill: color,
-            closed: true,
-            stroke: '#FFFFFF',
-            strokeWidth: 1.5,
-            lineJoin: 'round',
-          })
-          // Name label with background pill
-          const labelText = name
-          const tempText = new Konva.Text({ text: labelText, fontSize: 11, fontStyle: 'bold' })
-          const textW = tempText.width()
-          tempText.destroy()
-          const pillPadX = 6
-          const pillPadY = 3
-          const labelBg = new Konva.Rect({
-            x: 12,
-            y: 18,
-            width: textW + pillPadX * 2,
-            height: 11 + pillPadY * 2,
-            fill: color,
-            cornerRadius: 4,
-          })
-          const label = new Konva.Text({
-            x: 12 + pillPadX,
-            y: 18 + pillPadY,
-            text: labelText,
-            fontSize: 11,
-            fill: '#FFFFFF',
-            fontStyle: 'bold',
-          })
-          group.add(arrow, labelBg, label)
-          layer.add(group)
-          cursorNodesRef.current.set(uid, group)
-        }
-
-        group.position({ x: cursor.x, y: cursor.y })
-      }
-
-      // Remove stale cursor nodes
-      for (const [uid, group] of cursorNodesRef.current.entries()) {
-        if (!activeIds.has(uid)) {
-          group.destroy()
-          cursorNodesRef.current.delete(uid)
-        }
-      }
-
-      layer.batchDraw()
-    })
-  }, [onCursorUpdate])
 
   // Expand group IDs in selectedIds to their visible children (for Transformer attachment).
   // Vector types (line/arrow) are excluded — they use endpoint anchors instead.
@@ -461,13 +372,6 @@ export function Canvas({
     return ids
   }, [selectedIds, objects, getDescendants, isObjectLocked])
 
-  // Textarea overlay state for editing sticky notes / frame titles
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editingField, setEditingField] = useState<'text' | 'title'>('text')
-  const [textareaStyle, setTextareaStyle] = useState<React.CSSProperties>({})
-  const [editText, setEditText] = useState('')
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; objectId: string } | null>(null)
 
@@ -480,67 +384,47 @@ export function Canvas({
     }
   }, [])
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (editingId) return
-
-      if (canEdit && (e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size > 0 && !anySelectedLocked) {
-        e.preventDefault()
-        onDelete()
-      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.key === 'd' && selectedIds.size > 0 && !anySelectedLocked) {
-        e.preventDefault()
-        onDuplicate()
-      } else if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedIds.size > 0) {
-        e.preventDefault()
-        onCopy?.()
-      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.key === 'v') {
-        e.preventDefault()
-        onPaste?.()
-      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'g') {
-        e.preventDefault()
-        onUngroup()
-      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') {
-        e.preventDefault()
-        onGroup()
-      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
-        e.preventDefault()
-        onRedo?.()
-      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-        e.preventDefault()
-        onUndo?.()
-      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.shiftKey && e.key === ']' && selectedIds.size > 0 && !anySelectedLocked) {
-        e.preventDefault()
-        selectedIds.forEach(id => onBringToFront(id))
-      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.key === ']' && selectedIds.size > 0 && !anySelectedLocked) {
-        e.preventDefault()
-        selectedIds.forEach(id => onBringForward(id))
-      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.shiftKey && e.key === '[' && selectedIds.size > 0 && !anySelectedLocked) {
-        e.preventDefault()
-        selectedIds.forEach(id => onSendToBack(id))
-      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.key === '[' && selectedIds.size > 0 && !anySelectedLocked) {
-        e.preventDefault()
-        selectedIds.forEach(id => onSendBackward(id))
-      } else if (e.key === 'Escape') {
-        if (vertexEditId) {
-          onExitVertexEdit?.()
-        } else if (activeTool) {
-          onCancelTool?.()
-          // Cancel in-progress draw
-          isDrawing.current = false
-          drawStart.current = null
-          setDrawPreview(null)
-        } else if (activeGroupId) {
-          onExitGroup()
-        } else {
-          onClearSelection()
-        }
-        setContextMenu(null)
-      }
+  // Check if a double-click should enter a group instead of its normal action.
+  // Returns true if we entered a group (caller should skip its normal behavior).
+  const tryEnterGroup = useCallback((id: string): boolean => {
+    const obj = objects.get(id)
+    if (!obj?.parent_id) return false
+    // If the parent group/frame is currently selected but not entered, enter it
+    const parent = objects.get(obj.parent_id)
+    if (!parent || (parent.type !== 'group' && parent.type !== 'frame')) return false
+    if (selectedIds.has(parent.id) && activeGroupId !== parent.id) {
+      onEnterGroup(parent.id, id)
+      return true
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editingId, selectedIds, activeGroupId, activeTool, onDelete, onDuplicate, onCopy, onPaste, onGroup, onUngroup, onClearSelection, onExitGroup, onCancelTool, canEdit, onUndo, onRedo, anySelectedLocked, vertexEditId, onExitVertexEdit, onBringToFront, onBringForward, onSendBackward, onSendToBack])
+    return false
+  }, [objects, selectedIds, activeGroupId, onEnterGroup])
+
+  const {
+    editingId, editingField, editText, setEditText,
+    textareaStyle, textareaRef,
+    handleStartEdit, handleFinishEdit,
+    handleShapeDoubleClick, startGeometricTextEdit, lastDblClickRef,
+  } = useTextEditing({
+    objects, stageScale, canEdit, stageRef, shapeRefs,
+    onUpdateText, onUpdateTitle, onEditingChange, onActivity,
+    pendingEditId, onPendingEditConsumed, tryEnterGroup,
+  })
+
+  // Keyboard shortcuts (delegated to extracted hook)
+  useKeyboardShortcuts({
+    editingId, canEdit, selectedIds, activeGroupId, activeTool,
+    vertexEditId: vertexEditId ?? null, anySelectedLocked: anySelectedLocked ?? false,
+    onDelete, onDuplicate, onCopy, onPaste, onGroup, onUngroup,
+    onClearSelection, onExitGroup, onCancelTool, onUndo, onRedo,
+    onExitVertexEdit,
+    onBringToFront, onBringForward, onSendBackward, onSendToBack,
+    onCancelDraw: () => {
+      isDrawing.current = false
+      drawStart.current = null
+      setDrawPreview(null)
+    },
+    onEscapeContextMenu: () => setContextMenu(null),
+  })
 
   // Attach/detach Transformer to effective selected shapes (groups expanded to children)
   useEffect(() => {
@@ -584,182 +468,6 @@ export function Canvas({
     tr.nodes([])
     tr.getLayer()?.batchDraw()
   }, [effectiveNodeIds, editingId, objects, shiftHeld])
-
-  // Check if a double-click should enter a group instead of its normal action.
-  // Returns true if we entered a group (caller should skip its normal behavior).
-  const tryEnterGroup = useCallback((id: string): boolean => {
-    const obj = objects.get(id)
-    if (!obj?.parent_id) return false
-    // If the parent group/frame is currently selected but not entered, enter it
-    const parent = objects.get(obj.parent_id)
-    if (!parent || (parent.type !== 'group' && parent.type !== 'frame')) return false
-    if (selectedIds.has(parent.id) && activeGroupId !== parent.id) {
-      onEnterGroup(parent.id, id)
-      return true
-    }
-    return false
-  }, [objects, selectedIds, activeGroupId, onEnterGroup])
-
-  const handleStartEdit = useCallback((id: string, textNode: Konva.Text, field: 'text' | 'title' = 'text') => {
-    if (!canEdit) return
-    onActivity?.()
-    // If double-clicking a child of a selected group, enter the group instead
-    if (tryEnterGroup(id)) return
-
-    const stage = stageRef.current
-    if (!stage) return
-
-    const obj = objects.get(id)
-    if (!obj) return
-
-    const textRect = textNode.getClientRect()
-
-    setEditingId(id)
-    setEditingField(field)
-
-    let initialText: string
-    if (field === 'title') {
-      initialText = (obj.title ?? 'Note').slice(0, STICKY_TITLE_CHAR_LIMIT)
-    } else {
-      const charLimit = getTextCharLimit(obj.type)
-      initialText = charLimit ? (obj.text || '').slice(0, charLimit) : (obj.text || '')
-    }
-    setEditText(initialText)
-
-    const fontSize = field === 'title' ? 14 : obj.font_size
-    const fontFamily = obj.font_family || 'sans-serif'
-    const fontStyle = obj.font_style || 'normal'
-    const isBold = fontStyle === 'bold' || fontStyle === 'bold italic'
-    const isItalic = fontStyle === 'italic' || fontStyle === 'bold italic'
-    const textColor = field === 'title' ? (obj.text_color ?? '#374151') : (obj.text_color ?? '#000000')
-    const textAlign = (obj.text_align ?? (obj.type === 'sticky_note' ? 'left' : 'center')) as React.CSSProperties['textAlign']
-    setTextareaStyle({
-      position: 'absolute',
-      top: `${textRect.y}px`,
-      left: `${textRect.x}px`,
-      width: `${textRect.width}px`,
-      height: `${textRect.height}px`,
-      fontSize: `${fontSize * stageScale}px`,
-      fontFamily,
-      fontWeight: isBold || field === 'title' ? 'bold' : 'normal',
-      fontStyle: isItalic ? 'italic' : 'normal',
-      textAlign,
-      padding: '0px',
-      margin: '0px',
-      border: 'none',
-      outline: 'none',
-      resize: 'none',
-      background: 'transparent',
-      color: textColor,
-      overflow: 'hidden',
-      lineHeight: field === 'title' ? '1.3' : '1.2',
-      zIndex: 100,
-    })
-  }, [objects, stageScale, canEdit, tryEnterGroup, onActivity])
-
-  // Track last double-click for triple-click detection on geometric shapes
-  const lastDblClickRef = useRef<{ id: string; time: number } | null>(null)
-
-  // Double-click handler for non-text shapes — only enters group, records for triple-click
-  const handleShapeDoubleClick = useCallback((id: string) => {
-    if (tryEnterGroup(id)) return
-    // Record for triple-click detection (geometric shapes use triple-click to edit text)
-    lastDblClickRef.current = { id, time: Date.now() }
-  }, [tryEnterGroup])
-
-  // Start text editing on a geometric shape (used by triple-click)
-  const startGeometricTextEdit = useCallback((id: string) => {
-    const obj = objects.get(id)
-    if (!obj || !canEdit) return
-    const konvaNode = shapeRefs.current.get(id)
-    if (!konvaNode) return
-    const textNode = (konvaNode as Konva.Group).findOne?.('Text') as Konva.Text | undefined
-    if (textNode) {
-      handleStartEdit(id, textNode)
-    } else {
-      // Shape has no text yet — add empty text so re-render creates the Text node
-      onUpdateText(id, ' ')
-      setTimeout(() => {
-        const node = shapeRefs.current.get(id)
-        const tn = (node as Konva.Group)?.findOne?.('Text') as Konva.Text | undefined
-        if (tn) handleStartEdit(id, tn)
-      }, 50)
-    }
-  }, [objects, canEdit, handleStartEdit, onUpdateText])
-
-  const handleFinishEdit = useCallback(() => {
-    if (editingId) {
-      if (editingField === 'title') {
-        onUpdateTitle(editingId, editText.slice(0, STICKY_TITLE_CHAR_LIMIT))
-      } else {
-        onUpdateText(editingId, editText)
-      }
-      setEditingId(null)
-    }
-  }, [editingId, editingField, editText, onUpdateText, onUpdateTitle])
-
-  useEffect(() => {
-    if (editingId && textareaRef.current) {
-      textareaRef.current.focus()
-    }
-  }, [editingId])
-
-  // Sync textarea style live when font/text properties change during editing.
-  // Debounced (50ms) to avoid recalc on every zoom tick.
-  useEffect(() => {
-    if (!editingId) return
-    const obj = objects.get(editingId)
-    if (!obj) return
-    const timer = setTimeout(() => {
-      const fontFamily = obj.font_family || 'sans-serif'
-      const fontStyle = obj.font_style || 'normal'
-      const isBold = fontStyle === 'bold' || fontStyle === 'bold italic'
-      const isItalic = fontStyle === 'italic' || fontStyle === 'bold italic'
-      const textColor = editingField === 'title' ? (obj.text_color ?? '#374151') : (obj.text_color ?? '#000000')
-      const textAlign = (obj.text_align ?? (obj.type === 'sticky_note' ? 'left' : 'center')) as React.CSSProperties['textAlign']
-      const fontSize = editingField === 'title' ? 14 : obj.font_size
-      setTextareaStyle(prev => ({
-        ...prev,
-        fontFamily,
-        fontWeight: isBold || editingField === 'title' ? 'bold' : 'normal',
-        fontStyle: isItalic ? 'italic' : 'normal',
-        color: textColor,
-        textAlign,
-        fontSize: `${fontSize * stageScale}px`,
-      }))
-    }, 50)
-    return () => clearTimeout(timer)
-  }, [editingId, editingField, objects, stageScale])
-
-  useEffect(() => {
-    onEditingChange?.(!!editingId)
-  }, [editingId, onEditingChange])
-
-  // Auto-enter text edit mode for newly created text boxes.
-  // Polls via rAF until the Konva node exists (up to 500ms), then triggers edit.
-  // onPendingEditConsumed is called only after the node is found, preventing
-  // the state from being cleared before polling completes.
-  useEffect(() => {
-    if (!pendingEditId) return
-    const id = pendingEditId
-    const startTime = performance.now()
-    let rafId: number
-    const poll = () => {
-      const node = shapeRefs.current.get(id)
-      if (node) {
-        onPendingEditConsumed?.()
-        startGeometricTextEdit(id)
-        return
-      }
-      if (performance.now() - startTime < 500) {
-        rafId = requestAnimationFrame(poll)
-      } else {
-        onPendingEditConsumed?.()
-      }
-    }
-    rafId = requestAnimationFrame(poll)
-    return () => cancelAnimationFrame(rafId)
-  }, [pendingEditId, onPendingEditConsumed, startGeometricTextEdit])
 
   const handleStageClick = useCallback((e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (marqueeJustCompletedRef.current) {
@@ -893,99 +601,6 @@ export function Canvas({
     if (didPanRef.current) return
   }, [])
 
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
-
-  // Manual right-click pan using native pointer events.
-  // Bypasses Konva's drag system entirely — Konva's drag is unreliable for
-  // non-primary button drags due to internal dragButton/timing issues.
-  useEffect(() => {
-    const container = stageRef.current?.container()
-    if (!container) return
-
-    const onPointerDown = (e: PointerEvent) => {
-      if (e.button !== 2) return
-      const stage = stageRef.current
-      if (!stage) return
-
-      // Check if right-click hit a shape — if so, let context menu handle it
-      const rect = container.getBoundingClientRect()
-      const hit = stage.getIntersection({ x: e.clientX - rect.left, y: e.clientY - rect.top })
-      if (hit) return
-
-      isPanningRef.current = true
-      didPanRef.current = false
-      setIsPanning(true)
-      panStartRef.current = { x: e.clientX, y: e.clientY }
-      stagePosAtPanStartRef.current = { x: stage.x(), y: stage.y() }
-      container.setPointerCapture(e.pointerId)
-    }
-
-    const onPointerMove = (e: PointerEvent) => {
-      if (!isPanningRef.current) return
-      didPanRef.current = true
-      const stage = stageRef.current
-      if (!stage) return
-      const dx = e.clientX - panStartRef.current.x
-      const dy = e.clientY - panStartRef.current.y
-      const newX = stagePosAtPanStartRef.current.x + dx
-      const newY = stagePosAtPanStartRef.current.y + dy
-      stage.position({ x: newX, y: newY })
-      stage.batchDraw()
-      // Update grid background position live during pan
-      const bgEl = containerRef.current
-      if (bgEl) {
-        // Compute per-layer positions matching the grid rendering logic:
-        // dot layers offset by -halfTile so dot centers land on intersections
-        const sc = stageScale
-        const major = gridSize * sc
-        const sub = gridSubdivisions > 1 ? (gridSize / gridSubdivisions) * sc : 0
-        const lineP = `${newX}px ${newY}px`
-        const majDotP = `${newX - major / 2}px ${newY - major / 2}px`
-        const subDotP = sub ? `${newX - sub / 2}px ${newY - sub / 2}px` : ''
-        const showL = gridStyle === 'lines' || gridStyle === 'both'
-        const showD = gridStyle === 'dots' || gridStyle === 'both'
-        const posArr: string[] = []
-        if (gridSubdivisions > 1 && showD) posArr.push(subDotP)
-        if (showD) posArr.push(majDotP)
-        if (showL) posArr.push(lineP, lineP)
-        if (gridSubdivisions > 1 && showL) posArr.push(lineP, lineP)
-        bgEl.style.backgroundPosition = posArr.join(',')
-      }
-    }
-
-    const onPointerUp = (e: PointerEvent) => {
-      if (!isPanningRef.current) return
-      isPanningRef.current = false
-      setIsPanning(false)
-      container.releasePointerCapture(e.pointerId)
-      const stage = stageRef.current
-      if (stage) {
-        setStagePos({ x: stage.x(), y: stage.y() })
-      }
-    }
-
-    container.addEventListener('pointerdown', onPointerDown)
-    container.addEventListener('pointermove', onPointerMove)
-    container.addEventListener('pointerup', onPointerUp)
-    return () => {
-      container.removeEventListener('pointerdown', onPointerDown)
-      container.removeEventListener('pointermove', onPointerMove)
-      container.removeEventListener('pointerup', onPointerUp)
-    }
-  }, [setStagePos])
-
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    const updateSize = () => {
-      setDimensions({ width: el.clientWidth, height: el.clientHeight })
-    }
-    updateSize()
-    const ro = new ResizeObserver(updateSize)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
 
   // Auto-route cache: keyed by connector ID, stores { cacheKey, points }.
   // Recomputes only when the connector or connected shapes' positions change.
@@ -1213,99 +828,7 @@ export function Canvas({
       className="relative h-full w-full overflow-hidden"
       style={{
         backgroundColor: canvasColor,
-        ...(gridVisible ? (() => {
-          // Fade grid toward canvas color when zoomed out so shapes stay visible.
-          // Full strength at scale >= 1, fully faded at scale <= 0.2.
-          const zoomFade = Math.min(1, Math.max(0, (stageScale - 0.2) / 0.8))
-          // Full alpha at normal zoom — vibrant colors stay clearly visible.
-          // Only the zoom fade reduces these when zoomed out.
-          const majorAlpha = (snapToGridEnabled ? 0.85 : 0.7) * zoomFade
-          const subAlpha = 0.55 * zoomFade
-
-          if (majorAlpha <= 0) return {} // fully faded — skip all patterns
-
-          const majorSize = gridSize * stageScale
-          const subSize = (gridSize / gridSubdivisions) * stageScale
-
-          const images: string[] = []
-          const sizes: string[] = []
-          const positions: string[] = []
-
-          // Blend a hex color toward canvasColor by factor t (0 = original, 1 = canvas)
-          const blendToCanvas = (hex: string, t: number): string => {
-            const parse = (h: string) => {
-              const c = h.replace('#', '')
-              return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)]
-            }
-            const [r1, g1, b1] = parse(hex)
-            const [r2, g2, b2] = parse(canvasColor)
-            const mix = (a: number, b: number) => Math.round(a + (b - a) * t)
-            return `#${mix(r1, r2).toString(16).padStart(2, '0')}${mix(g1, g2).toString(16).padStart(2, '0')}${mix(b1, b2).toString(16).padStart(2, '0')}`
-          }
-
-          // Blend grid colors toward canvas at low zoom (inverseFade: 0 at full zoom, 1 at 0.2x)
-          const colorFade = 1 - zoomFade
-          const fadedGridColor = blendToCanvas(gridColor, colorFade * 0.7)
-          const fadedSubColor = blendToCanvas(subdivisionColor, colorFade * 0.7)
-
-          // Major grid patterns
-          const showLines = gridStyle === 'lines' || gridStyle === 'both'
-          const showDots = gridStyle === 'dots' || gridStyle === 'both'
-          const majorHex = `${fadedGridColor}${Math.round(majorAlpha * 255).toString(16).padStart(2, '0')}`
-          const subHex = `${fadedSubColor}${Math.round(subAlpha * 255).toString(16).padStart(2, '0')}`
-          // Dot radii scale with zoom so they stay visible but don't overwhelm
-          const majorDotR = Math.max(1.5, Math.min(3, 1.5 * stageScale))
-          const subDotR = Math.max(1, Math.min(2, 1 * stageScale))
-
-          // Line layers share the standard position; dot layers are offset by
-          // -halfTile so the center of each dot tile lands on a line intersection.
-          const linePos = `${stagePos.x}px ${stagePos.y}px`
-          const majorDotPos = `${stagePos.x - majorSize / 2}px ${stagePos.y - majorSize / 2}px`
-          const subDotPos = `${stagePos.x - subSize / 2}px ${stagePos.y - subSize / 2}px`
-
-          // Subdivision dots go FIRST (behind major dots) so major dots paint on top
-          if (gridSubdivisions > 1 && showDots) {
-            images.push(
-              `radial-gradient(circle, ${subHex} ${subDotR}px, transparent ${subDotR}px)`,
-            )
-            sizes.push(`${subSize}px ${subSize}px`)
-            positions.push(subDotPos)
-          }
-
-          // Major dots on top of subdivision dots
-          if (showDots) {
-            images.push(
-              `radial-gradient(circle, ${majorHex} ${majorDotR}px, transparent ${majorDotR}px)`,
-            )
-            sizes.push(`${majorSize}px ${majorSize}px`)
-            positions.push(majorDotPos)
-          }
-
-          if (showLines) {
-            images.push(
-              `linear-gradient(${majorHex} 1px, transparent 1px)`,
-              `linear-gradient(90deg, ${majorHex} 1px, transparent 1px)`,
-            )
-            sizes.push(`${majorSize}px ${majorSize}px`, `${majorSize}px ${majorSize}px`)
-            positions.push(linePos, linePos)
-          }
-
-          // Subdivision lines (only when subdivisions > 1)
-          if (gridSubdivisions > 1 && showLines) {
-            images.push(
-              `linear-gradient(${subHex} 1px, transparent 1px)`,
-              `linear-gradient(90deg, ${subHex} 1px, transparent 1px)`,
-            )
-            sizes.push(`${subSize}px ${subSize}px`, `${subSize}px ${subSize}px`)
-            positions.push(linePos, linePos)
-          }
-
-          return {
-            backgroundImage: images.join(','),
-            backgroundSize: sizes.join(','),
-            backgroundPosition: positions.join(','),
-          }
-        })() : {}),
+        ...gridStyles,
         cursor: isPanning ? 'grabbing' : activeTool ? 'crosshair' : undefined,
       }}
     >

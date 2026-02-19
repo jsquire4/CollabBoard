@@ -1,0 +1,235 @@
+'use client'
+
+import { useState, useCallback, useEffect, useRef } from 'react'
+import Konva from 'konva'
+import { BoardObject } from '@/types/board'
+
+// ── Constants ────────────────────────────────────────────────────────
+
+const SHAPE_TEXT_CHAR_LIMIT = 256
+const FRAME_TITLE_CHAR_LIMIT = 256
+const STICKY_TITLE_CHAR_LIMIT = 256
+const STICKY_TEXT_CHAR_LIMIT = 10000
+
+export function getTextCharLimit(type: string): number | undefined {
+  if (type === 'sticky_note') return STICKY_TEXT_CHAR_LIMIT
+  if (type === 'frame') return FRAME_TITLE_CHAR_LIMIT
+  return SHAPE_TEXT_CHAR_LIMIT
+}
+
+export { STICKY_TITLE_CHAR_LIMIT }
+
+// ── Hook interface ──────────────────────────────────────────────────
+
+export interface UseTextEditingDeps {
+  objects: Map<string, BoardObject>
+  stageScale: number
+  canEdit: boolean
+  stageRef: React.RefObject<Konva.Stage | null>
+  shapeRefs: React.RefObject<Map<string, Konva.Node>>
+  onUpdateText: (id: string, text: string) => void
+  onUpdateTitle: (id: string, title: string) => void
+  onEditingChange?: (isEditing: boolean) => void
+  onActivity?: () => void
+  pendingEditId?: string | null
+  onPendingEditConsumed?: () => void
+  tryEnterGroup: (id: string) => boolean
+}
+
+// ── Hook ────────────────────────────────────────────────────────────
+
+export function useTextEditing({
+  objects, stageScale, canEdit,
+  stageRef, shapeRefs,
+  onUpdateText, onUpdateTitle,
+  onEditingChange, onActivity,
+  pendingEditId, onPendingEditConsumed,
+  tryEnterGroup,
+}: UseTextEditingDeps) {
+  // ── State ──────────────────────────────────────────────────────────
+
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingField, setEditingField] = useState<'text' | 'title'>('text')
+  const [textareaStyle, setTextareaStyle] = useState<React.CSSProperties>({})
+  const [editText, setEditText] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Track last double-click for triple-click detection on geometric shapes
+  const lastDblClickRef = useRef<{ id: string; time: number } | null>(null)
+
+  // ── Callbacks ──────────────────────────────────────────────────────
+
+  const handleStartEdit = useCallback((id: string, textNode: Konva.Text, field: 'text' | 'title' = 'text') => {
+    if (!canEdit) return
+    onActivity?.()
+    // If double-clicking a child of a selected group, enter the group instead
+    if (tryEnterGroup(id)) return
+
+    const stage = stageRef.current
+    if (!stage) return
+
+    const obj = objects.get(id)
+    if (!obj) return
+
+    const textRect = textNode.getClientRect()
+
+    setEditingId(id)
+    setEditingField(field)
+
+    let initialText: string
+    if (field === 'title') {
+      initialText = (obj.title ?? 'Note').slice(0, STICKY_TITLE_CHAR_LIMIT)
+    } else {
+      const charLimit = getTextCharLimit(obj.type)
+      initialText = charLimit ? (obj.text || '').slice(0, charLimit) : (obj.text || '')
+    }
+    setEditText(initialText)
+
+    const fontSize = field === 'title' ? 14 : obj.font_size
+    const fontFamily = obj.font_family || 'sans-serif'
+    const fontStyle = obj.font_style || 'normal'
+    const isBold = fontStyle === 'bold' || fontStyle === 'bold italic'
+    const isItalic = fontStyle === 'italic' || fontStyle === 'bold italic'
+    const textColor = field === 'title' ? (obj.text_color ?? '#374151') : (obj.text_color ?? '#000000')
+    const textAlign = (obj.text_align ?? (obj.type === 'sticky_note' ? 'left' : 'center')) as React.CSSProperties['textAlign']
+    setTextareaStyle({
+      position: 'absolute',
+      top: `${textRect.y}px`,
+      left: `${textRect.x}px`,
+      width: `${textRect.width}px`,
+      height: `${textRect.height}px`,
+      fontSize: `${fontSize * stageScale}px`,
+      fontFamily,
+      fontWeight: isBold || field === 'title' ? 'bold' : 'normal',
+      fontStyle: isItalic ? 'italic' : 'normal',
+      textAlign,
+      padding: '0px',
+      margin: '0px',
+      border: 'none',
+      outline: 'none',
+      resize: 'none',
+      background: 'transparent',
+      color: textColor,
+      overflow: 'hidden',
+      lineHeight: field === 'title' ? '1.3' : '1.2',
+      zIndex: 100,
+    })
+  }, [objects, stageScale, canEdit, tryEnterGroup, onActivity])
+
+  // Double-click handler for non-text shapes — only enters group, records for triple-click
+  const handleShapeDoubleClick = useCallback((id: string) => {
+    if (tryEnterGroup(id)) return
+    // Record for triple-click detection (geometric shapes use triple-click to edit text)
+    lastDblClickRef.current = { id, time: Date.now() }
+  }, [tryEnterGroup])
+
+  // Start text editing on a geometric shape (used by triple-click)
+  const startGeometricTextEdit = useCallback((id: string) => {
+    const obj = objects.get(id)
+    if (!obj || !canEdit) return
+    const konvaNode = shapeRefs.current.get(id)
+    if (!konvaNode) return
+    const textNode = (konvaNode as Konva.Group).findOne?.('Text') as Konva.Text | undefined
+    if (textNode) {
+      handleStartEdit(id, textNode)
+    } else {
+      // Shape has no text yet — add empty text so re-render creates the Text node
+      onUpdateText(id, ' ')
+      setTimeout(() => {
+        const node = shapeRefs.current.get(id)
+        const tn = (node as Konva.Group)?.findOne?.('Text') as Konva.Text | undefined
+        if (tn) handleStartEdit(id, tn)
+      }, 50)
+    }
+  }, [objects, canEdit, handleStartEdit, onUpdateText])
+
+  const handleFinishEdit = useCallback(() => {
+    if (editingId) {
+      if (editingField === 'title') {
+        onUpdateTitle(editingId, editText.slice(0, STICKY_TITLE_CHAR_LIMIT))
+      } else {
+        onUpdateText(editingId, editText)
+      }
+      setEditingId(null)
+    }
+  }, [editingId, editingField, editText, onUpdateText, onUpdateTitle])
+
+  // ── Effects ────────────────────────────────────────────────────────
+
+  // Focus textarea when editing starts
+  useEffect(() => {
+    if (editingId && textareaRef.current) {
+      textareaRef.current.focus()
+    }
+  }, [editingId])
+
+  // Sync textarea style live when font/text properties change during editing.
+  // Debounced (50ms) to avoid recalc on every zoom tick.
+  useEffect(() => {
+    if (!editingId) return
+    const obj = objects.get(editingId)
+    if (!obj) return
+    const timer = setTimeout(() => {
+      const fontFamily = obj.font_family || 'sans-serif'
+      const fontStyle = obj.font_style || 'normal'
+      const isBold = fontStyle === 'bold' || fontStyle === 'bold italic'
+      const isItalic = fontStyle === 'italic' || fontStyle === 'bold italic'
+      const textColor = editingField === 'title' ? (obj.text_color ?? '#374151') : (obj.text_color ?? '#000000')
+      const textAlign = (obj.text_align ?? (obj.type === 'sticky_note' ? 'left' : 'center')) as React.CSSProperties['textAlign']
+      const fontSize = editingField === 'title' ? 14 : obj.font_size
+      setTextareaStyle(prev => ({
+        ...prev,
+        fontFamily,
+        fontWeight: isBold || editingField === 'title' ? 'bold' : 'normal',
+        fontStyle: isItalic ? 'italic' : 'normal',
+        color: textColor,
+        textAlign,
+        fontSize: `${fontSize * stageScale}px`,
+      }))
+    }, 50)
+    return () => clearTimeout(timer)
+  }, [editingId, editingField, objects, stageScale])
+
+  // Notify parent when editing state changes
+  useEffect(() => {
+    onEditingChange?.(!!editingId)
+  }, [editingId, onEditingChange])
+
+  // Auto-enter text edit mode for newly created text boxes.
+  // Polls via rAF until the Konva node exists (up to 500ms), then triggers edit.
+  useEffect(() => {
+    if (!pendingEditId) return
+    const id = pendingEditId
+    const startTime = performance.now()
+    let rafId: number
+    const poll = () => {
+      const node = shapeRefs.current.get(id)
+      if (node) {
+        onPendingEditConsumed?.()
+        startGeometricTextEdit(id)
+        return
+      }
+      if (performance.now() - startTime < 500) {
+        rafId = requestAnimationFrame(poll)
+      } else {
+        onPendingEditConsumed?.()
+      }
+    }
+    rafId = requestAnimationFrame(poll)
+    return () => cancelAnimationFrame(rafId)
+  }, [pendingEditId, onPendingEditConsumed, startGeometricTextEdit])
+
+  return {
+    editingId,
+    editingField,
+    editText,
+    setEditText,
+    textareaStyle,
+    textareaRef,
+    handleStartEdit,
+    handleFinishEdit,
+    handleShapeDoubleClick,
+    startGeometricTextEdit,
+    lastDblClickRef,
+  }
+}

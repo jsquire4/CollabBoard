@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useRef, useState, useCallback, useEffect, useMemo, memo } from 'react'
-import { Stage, Layer, Transformer, Rect as KonvaRect, Text as KonvaText, Group as KonvaGroup, Line as KonvaLine, Circle as KonvaCircle } from 'react-konva'
+import React, { useRef, useCallback, useEffect, useMemo } from 'react'
+import { Stage, Layer, Transformer, Rect as KonvaRect, Group as KonvaGroup, Line as KonvaLine, Circle as KonvaCircle } from 'react-konva'
 import Konva from 'konva'
 import { useCanvas } from '@/hooks/useCanvas'
 import { useModifierKeys } from '@/hooks/useShiftKey'
@@ -11,197 +11,21 @@ import { useStageInteractions } from '@/hooks/board/useStageInteractions'
 import { useRemoteCursors } from '@/hooks/board/useRemoteCursors'
 import { useRightClickPan } from '@/hooks/board/useRightClickPan'
 import { useGridBackground } from '@/hooks/board/useGridBackground'
-import { useTextEditing, getTextCharLimit, STICKY_TITLE_CHAR_LIMIT } from '@/hooks/board/useTextEditing'
+import { useTextEditing } from '@/hooks/board/useTextEditing'
 import { useKeyboardShortcuts } from '@/hooks/board/useKeyboardShortcuts'
-import { StickyNote } from './StickyNote'
-import { FrameShape } from './FrameShape'
-import { GenericShape } from './GenericShape'
-import { VectorShape } from './VectorShape'
+import { useShapeDrag } from '@/hooks/board/useShapeDrag'
+import { useContextMenu } from '@/hooks/board/useContextMenu'
 import { shapeRegistry } from './shapeRegistry'
-import { isVectorType, snapToGrid } from './shapeUtils'
+import { isVectorType } from './shapeUtils'
+import { renderShape, ShapeCallbacks, ShapeState } from './renderShape'
 import { computeAutoRoute } from './autoRoute'
-import { ContextMenu } from './ContextMenu'
-import { ZoomControls } from './ZoomControls'
+import { RemoteSelectionHighlights } from './RemoteSelectionHighlights'
+import { LockIconOverlay } from './LockIconOverlay'
+import { CanvasOverlays } from './CanvasOverlays'
 import type { RemoteCursorData } from '@/hooks/useCursors'
-import { OnlineUser, getColorForUser } from '@/hooks/usePresence'
 
 // Shape types that support triple-click text editing (all registry shapes)
 const TRIPLE_CLICK_TEXT_TYPES = new Set(shapeRegistry.keys())
-
-// Compute the axis-aligned bounding box of a rect after rotation around its top-left corner.
-// Returns { minX, minY } of the rotated AABB — used to position the name label at the visual top.
-function getRotatedAABB(
-  ox: number, oy: number, w: number, h: number, rotDeg: number
-): { minX: number; minY: number; maxX: number; maxY: number } {
-  const rad = (rotDeg * Math.PI) / 180
-  const cos = Math.cos(rad)
-  const sin = Math.sin(rad)
-  // Four corners of the highlight rect relative to the rotation origin (ox, oy)
-  const corners = [
-    { x: -4, y: -4 },
-    { x: w + 4, y: -4 },
-    { x: -4, y: h + 4 },
-    { x: w + 4, y: h + 4 },
-  ]
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-  for (const c of corners) {
-    const rx = ox + c.x * cos - c.y * sin
-    const ry = oy + c.x * sin + c.y * cos
-    if (rx < minX) minX = rx
-    if (ry < minY) minY = ry
-    if (rx > maxX) maxX = rx
-    if (ry > maxY) maxY = ry
-  }
-  return { minX, minY, maxX, maxY }
-}
-
-// Memoized remote selection highlights — only re-renders when selections/objects change,
-// not when the parent Canvas re-renders from drags, transforms, etc.
-const RemoteSelectionHighlights = memo(function RemoteSelectionHighlights({
-  remoteSelections,
-  onlineUsers,
-  objects,
-  getDescendants,
-}: {
-  remoteSelections: Map<string, Set<string>>
-  onlineUsers?: OnlineUser[]
-  objects: Map<string, BoardObject>
-  getDescendants: (parentId: string) => BoardObject[]
-}) {
-  return (
-    <>
-      {Array.from(remoteSelections.entries()).map(([uid, objIds]) => {
-        const user = onlineUsers?.find(u => u.user_id === uid)
-        const color = user?.color ?? getColorForUser(uid)
-        const name = user?.display_name ?? 'User'
-        return Array.from(objIds).map(objId => {
-          const obj = objects.get(objId)
-          if (!obj) return null
-
-          // For groups, compute bounding box from descendants
-          if (obj.type === 'group') {
-            const children = getDescendants(objId).filter(c => c.type !== 'group')
-            if (children.length === 0) return null
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-            for (const c of children) {
-              if (isVectorType(c.type)) {
-                const cx2 = c.x2 ?? c.x + c.width
-                const cy2 = c.y2 ?? c.y + c.height
-                minX = Math.min(minX, c.x, cx2)
-                minY = Math.min(minY, c.y, cy2)
-                maxX = Math.max(maxX, c.x, cx2)
-                maxY = Math.max(maxY, c.y, cy2)
-              } else {
-                minX = Math.min(minX, c.x)
-                minY = Math.min(minY, c.y)
-                maxX = Math.max(maxX, c.x + c.width)
-                maxY = Math.max(maxY, c.y + c.height)
-              }
-            }
-            const gx = minX - 8
-            const gy = minY - 8
-            const gw = maxX - minX + 16
-            const gh = maxY - minY + 16
-            const labelWidth = Math.min(name.length * 7 + 12, 120)
-            return (
-              <KonvaGroup key={`remote-sel-${uid}-${objId}`} listening={false}>
-                <KonvaRect
-                  x={gx} y={gy} width={gw} height={gh}
-                  fill="transparent" stroke={color} strokeWidth={2}
-                  cornerRadius={6} dash={[8, 4]}
-                  shadowColor={`${color}4D`} shadowBlur={12}
-                />
-                <KonvaRect
-                  x={gx} y={gy - 20}
-                  width={labelWidth} height={16}
-                  fill={color} cornerRadius={3}
-                />
-                <KonvaText
-                  x={gx + 6} y={gy - 20 + 2}
-                  text={name} fontSize={10} fill="white"
-                  width={labelWidth - 12} ellipsis={true} wrap="none"
-                />
-              </KonvaGroup>
-            )
-          }
-
-          const labelWidth = Math.min(name.length * 7 + 12, 120)
-
-          // For vector types, use AABB from endpoints (no rotation)
-          if (isVectorType(obj.type)) {
-            const ex2 = obj.x2 ?? obj.x + obj.width
-            const ey2 = obj.y2 ?? obj.y + obj.height
-            const bx = Math.min(obj.x, ex2)
-            const by = Math.min(obj.y, ey2)
-            const bw = Math.abs(ex2 - obj.x)
-            const bh = Math.abs(ey2 - obj.y)
-            return (
-              <KonvaGroup key={`remote-sel-${uid}-${objId}`} listening={false}>
-                <KonvaRect
-                  x={bx - 4} y={by - 4}
-                  width={bw + 8} height={bh + 8}
-                  fill="transparent" stroke={color} strokeWidth={2}
-                  cornerRadius={4} dash={[6, 3]}
-                />
-                <KonvaRect
-                  x={bx - 4} y={by - 20}
-                  width={labelWidth} height={16}
-                  fill={color} cornerRadius={3}
-                />
-                <KonvaText
-                  x={bx - 4 + 6} y={by - 20 + 2}
-                  text={name} fontSize={10} fill="white"
-                  width={labelWidth - 12} ellipsis={true} wrap="none"
-                />
-              </KonvaGroup>
-            )
-          }
-
-          // For non-vector shapes: rotate the highlight with the shape
-          const rotation = (obj.type === 'circle') ? 0 : (obj.rotation || 0)
-          const bw = obj.width
-          const bh = obj.height
-
-          // Compute where the visual top of the rotated box is for the name label
-          let labelX: number, labelY: number
-          if (rotation !== 0) {
-            const aabb = getRotatedAABB(obj.x, obj.y, bw, bh, rotation)
-            labelX = aabb.minX
-            labelY = aabb.minY - 16
-          } else {
-            labelX = obj.x - 4
-            labelY = obj.y - 20
-          }
-
-          return (
-            <KonvaGroup key={`remote-sel-${uid}-${objId}`} listening={false}>
-              {/* Dashed highlight rect — rotated with the shape */}
-              <KonvaGroup x={obj.x} y={obj.y} rotation={rotation}>
-                <KonvaRect
-                  x={-4} y={-4}
-                  width={bw + 8} height={bh + 8}
-                  fill="transparent" stroke={color} strokeWidth={2}
-                  cornerRadius={4} dash={[6, 3]}
-                />
-              </KonvaGroup>
-              {/* Name label — always horizontal, at visual top */}
-              <KonvaRect
-                x={labelX} y={labelY}
-                width={labelWidth} height={16}
-                fill={color} cornerRadius={3}
-              />
-              <KonvaText
-                x={labelX + 6} y={labelY + 2}
-                text={name} fontSize={10} fill="white"
-                width={labelWidth - 12} ellipsis={true} wrap="none"
-              />
-            </KonvaGroup>
-          )
-        })
-      })}
-    </>
-  )
-})
 
 interface CanvasProps {
   // Command callbacks (not in context — explicit for testability)
@@ -309,8 +133,8 @@ export function Canvas({
   // ── Read shared state from context ──────────────────────────────
   const {
     objects, sortedObjects, selectedIds, activeGroupId, activeTool,
-    getChildren, getDescendants,
-    userRole, canEdit,
+    getDescendants,
+    canEdit,
     onlineUsers, remoteSelections, isObjectLocked,
     gridSize, gridSubdivisions, gridVisible,
     snapToGrid: snapToGridEnabled,
@@ -348,6 +172,20 @@ export function Canvas({
     stageScale, gridSize, gridSubdivisions, gridStyle,
   })
 
+  const { handleShapeDragStart, handleShapeDragMove, handleShapeDragEnd, shapeDragBoundFunc } = useShapeDrag({
+    shapeRefs, stageRef, stagePos, stageScale,
+    onDragStart: onDragStartProp, onDragEnd, onDragMove,
+    onMoveGroupChildren, onCheckFrameContainment, onCursorMove,
+  })
+
+  const {
+    contextMenu, setContextMenu, handleContextMenu, handleStageContextMenu,
+    contextTargetId, handleCtxBringToFront, handleCtxBringForward, handleCtxSendBackward, handleCtxSendToBack,
+  } = useContextMenu({
+    onSelect, onBringToFront, onBringForward, onSendBackward, onSendToBack,
+    didPanRef, onActivity,
+  })
+
   // Snapshot of each node's width/height at transform start — prevents feedback loops
   // when onTransformMove updates state and the next tick reads stale dimensions.
   const transformOriginRef = useRef<Map<string, { width: number; height: number }>>(new Map())
@@ -371,9 +209,6 @@ export function Canvas({
     }
     return ids
   }, [selectedIds, objects, getDescendants, isObjectLocked])
-
-  // Context menu state
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; objectId: string } | null>(null)
 
   // Ref callback for shape registration
   const handleShapeRef = useCallback((id: string, node: Konva.Node | null) => {
@@ -513,95 +348,6 @@ export function Canvas({
     }
   }, [objects, onEnterGroup])
 
-  // Grid snap dragBoundFunc — passed to shapes for Konva-level drag constraint
-  const shapeDragBoundFunc = useMemo(() => {
-    if (!snapToGridEnabled) return undefined
-    return (pos: { x: number; y: number }) => ({
-      x: snapToGrid(pos.x, gridSize, gridSubdivisions),
-      y: snapToGrid(pos.y, gridSize, gridSubdivisions),
-    })
-  }, [snapToGridEnabled, gridSize, gridSubdivisions])
-
-  // Handle drag start: notify parent for undo capture
-  const handleShapeDragStart = useCallback((id: string) => {
-    onDragStartProp?.(id)
-  }, [onDragStartProp])
-
-  // Handle drag move: update local state + broadcast, no DB write
-  const handleShapeDragMove = useCallback((id: string, x: number, y: number) => {
-    if (!canEdit || !onDragMove) return
-    const obj = objects.get(id)
-    if (!obj) return
-
-    // Apply grid snapping if enabled
-    const finalX = snapToGridEnabled ? snapToGrid(x, gridSize, gridSubdivisions) : x
-    const finalY = snapToGridEnabled ? snapToGrid(y, gridSize, gridSubdivisions) : y
-    if (snapToGridEnabled) {
-      shapeRefs.current.get(id)?.position({ x: finalX, y: finalY })
-    }
-
-    const dx = finalX - obj.x
-    const dy = finalY - obj.y
-
-    onDragMove(id, finalX, finalY)
-
-    // Broadcast cursor position during drag — stage onMouseMove doesn't fire
-    // while Konva is handling a shape drag, so we push the pointer position here.
-    if (onCursorMove) {
-      const stage = stageRef.current
-      const pos = stage?.getPointerPosition()
-      if (pos) {
-        const canvasX = (pos.x - stagePos.x) / stageScale
-        const canvasY = (pos.y - stagePos.y) / stageScale
-        onCursorMove(canvasX, canvasY)
-      }
-    }
-
-    // If this is a frame, move children with skipDb
-    if (obj.type === 'frame') {
-      onMoveGroupChildren(id, dx, dy, true)
-    }
-  }, [canEdit, objects, onDragMove, onMoveGroupChildren, onCursorMove, stagePos, stageScale, snapToGridEnabled, gridSize, gridSubdivisions])
-
-  // Handle drag end with frame containment check and group child movement
-  const handleShapeDragEnd = useCallback((id: string, x: number, y: number) => {
-    if (!canEdit) return
-    const obj = objects.get(id)
-    if (!obj) return
-
-    const finalX = snapToGridEnabled ? snapToGrid(x, gridSize, gridSubdivisions) : x
-    const finalY = snapToGridEnabled ? snapToGrid(y, gridSize, gridSubdivisions) : y
-
-    const dx = finalX - obj.x
-    const dy = finalY - obj.y
-
-    onDragEnd(id, finalX, finalY)
-
-    // If this is a frame, move all children (with DB write)
-    if (obj.type === 'frame') {
-      onMoveGroupChildren(id, dx, dy, false)
-    }
-
-    // Check frame containment for non-frame objects
-    if (obj.type !== 'frame' && obj.type !== 'group') {
-      setTimeout(() => onCheckFrameContainment(id), 0)
-    }
-  }, [canEdit, objects, onDragEnd, onMoveGroupChildren, onCheckFrameContainment, snapToGridEnabled, gridSize, gridSubdivisions])
-
-  const handleContextMenu = useCallback((id: string, clientX: number, clientY: number) => {
-    if (!canEdit) return
-    onActivity?.()
-    onSelect(id, { shift: shiftHeld, ctrl: ctrlHeld })
-    setContextMenu({ x: clientX, y: clientY, objectId: id })
-  }, [onSelect, canEdit, shiftHeld, ctrlHeld, onActivity])
-
-  const handleStageContextMenu = useCallback((e: Konva.KonvaEventObject<PointerEvent>) => {
-    e.evt.preventDefault()
-    // Suppress context menu if user panned (moved mouse while right-clicking)
-    if (didPanRef.current) return
-  }, [])
-
-
   // Auto-route cache: keyed by connector ID, stores { cacheKey, points }.
   // Recomputes only when the connector or connected shapes' positions change.
   const autoRouteCacheRef = useRef<Map<string, { key: string; points: number[] | null }>>(new Map())
@@ -683,144 +429,26 @@ export function Canvas({
     }
   }
 
-  // Context menu z-order handlers — resolve to group if shape is in a group
-  const contextTargetId = useMemo(() => {
-    if (!contextMenu) return null
-    const obj = objects.get(contextMenu.objectId)
-    if (obj?.parent_id && !activeGroupId) {
-      // Find top-level group/frame ancestor
-      let current = obj
-      while (current.parent_id) {
-        const parent = objects.get(current.parent_id)
-        if (!parent) break
-        current = parent
-      }
-      return current.id
-    }
-    return contextMenu.objectId
-  }, [contextMenu, objects, activeGroupId])
-  const handleCtxBringToFront = useCallback(() => {
-    if (contextTargetId) onBringToFront(contextTargetId)
-  }, [contextTargetId, onBringToFront])
-  const handleCtxBringForward = useCallback(() => {
-    if (contextTargetId) onBringForward(contextTargetId)
-  }, [contextTargetId, onBringForward])
-  const handleCtxSendBackward = useCallback(() => {
-    if (contextTargetId) onSendBackward(contextTargetId)
-  }, [contextTargetId, onSendBackward])
-  const handleCtxSendToBack = useCallback(() => {
-    if (contextTargetId) onSendToBack(contextTargetId)
-  }, [contextTargetId, onSendToBack])
+  // Shape rendering state + callbacks (stable references for renderShape)
+  const shapeState: ShapeState = useMemo(() => ({
+    selectedIds, isObjectLocked: isObjectLocked ?? (() => false), canEdit, editingId, editingField,
+  }), [selectedIds, isObjectLocked, canEdit, editingId, editingField])
 
-  // Render a shape by type
-  const renderShape = (obj: BoardObject) => {
-    const isSelected = selectedIds.has(obj.id)
-    const shapeLocked = isObjectLocked?.(obj.id) ?? false
-    const shapeEditable = canEdit && !shapeLocked
-
-    // Registry shapes (rectangle, circle, triangle, chevron, parallelogram)
-    if (shapeRegistry.has(obj.type)) {
-      return (
-        <GenericShape
-          key={obj.id}
-          object={obj}
-          onDragEnd={handleShapeDragEnd}
-          onDragMove={handleShapeDragMove}
-          onDragStart={handleShapeDragStart}
-          isSelected={isSelected}
-          onSelect={handleShapeSelect}
-          shapeRef={handleShapeRef}
-          onTransformEnd={onTransformEnd}
-          onContextMenu={handleContextMenu}
-          onDoubleClick={handleShapeDoubleClick}
-          isEditing={editingId === obj.id}
-          editable={shapeEditable}
-          dragBoundFunc={shapeDragBoundFunc}
-        />
-      )
-    }
-
-    switch (obj.type) {
-      case 'sticky_note':
-        return (
-          <StickyNote
-            key={obj.id}
-            object={obj}
-            onDragEnd={handleShapeDragEnd}
-            onDragMove={handleShapeDragMove}
-            onDragStart={handleShapeDragStart}
-            isSelected={isSelected}
-            onSelect={handleShapeSelect}
-            onStartEdit={handleStartEdit}
-            shapeRef={handleShapeRef}
-            onTransformEnd={onTransformEnd}
-            onContextMenu={handleContextMenu}
-            editable={shapeEditable}
-            dragBoundFunc={shapeDragBoundFunc}
-            isEditing={editingId === obj.id}
-            editingField={editingId === obj.id ? editingField : undefined}
-          />
-        )
-      case 'frame':
-        return (
-          <FrameShape
-            key={obj.id}
-            object={obj}
-            onDragEnd={handleShapeDragEnd}
-            onDragMove={handleShapeDragMove}
-            onDragStart={handleShapeDragStart}
-            isSelected={isSelected}
-            onSelect={handleShapeSelect}
-            onStartEdit={handleStartEdit}
-            shapeRef={handleShapeRef}
-            onTransformEnd={onTransformEnd}
-            onContextMenu={handleContextMenu}
-            editable={shapeEditable}
-            dragBoundFunc={shapeDragBoundFunc}
-            isEditing={editingId === obj.id}
-          />
-        )
-      case 'line':
-      case 'arrow': {
-        const autoRoutePoints = getAutoRoutePoints(obj)
-        // Populate ref so BoardClient can use auto-route points for waypoint insertion
-        if (autoRoutePointsRef) {
-          if (autoRoutePoints) {
-            autoRoutePointsRef.current.set(obj.id, autoRoutePoints)
-          } else {
-            autoRoutePointsRef.current.delete(obj.id)
-          }
-        }
-        return (
-          <VectorShape
-            key={obj.id}
-            variant={obj.type as 'line' | 'arrow'}
-            object={obj}
-            onDragEnd={handleShapeDragEnd}
-            onDragMove={handleShapeDragMove}
-            onDragStart={handleShapeDragStart}
-            isSelected={isSelected}
-            onSelect={handleShapeSelect}
-            shapeRef={handleShapeRef}
-            onTransformEnd={onTransformEnd}
-            onContextMenu={handleContextMenu}
-            editable={shapeEditable}
-            dragBoundFunc={shapeDragBoundFunc}
-            onEndpointDragMove={onEndpointDragMove}
-            onEndpointDragEnd={onEndpointDragEnd}
-            autoRoutePoints={autoRoutePoints}
-            onWaypointDragEnd={onWaypointDragEnd}
-            onWaypointInsert={onWaypointInsert}
-            onWaypointDelete={onWaypointDelete}
-          />
-        )
-      }
-      case 'group':
-        return null
-      default:
-        return null
-    }
-  }
+  const shapeCallbacks: ShapeCallbacks = useMemo(() => ({
+    handleShapeDragEnd, handleShapeDragMove, handleShapeDragStart,
+    handleShapeSelect, handleShapeRef, onTransformEnd, handleContextMenu,
+    handleShapeDoubleClick, handleStartEdit, shapeDragBoundFunc,
+    onEndpointDragMove, onEndpointDragEnd,
+    onWaypointDragEnd, onWaypointInsert, onWaypointDelete,
+    getAutoRoutePoints, autoRoutePointsRef,
+  }), [
+    handleShapeDragEnd, handleShapeDragMove, handleShapeDragStart,
+    handleShapeSelect, handleShapeRef, onTransformEnd, handleContextMenu,
+    handleShapeDoubleClick, handleStartEdit, shapeDragBoundFunc,
+    onEndpointDragMove, onEndpointDragEnd,
+    onWaypointDragEnd, onWaypointInsert, onWaypointDelete,
+    getAutoRoutePoints, autoRoutePointsRef,
+  ])
 
   return (
     <div
@@ -907,50 +535,10 @@ export function Canvas({
           )}
 
           {/* Render visible objects sorted by z_index (viewport culled) */}
-          {visibleObjects.map(obj => renderShape(obj))}
+          {visibleObjects.map(obj => renderShape(obj, shapeState, shapeCallbacks))}
 
           {/* Lock icon overlays for locked shapes */}
-          {visibleObjects.map(obj => {
-            if (obj.type === 'group') return null
-            if (!(isObjectLocked?.(obj.id))) return null
-            let iconX: number, iconY: number
-            if (isVectorType(obj.type)) {
-              const ex2 = obj.x2 ?? obj.x + obj.width
-              const ey2 = obj.y2 ?? obj.y + obj.height
-              iconX = (obj.x + ex2) / 2 + 8
-              iconY = (obj.y + ey2) / 2 - 20
-            } else {
-              iconX = obj.x + obj.width - 6
-              iconY = obj.y - 6
-            }
-            return (
-              <KonvaGroup key={`lock-${obj.id}`} x={iconX} y={iconY} listening={false}>
-                {/* Lock body */}
-                <KonvaRect
-                  x={-6} y={-3}
-                  width={12} height={9}
-                  fill="#9CA3AF"
-                  cornerRadius={2}
-                />
-                {/* Lock shackle (arc drawn as line) */}
-                <KonvaLine
-                  points={[-3, -3, -3, -6, 0, -9, 3, -6, 3, -3]}
-                  stroke="#9CA3AF"
-                  strokeWidth={2.5}
-                  lineCap="round"
-                  lineJoin="round"
-                  tension={0.4}
-                />
-                {/* Keyhole */}
-                <KonvaRect
-                  x={-1.5} y={0}
-                  width={3} height={3}
-                  fill="#F3F4F6"
-                  cornerRadius={1}
-                />
-              </KonvaGroup>
-            )
-          })}
+          <LockIconOverlay visibleObjects={visibleObjects} isObjectLocked={isObjectLocked ?? (() => false)} />
 
           {/* Marquee selection rectangle */}
           {marquee && (
@@ -1104,141 +692,55 @@ export function Canvas({
         <Layer ref={cursorLayerRef} listening={false} />
       </Stage>
 
-      {/* Textarea overlay for editing text */}
-      {editingId && (
-        <textarea
-          ref={textareaRef}
-          value={editText}
-          maxLength={editingField === 'title' ? STICKY_TITLE_CHAR_LIMIT : (editingId ? getTextCharLimit(objects.get(editingId)?.type ?? '') : undefined)}
-          onChange={e => {
-            let value = e.target.value
-            if (editingField === 'title') {
-              value = value.slice(0, STICKY_TITLE_CHAR_LIMIT)
-            } else if (editingId) {
-              const limit = getTextCharLimit(objects.get(editingId)?.type ?? '')
-              if (limit !== undefined) {
-                value = value.slice(0, limit)
-              }
-            }
-            setEditText(value)
-            if (editingId) {
-              if (editingField === 'title') {
-                onUpdateTitle(editingId, value)
-              } else {
-                onUpdateText(editingId, value)
-              }
-            }
-          }}
-          onBlur={handleFinishEdit}
-          onKeyDown={e => {
-            if (e.key === 'Escape') handleFinishEdit()
-          }}
-          style={textareaStyle}
-        />
-      )}
-
-      {/* Connector hint — floating button near shape edge */}
-      {connectorHint && (() => {
-        const hintScreenX = connectorHint.anchor.x * stageScale + stagePos.x
-        const hintScreenY = connectorHint.anchor.y * stageScale + stagePos.y
-        return (
-        <button
-          type="button"
-          className="pointer-events-auto absolute z-50 flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg transition hover:bg-blue-600"
-          style={{
-            left: hintScreenX - 12,
-            top: hintScreenY - 12,
-          }}
-          title="Draw connector"
-          onMouseDown={(e) => {
-            e.stopPropagation()
-            // Pre-store anchor and activate connector drawing
-            drawSnapStartRef.current = {
-              shapeId: connectorHint.shapeId,
-              anchorId: connectorHint.anchor.id,
-              x: connectorHint.anchor.x,
-              y: connectorHint.anchor.y,
-            }
-            connectorHintDrawingRef.current = true
-            drawIsLineRef.current = true
-            setConnectorHint(null)
-            drawStart.current = { x: connectorHint.anchor.x, y: connectorHint.anchor.y }
-            isDrawing.current = true
-            setDrawPreview({ x: connectorHint.anchor.x, y: connectorHint.anchor.y, width: 0, height: 0 })
-            const cleanup = () => {
-              // If Konva's mouseUp already handled it, these are no-ops
-              isDrawing.current = false
-              drawStart.current = null
-              drawSnapStartRef.current = null
-              connectorHintDrawingRef.current = false
-              drawIsLineRef.current = false
-              setDrawPreview(null)
-              setLinePreview(null)
-              window.removeEventListener('mouseup', cleanup)
-            }
-            window.addEventListener('mouseup', cleanup, { once: true })
-          }}
-        >
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-          </svg>
-        </button>
-        )
-      })()}
-
-      {/* Zoom controls */}
-      <div className="pointer-events-auto absolute bottom-4 right-4 z-50">
-        <ZoomControls
-          scale={stageScale}
-          onZoomIn={zoomIn}
-          onZoomOut={zoomOut}
-          onReset={resetZoom}
-          uiDarkMode={uiDarkMode}
-        />
-      </div>
-
-      {/* Right-click context menu */}
-      {contextMenu && (() => {
-        const ctxObj = objects.get(contextMenu.objectId)
-        const isLine = ctxObj?.type === 'line' || ctxObj?.type === 'arrow'
-        return (
-        <ContextMenu
-          position={{ x: contextMenu.x, y: contextMenu.y }}
-          onDelete={onDelete}
-          onDuplicate={onDuplicate}
-          onColorChange={onColorChange}
-          onClose={() => setContextMenu(null)}
-          recentColors={recentColors}
-          colors={colors}
-          currentColor={selectedColor}
-          isLine={isLine}
-          onStrokeStyleChange={onStrokeStyleChange}
-          onOpacityChange={onOpacityChange}
-          currentStrokeWidth={ctxObj?.stroke_width}
-          currentStrokeDash={ctxObj?.stroke_dash}
-          currentStrokeColor={ctxObj?.stroke_color}
-          currentOpacity={ctxObj?.opacity ?? 1}
-          onBringToFront={handleCtxBringToFront}
-          onBringForward={handleCtxBringForward}
-          onSendBackward={handleCtxSendBackward}
-          onSendToBack={handleCtxSendToBack}
-          onGroup={onGroup}
-          onUngroup={onUngroup}
-          canGroup={canGroup}
-          canUngroup={canUngroup}
-          isLocked={isObjectLocked?.(contextMenu.objectId) ?? false}
-          onLock={() => { onLock?.(); setContextMenu(null) }}
-          onUnlock={() => { onUnlock?.(); setContextMenu(null) }}
-          canLockShape={canLock}
-          canUnlockShape={canUnlock}
-          onEditVertices={onEditVertices}
-          canEditVertices={canEditVertices}
-          onMarkerChange={onMarkerChange}
-          currentMarkerStart={ctxObj?.marker_start ?? (ctxObj?.type === 'arrow' ? 'arrow' : 'none')}
-          currentMarkerEnd={ctxObj?.marker_end ?? (ctxObj?.type === 'arrow' ? 'arrow' : 'none')}
-        />
-        )
-      })()}
+      <CanvasOverlays
+        editingId={editingId}
+        editingField={editingField}
+        editText={editText}
+        setEditText={setEditText}
+        textareaRef={textareaRef}
+        textareaStyle={textareaStyle}
+        handleFinishEdit={handleFinishEdit}
+        onUpdateText={onUpdateText}
+        onUpdateTitle={onUpdateTitle}
+        objects={objects}
+        connectorHint={connectorHint}
+        stageScale={stageScale}
+        stagePos={stagePos}
+        connectorDrawingRefs={{
+          drawSnapStartRef, connectorHintDrawingRef, drawIsLineRef,
+          isDrawing, drawStart, setDrawPreview, setLinePreview, setConnectorHint,
+        }}
+        zoomIn={zoomIn}
+        zoomOut={zoomOut}
+        resetZoom={resetZoom}
+        uiDarkMode={uiDarkMode}
+        contextMenu={contextMenu}
+        setContextMenu={setContextMenu}
+        onDelete={onDelete}
+        onDuplicate={onDuplicate}
+        onColorChange={onColorChange}
+        recentColors={recentColors}
+        colors={colors}
+        selectedColor={selectedColor}
+        onStrokeStyleChange={onStrokeStyleChange}
+        onOpacityChange={onOpacityChange}
+        handleCtxBringToFront={handleCtxBringToFront}
+        handleCtxBringForward={handleCtxBringForward}
+        handleCtxSendBackward={handleCtxSendBackward}
+        handleCtxSendToBack={handleCtxSendToBack}
+        onGroup={onGroup}
+        onUngroup={onUngroup}
+        canGroup={canGroup}
+        canUngroup={canUngroup}
+        isObjectLocked={isObjectLocked ?? (() => false)}
+        onLock={onLock}
+        onUnlock={onUnlock}
+        canLock={canLock}
+        canUnlock={canUnlock}
+        onEditVertices={onEditVertices}
+        canEditVertices={canEditVertices}
+        onMarkerChange={onMarkerChange}
+      />
 
     </div>
   )

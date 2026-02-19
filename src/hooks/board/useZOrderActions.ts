@@ -42,6 +42,7 @@ export function useZOrderActions({
     const obj = objects.get(id)
     if (!obj) return
     const set = getZOrderSet(id)
+    if (set.length === 0) return
     const allObjects = Array.from(objects.values())
     const setIds = new Set(set.map(o => o.id))
     const maxInSet = Math.max(...set.map(o => o.z_index))
@@ -62,6 +63,7 @@ export function useZOrderActions({
     const obj = objects.get(id)
     if (!obj) return
     const set = getZOrderSet(id)
+    if (set.length === 0) return
     const allObjects = Array.from(objects.values())
     const setIds = new Set(set.map(o => o.id))
     const minInSet = Math.min(...set.map(o => o.z_index))

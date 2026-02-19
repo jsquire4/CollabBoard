@@ -65,7 +65,12 @@ export function useStyleActions({
     }
     const deleted = checkAndDeleteInvisible(pendingChanges)
     if (deleted.length > 0) {
-      undoStack.push({ type: 'delete', objects: deleted })
+      const originalColors = new Map(patches.map(p => [p.id, p.before.color]))
+      const restoredObjects = deleted.map(obj => {
+        const origColor = originalColors.get(obj.id)
+        return origColor !== undefined ? { ...obj, color: origColor } : obj
+      })
+      undoStack.push({ type: 'delete', objects: restoredObjects })
     } else if (patches.length > 0) {
       undoStack.push({ type: 'update', patches })
     }
@@ -88,7 +93,12 @@ export function useStyleActions({
     }
     const deleted = checkAndDeleteInvisible(pendingChanges)
     if (deleted.length > 0) {
-      undoStack.push({ type: 'delete', objects: deleted })
+      const originalValues = new Map(patches.map(p => [p.id, p.before]))
+      const restoredObjects = deleted.map(obj => {
+        const orig = originalValues.get(obj.id)
+        return orig ? { ...obj, ...orig } : obj
+      })
+      undoStack.push({ type: 'delete', objects: restoredObjects })
     } else if (patches.length > 0) {
       undoStack.push({ type: 'update', patches })
     }
@@ -143,7 +153,7 @@ export function useStyleActions({
     for (const id of selectedIds) {
       const obj = objects.get(id)
       if (!obj || obj.type !== 'rectangle') continue
-      patches.push({ id, before: { corner_radius: obj.corner_radius ?? 6 } })
+      patches.push({ id, before: { corner_radius: obj.corner_radius ?? 0 } })
       updateObject(id, { corner_radius })
     }
     if (patches.length > 0) undoStack.push({ type: 'update', patches })
@@ -184,7 +194,6 @@ export function useStyleActions({
   }, [canEdit, selectedIds, objects, updateObject, undoStack])
 
   return {
-    checkAndDeleteInvisible,
     handleColorChange,
     handleStrokeStyleChange,
     handleOpacityChange,

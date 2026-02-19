@@ -78,6 +78,12 @@ describe('useLockActions', () => {
       const { result } = renderHook(() => useLockActions(deps))
       expect(result.current.canUnlockObject('r1')).toBe(false)
     })
+
+    it('returns false for nonexistent object', () => {
+      const deps = makeDeps({ userRole: 'owner' })
+      const { result } = renderHook(() => useLockActions(deps))
+      expect(result.current.canUnlockObject('nonexistent')).toBe(false)
+    })
   })
 
   describe('handleLockSelected', () => {
@@ -96,6 +102,16 @@ describe('useLockActions', () => {
       expect(deps.lockObject).toHaveBeenCalledWith('r1')
       expect(deps.lockObject).not.toHaveBeenCalledWith('r2')
     })
+
+    it('does not call lockObject with empty selectedIds', () => {
+      const deps = makeDeps({
+        selectedIds: new Set<string>(),
+        userRole: 'owner',
+      })
+      const { result } = renderHook(() => useLockActions(deps))
+      act(() => result.current.handleLockSelected())
+      expect(deps.lockObject).not.toHaveBeenCalled()
+    })
   })
 
   describe('handleUnlockSelected', () => {
@@ -111,6 +127,16 @@ describe('useLockActions', () => {
       const { result } = renderHook(() => useLockActions(deps))
       act(() => result.current.handleUnlockSelected())
       expect(deps.unlockObject).toHaveBeenCalledWith('r1')
+    })
+
+    it('does not call unlockObject with empty selectedIds', () => {
+      const deps = makeDeps({
+        selectedIds: new Set<string>(),
+        userRole: 'owner',
+      })
+      const { result } = renderHook(() => useLockActions(deps))
+      act(() => result.current.handleUnlockSelected())
+      expect(deps.unlockObject).not.toHaveBeenCalled()
     })
   })
 
@@ -133,6 +159,15 @@ describe('useLockActions', () => {
         objects: objectsMap(r1),
         selectedIds: new Set(['r1']),
         isObjectLocked: vi.fn(() => false),
+      })
+      const { result } = renderHook(() => useLockActions(deps))
+      expect(result.current.anySelectedLocked).toBe(false)
+    })
+
+    it('anySelectedLocked is false with empty selection', () => {
+      const deps = makeDeps({
+        selectedIds: new Set<string>(),
+        isObjectLocked: vi.fn(() => true),
       })
       const { result } = renderHook(() => useLockActions(deps))
       expect(result.current.anySelectedLocked).toBe(false)

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useClipboardActions } from './useClipboardActions'
-import { makeRectangle, makeObject, objectsMap, resetFactory } from '@/test/boardObjectFactory'
+import { makeRectangle, objectsMap, resetFactory } from '@/test/boardObjectFactory'
 
 function makeDeps(overrides?: Record<string, unknown>) {
   return {
@@ -55,6 +55,16 @@ describe('useClipboardActions', () => {
     it('skips undo push when no objects found', () => {
       const deps = makeDeps({
         selectedIds: new Set(['nonexistent']),
+      })
+      const { result } = renderHook(() => useClipboardActions(deps))
+      act(() => result.current.handleDelete())
+      expect(deps.undoStack.push).not.toHaveBeenCalled()
+      expect(deps.deleteSelected).toHaveBeenCalled()
+    })
+
+    it('calls deleteSelected but skips undo push when selectedIds is empty', () => {
+      const deps = makeDeps({
+        selectedIds: new Set<string>(),
       })
       const { result } = renderHook(() => useClipboardActions(deps))
       act(() => result.current.handleDelete())
@@ -130,6 +140,23 @@ describe('useClipboardActions', () => {
       const { result } = renderHook(() => useClipboardActions(deps))
       act(() => result.current.handlePaste())
       expect(deps.duplicateObject).not.toHaveBeenCalled()
+    })
+
+    it('skips undo push when all duplicateObject calls return null', () => {
+      const r1 = makeRectangle({ id: 'r1' })
+      const duplicateObject = vi.fn(() => null)
+      const deps = makeDeps({
+        objects: objectsMap(r1),
+        selectedIds: new Set(['r1']),
+        duplicateObject,
+      })
+      const { result } = renderHook(() => useClipboardActions(deps))
+
+      act(() => result.current.handleCopy())
+      act(() => result.current.handlePaste())
+
+      expect(duplicateObject).toHaveBeenCalledWith('r1')
+      expect(deps.undoStack.push).not.toHaveBeenCalled()
     })
 
     it('duplicates each clipboard item and pushes undo', () => {

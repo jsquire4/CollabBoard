@@ -52,7 +52,7 @@ export function useGroupActions({
     ungroupSelected()
   }, [canEdit, selectedIds, objects, getChildren, ungroupSelected, undoStack, markActivity])
 
-  const canGroup = selectedIds.size > 1
+  const canGroup = useMemo(() => selectedIds.size > 1, [selectedIds])
 
   const canUngroup = useMemo(() => {
     for (const id of selectedIds) {

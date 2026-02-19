@@ -45,6 +45,46 @@ describe('useGroupActions', () => {
       expect(deps.groupSelected).not.toHaveBeenCalled()
     })
 
+    it('does not push undo when groupSelected returns null', async () => {
+      const r1 = makeRectangle({ id: 'r1' })
+      const r2 = makeRectangle({ id: 'r2' })
+      const groupSelected = vi.fn(async () => null)
+      const deps = makeDeps({
+        objects: objectsMap(r1, r2),
+        selectedIds: new Set(['r1', 'r2']),
+        groupSelected,
+      })
+      const { result } = renderHook(() => useGroupActions(deps))
+      await act(async () => { await result.current.handleGroup() })
+
+      expect(groupSelected).toHaveBeenCalled()
+      expect(deps.undoStack.push).not.toHaveBeenCalled()
+    })
+
+    it('does not call markActivity when canEdit is false', () => {
+      const r1 = makeRectangle({ id: 'r1' })
+      const r2 = makeRectangle({ id: 'r2' })
+      const deps = makeDeps({
+        canEdit: false,
+        objects: objectsMap(r1, r2),
+        selectedIds: new Set(['r1', 'r2']),
+      })
+      const { result } = renderHook(() => useGroupActions(deps))
+      act(() => { result.current.handleGroup() })
+      expect(deps.markActivity).not.toHaveBeenCalled()
+    })
+
+    it('does not call markActivity when fewer than 2 selected', () => {
+      const r1 = makeRectangle({ id: 'r1' })
+      const deps = makeDeps({
+        objects: objectsMap(r1),
+        selectedIds: new Set(['r1']),
+      })
+      const { result } = renderHook(() => useGroupActions(deps))
+      act(() => { result.current.handleGroup() })
+      expect(deps.markActivity).not.toHaveBeenCalled()
+    })
+
     it('groups selected and pushes undo entry', async () => {
       const r1 = makeRectangle({ id: 'r1', parent_id: null })
       const r2 = makeRectangle({ id: 'r2', parent_id: 'frame-1' })
@@ -77,6 +117,18 @@ describe('useGroupActions', () => {
       const { result } = renderHook(() => useGroupActions(deps))
       act(() => result.current.handleUngroup())
       expect(deps.ungroupSelected).not.toHaveBeenCalled()
+    })
+
+    it('calls ungroupSelected but pushes no undo entries when selectedIds is empty', () => {
+      const deps = makeDeps({
+        objects: new Map(),
+        selectedIds: new Set<string>(),
+      })
+      const { result } = renderHook(() => useGroupActions(deps))
+      act(() => result.current.handleUngroup())
+      expect(deps.markActivity).toHaveBeenCalled()
+      expect(deps.ungroupSelected).toHaveBeenCalled()
+      expect(deps.undoStack.push).not.toHaveBeenCalled()
     })
 
     it('skips non-group objects', () => {
@@ -125,6 +177,12 @@ describe('useGroupActions', () => {
       const { result } = renderHook(() => useGroupActions(deps))
       expect(result.current.canGroup).toBe(false)
     })
+
+    it('is false when selection is empty', () => {
+      const deps = makeDeps({ selectedIds: new Set<string>() })
+      const { result } = renderHook(() => useGroupActions(deps))
+      expect(result.current.canGroup).toBe(false)
+    })
   })
 
   describe('canUngroup', () => {
@@ -144,6 +202,12 @@ describe('useGroupActions', () => {
         objects: objectsMap(r1),
         selectedIds: new Set(['r1']),
       })
+      const { result } = renderHook(() => useGroupActions(deps))
+      expect(result.current.canUngroup).toBe(false)
+    })
+
+    it('is false when selection is empty', () => {
+      const deps = makeDeps({ selectedIds: new Set<string>() })
       const { result } = renderHook(() => useGroupActions(deps))
       expect(result.current.canUngroup).toBe(false)
     })

@@ -77,6 +77,17 @@ describe('useVertexActions', () => {
       act(() => result.current.handleEditVertices())
       expect(deps.setVertexEditId).not.toHaveBeenCalled()
     })
+
+    it('does nothing with empty selectedIds', () => {
+      const deps = makeDeps({
+        objects: new Map(),
+        selectedIds: new Set<string>(),
+      })
+      const { result } = renderHook(() => useVertexActions(deps))
+      act(() => result.current.handleEditVertices())
+      expect(deps.updateObject).not.toHaveBeenCalled()
+      expect(deps.setVertexEditId).not.toHaveBeenCalled()
+    })
   })
 
   describe('handleVertexDragEnd', () => {
@@ -99,6 +110,27 @@ describe('useVertexActions', () => {
 
     it('does nothing when object has no custom_points', () => {
       const rect = makeRectangle({ id: 'r1' })
+      const deps = makeDeps({ objects: objectsMap(rect) })
+      const { result } = renderHook(() => useVertexActions(deps))
+      act(() => result.current.handleVertexDragEnd('r1', 0, 50, 50))
+      expect(deps.updateObject).not.toHaveBeenCalled()
+    })
+
+    it('handles out-of-bounds index without crashing (no bounds check)', () => {
+      const pts = [0, 0, 100, 0, 100, 80, 0, 80]
+      const rect = makeRectangle({ id: 'r1', custom_points: JSON.stringify(pts) })
+      const deps = makeDeps({ objects: objectsMap(rect) })
+      const { result } = renderHook(() => useVertexActions(deps))
+
+      // Index 10 is beyond the 4-vertex array — function still executes
+      // (writes sparse array slots) and pushes undo. No bounds check exists.
+      act(() => result.current.handleVertexDragEnd('r1', 10, 50, 50))
+      expect(deps.updateObject).toHaveBeenCalled()
+      expect(deps.undoStack.push).toHaveBeenCalled()
+    })
+
+    it('does not call updateObject with malformed JSON in custom_points', () => {
+      const rect = makeRectangle({ id: 'r1', custom_points: 'not-valid-json' })
       const deps = makeDeps({ objects: objectsMap(rect) })
       const { result } = renderHook(() => useVertexActions(deps))
       act(() => result.current.handleVertexDragEnd('r1', 0, 50, 50))
@@ -133,6 +165,14 @@ describe('useVertexActions', () => {
       expect(deps.updateObject).toHaveBeenCalledWith('r1', {
         custom_points: JSON.stringify([0, 0, 100, 0, 100, 100, 50, 50]),
       })
+    })
+
+    it('does not call updateObject when object has no custom_points', () => {
+      const rect = makeRectangle({ id: 'r1' })
+      const deps = makeDeps({ objects: objectsMap(rect) })
+      const { result } = renderHook(() => useVertexActions(deps))
+      act(() => result.current.handleVertexInsert('r1', 0))
+      expect(deps.updateObject).not.toHaveBeenCalled()
     })
   })
 

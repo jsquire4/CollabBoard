@@ -72,11 +72,9 @@ export function makeStickyNote(overrides?: Partial<BoardObject>): BoardObject {
   })
 }
 
-export function makeGroup(childIds: string[], overrides?: Partial<BoardObject>): BoardObject {
-  const group = makeObject({ type: 'group', color: 'transparent', ...overrides })
-  // Note: childIds are for reference — caller must set parent_id on children
-  void childIds
-  return group
+/** Create a group object. Caller must set parent_id on children separately. */
+export function makeGroup(overrides?: Partial<BoardObject>): BoardObject {
+  return makeObject({ type: 'group', color: 'transparent', ...overrides })
 }
 
 export function makeFrame(overrides?: Partial<BoardObject>): BoardObject {

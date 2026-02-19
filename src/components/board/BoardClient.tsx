@@ -41,6 +41,8 @@ const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canv
   ),
 })
 
+const TEXT_TYPES = new Set(['sticky_note', 'rectangle', 'circle', 'triangle', 'chevron', 'parallelogram', 'ngon', 'frame'])
+
 interface BoardClientProps {
   userId: string
   boardId: string
@@ -82,7 +84,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
 
   // Idle check: set presence to 'idle' after 30s of no cursor activity
   useEffect(() => {
-    if (!updatePresence) return
     idleCheckRef.current = setInterval(() => {
       if (Date.now() - lastActivityRef.current > 30_000) {
         updatePresence('idle')
@@ -115,7 +116,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const [vertexEditId, setVertexEditId] = useState<string | null>(null)
   const [pendingEditId, setPendingEditId] = useState<string | null>(null)
   const [snapIndicator, setSnapIndicator] = useState<{ x: number; y: number } | null>(null)
-  const [shapePalette, setShapePalette] = useState<{ lineId: string; canvasX: number; canvasY: number; screenX: number; screenY: number } | null>(null)
+  const [shapePalette, setShapePalette] = useState<{ lineId: string; canvasX: number; canvasY: number; screenX?: number; screenY?: number } | null>(null)
 
   // Grid settings — initialized from server props, persisted on change
   const [gridSize, setGridSize] = useState(initialGridSize)
@@ -155,7 +156,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const preDragRef = useRef<Map<string, { x: number; y: number; x2?: number | null; y2?: number | null; parent_id: string | null; waypoints?: string | null; connect_start_id?: string | null; connect_end_id?: string | null; connect_start_anchor?: string | null; connect_end_anchor?: string | null }>>(new Map())
   // Clear stale preDragRef if drag is interrupted (e.g. window blur mid-drag)
   useEffect(() => {
-    const handleBlur = () => { preDragRef.current = new Map() }
+    const handleBlur = () => { preDragRef.current.clear() }
     window.addEventListener('blur', handleBlur)
     return () => window.removeEventListener('blur', handleBlur)
   }, [])
@@ -176,7 +177,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         }
       }
     })
-  }, [channel, boardId, trackPresence, reconcileOnReconnect])
+  }, [channel, trackPresence, reconcileOnReconnect])
 
   const canEdit = userRole !== 'viewer'
 
@@ -423,7 +424,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     const obj = objects.get(id)
     if (!obj) return
     const map = preDragRef.current
-    map.set(id, { x: obj.x, y: obj.y, x2: obj.x2, y2: obj.y2, parent_id: obj.parent_id, waypoints: obj.waypoints })
+    map.set(id, { x: obj.x, y: obj.y, x2: obj.x2, y2: obj.y2, parent_id: obj.parent_id, waypoints: obj.waypoints, connect_start_id: obj.connect_start_id, connect_end_id: obj.connect_end_id, connect_start_anchor: obj.connect_start_anchor, connect_end_anchor: obj.connect_end_anchor })
     if (obj.type === 'frame') {
       for (const d of getDescendants(id)) {
         map.set(d.id, { x: d.x, y: d.y, x2: d.x2, y2: d.y2, parent_id: d.parent_id, waypoints: d.waypoints })
@@ -466,7 +467,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     if (preDragRef.current.size > 0) {
       const patches = Array.from(preDragRef.current.entries()).map(([pid, before]) => ({ id: pid, before }))
       undoStack.push({ type: 'move', patches })
-      preDragRef.current = new Map()
+      preDragRef.current.clear()
     }
   }, [canEdit, updateObjectDragEnd, undoStack, objects, followConnectors, markActivity])
 
@@ -496,16 +497,15 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     if (!canEdit) return
     markActivity()
     const obj = objects.get(id)
-    if (obj) {
-      const before: Partial<BoardObject> = {}
-      for (const key of Object.keys(updates)) {
-        (before as unknown as Record<string, unknown>)[key] = (obj as unknown as Record<string, unknown>)[key]
-      }
-      undoStack.push({ type: 'update', patches: [{ id, before }] })
+    if (!obj) return
+    const before: Partial<BoardObject> = {}
+    for (const key of Object.keys(updates)) {
+      (before as unknown as Record<string, unknown>)[key] = (obj as unknown as Record<string, unknown>)[key]
     }
+    undoStack.push({ type: 'update', patches: [{ id, before }] })
     updateObject(id, updates)
-    if (!isVectorType(obj?.type ?? '')) {
-      const anchors = getShapeAnchors({ ...obj!, ...updates })
+    if (!isVectorType(obj.type)) {
+      const anchors = getShapeAnchors({ ...obj, ...updates })
       followConnectors(id, anchors, updateObject, true)
     }
   }, [canEdit, objects, updateObject, undoStack, followConnectors, markActivity])
@@ -542,8 +542,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     if (!firstId) return undefined
     return objects.get(firstId)?.color
   }, [selectedIds, objects])
-
-  const TEXT_TYPES = new Set(['sticky_note', 'rectangle', 'circle', 'triangle', 'chevron', 'parallelogram', 'ngon', 'frame'])
 
   const selectedFontInfo = useMemo(() => {
     const firstTextId = [...selectedIds].find((id) => {

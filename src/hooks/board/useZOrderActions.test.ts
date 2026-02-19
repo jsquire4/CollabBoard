@@ -92,6 +92,34 @@ describe('useZOrderActions', () => {
       act(() => result.current.handleBringForward('nonexistent'))
       expect(deps.undoStack.push).not.toHaveBeenCalled()
     })
+
+    it('returns early when getZOrderSet returns empty', () => {
+      const r1 = makeRectangle({ id: 'r1', z_index: 1 })
+      const deps = makeDeps({
+        objects: objectsMap(r1),
+        getZOrderSet: vi.fn(() => []),
+      })
+      const { result } = renderHook(() => useZOrderActions(deps))
+      act(() => result.current.handleBringForward('r1'))
+      expect(deps.undoStack.push).not.toHaveBeenCalled()
+      expect(deps.bringForward).not.toHaveBeenCalled()
+    })
+
+    it('still calls bringForward when shape is already at top (no higher sibling)', () => {
+      const r1 = makeRectangle({ id: 'r1', z_index: 10, parent_id: null })
+      const getZOrderSet = vi.fn(() => [r1])
+      const deps = makeDeps({
+        objects: objectsMap(r1),
+        getZOrderSet,
+      })
+      const { result } = renderHook(() => useZOrderActions(deps))
+      act(() => result.current.handleBringForward('r1'))
+      // Undo patches only contain r1 (no next-higher sibling)
+      const pushCall = deps.undoStack.push.mock.calls[0][0]
+      expect(pushCall.patches).toHaveLength(1)
+      expect(pushCall.patches[0].id).toBe('r1')
+      expect(deps.bringForward).toHaveBeenCalledWith('r1')
+    })
   })
 
   describe('handleSendBackward', () => {
@@ -117,6 +145,34 @@ describe('useZOrderActions', () => {
       expect(ids).toContain('r2')
       expect(ids).toContain('r1')
       expect(deps.sendBackward).toHaveBeenCalledWith('r2')
+    })
+
+    it('returns early when getZOrderSet returns empty', () => {
+      const r1 = makeRectangle({ id: 'r1', z_index: 1 })
+      const deps = makeDeps({
+        objects: objectsMap(r1),
+        getZOrderSet: vi.fn(() => []),
+      })
+      const { result } = renderHook(() => useZOrderActions(deps))
+      act(() => result.current.handleSendBackward('r1'))
+      expect(deps.undoStack.push).not.toHaveBeenCalled()
+      expect(deps.sendBackward).not.toHaveBeenCalled()
+    })
+
+    it('still calls sendBackward when shape is already at bottom (no lower sibling)', () => {
+      const r1 = makeRectangle({ id: 'r1', z_index: 1, parent_id: null })
+      const getZOrderSet = vi.fn(() => [r1])
+      const deps = makeDeps({
+        objects: objectsMap(r1),
+        getZOrderSet,
+      })
+      const { result } = renderHook(() => useZOrderActions(deps))
+      act(() => result.current.handleSendBackward('r1'))
+      // Undo patches only contain r1 (no next-lower sibling)
+      const pushCall = deps.undoStack.push.mock.calls[0][0]
+      expect(pushCall.patches).toHaveLength(1)
+      expect(pushCall.patches[0].id).toBe('r1')
+      expect(deps.sendBackward).toHaveBeenCalledWith('r1')
     })
   })
 })

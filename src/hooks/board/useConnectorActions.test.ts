@@ -3,7 +3,6 @@ import { renderHook, act } from '@testing-library/react'
 import { useConnectorActions, pickBestAnchor } from './useConnectorActions'
 import { makeRectangle, makeLine, makeArrow, objectsMap, resetFactory } from '@/test/boardObjectFactory'
 import { BoardObject } from '@/types/board'
-import { createRef } from 'react'
 
 // Mock anchorPoints — provide controllable anchors
 vi.mock('@/components/board/anchorPoints', () => ({
@@ -55,7 +54,7 @@ function makeDeps(overrides?: Record<string, unknown>) {
     markActivity: vi.fn(),
     setSnapIndicator: vi.fn(),
     setShapePalette: vi.fn(),
-    shapePalette: null as { lineId: string; canvasX: number; canvasY: number; screenX: number; screenY: number } | null,
+    shapePalette: null as { lineId: string; canvasX: number; canvasY: number; screenX?: number; screenY?: number } | null,
     autoRoutePointsRef: { current: new Map<string, number[]>() },
     ...overrides,
   }
@@ -114,41 +113,24 @@ describe('useConnectorActions', () => {
       ])
     })
 
+    it('indexes only start shape when connector has no end connection', () => {
+      const rect = makeRectangle({ id: 'r1' })
+      const line = makeLine({ id: 'l1', connect_start_id: 'r1', connect_end_id: null })
+      const deps = makeDeps({ objects: objectsMap(rect, line) })
+      const { result } = renderHook(() => useConnectorActions(deps))
+
+      expect(result.current.connectionIndex.get('r1')).toEqual([
+        { connectorId: 'l1', endpoint: 'start' },
+      ])
+      // No entry for end since connect_end_id is null
+      expect(result.current.connectionIndex.size).toBe(1)
+    })
+
     it('returns empty map when no connectors', () => {
       const rect = makeRectangle({ id: 'r1' })
       const deps = makeDeps({ objects: objectsMap(rect) })
       const { result } = renderHook(() => useConnectorActions(deps))
       expect(result.current.connectionIndex.size).toBe(0)
-    })
-  })
-
-  describe('computeAllAnchors', () => {
-    it('excludes the given id, vector types, and groups', () => {
-      const r1 = makeRectangle({ id: 'r1', x: 0, y: 0, width: 100, height: 80 })
-      const r2 = makeRectangle({ id: 'r2', x: 200, y: 200, width: 100, height: 80 })
-      const line = makeLine({ id: 'l1' })
-      const group = { ...makeRectangle({ id: 'g1' }), type: 'group' as const }
-      const deps = makeDeps({ objects: objectsMap(r1, r2, line, group) })
-      const { result } = renderHook(() => useConnectorActions(deps))
-
-      let allAnchors: ReturnType<typeof result.current.computeAllAnchors>
-      act(() => { allAnchors = result.current.computeAllAnchors('r1') })
-
-      // Should only include r2 anchors (r1 excluded, line/group filtered)
-      expect(allAnchors!.shapeMap.has('r2')).toBe(true)
-      expect(allAnchors!.shapeMap.has('r1')).toBe(false)
-      expect(allAnchors!.shapeMap.has('l1')).toBe(false)
-      expect(allAnchors!.shapeMap.has('g1')).toBe(false)
-    })
-
-    it('excludes soft-deleted objects', () => {
-      const r1 = makeRectangle({ id: 'r1', deleted_at: '2026-01-01T00:00:00Z' })
-      const deps = makeDeps({ objects: objectsMap(r1) })
-      const { result } = renderHook(() => useConnectorActions(deps))
-
-      let allAnchors: ReturnType<typeof result.current.computeAllAnchors>
-      act(() => { allAnchors = result.current.computeAllAnchors('__none__') })
-      expect(allAnchors!.shapeMap.has('r1')).toBe(false)
     })
   })
 
@@ -182,6 +164,17 @@ describe('useConnectorActions', () => {
       act(() => result.current.handleEndpointDragMove('l1', { x: 500, y: 500 }))
       expect(deps.setSnapIndicator).toHaveBeenCalledWith(null)
     })
+
+    it('excludes soft-deleted objects from anchor computation', () => {
+      const rect = makeRectangle({ id: 'r1', x: 100, y: 40, deleted_at: new Date().toISOString() })
+      const line = makeLine({ id: 'l1' })
+      const deps = makeDeps({ objects: objectsMap(rect, line) })
+      const { result } = renderHook(() => useConnectorActions(deps))
+
+      // Soft-deleted rect should not produce anchors, so no snap even if endpoint is at rect's position
+      act(() => result.current.handleEndpointDragMove('l1', { x: 100, y: 40 }))
+      expect(deps.setSnapIndicator).toHaveBeenCalledWith(null)
+    })
   })
 
   describe('handleWaypointDragEnd', () => {
@@ -212,6 +205,17 @@ describe('useConnectorActions', () => {
   })
 
   describe('handleWaypointInsert', () => {
+    it('does nothing when canEdit is false', () => {
+      const line = makeLine({ id: 'l1', x: 0, y: 0, x2: 200, y2: 0, waypoints: '[100,0]' })
+      const deps = makeDeps({ canEdit: false, objects: objectsMap(line) })
+      const { result } = renderHook(() => useConnectorActions(deps))
+
+      act(() => result.current.handleWaypointInsert('l1', 0))
+
+      expect(deps.updateObject).not.toHaveBeenCalled()
+      expect(deps.undoStack.push).not.toHaveBeenCalled()
+    })
+
     it('inserts midpoint at given segment index', () => {
       const line = makeLine({ id: 'l1', x: 0, y: 0, x2: 200, y2: 0, waypoints: '[100,0]' })
       const deps = makeDeps({ objects: objectsMap(line) })
@@ -227,6 +231,17 @@ describe('useConnectorActions', () => {
   })
 
   describe('handleWaypointDelete', () => {
+    it('does nothing when canEdit is false', () => {
+      const line = makeLine({ id: 'l1', waypoints: '[100,100,200,200]' })
+      const deps = makeDeps({ canEdit: false, objects: objectsMap(line) })
+      const { result } = renderHook(() => useConnectorActions(deps))
+
+      act(() => result.current.handleWaypointDelete('l1', 0))
+
+      expect(deps.updateObject).not.toHaveBeenCalled()
+      expect(deps.undoStack.push).not.toHaveBeenCalled()
+    })
+
     it('removes waypoint at given index', () => {
       const line = makeLine({ id: 'l1', waypoints: '[100,100,200,200]' })
       const deps = makeDeps({ objects: objectsMap(line) })
@@ -395,18 +410,6 @@ describe('useConnectorActions', () => {
       }))
       // Should also push an 'add' undo entry for the new shape
       expect(deps.undoStack.push).toHaveBeenCalledWith({ type: 'add', ids: ['new-shape'] })
-    })
-  })
-
-  describe('resolveSnap', () => {
-    it('returns null when no anchor is near', () => {
-      const deps = makeDeps()
-      const { result } = renderHook(() => useConnectorActions(deps))
-
-      let resolved: ReturnType<typeof result.current.resolveSnap>
-      act(() => { resolved = result.current.resolveSnap([], new Map(), 100, 100) })
-      expect(resolved!.snap).toBeNull()
-      expect(resolved!.shapeId).toBeNull()
     })
   })
 

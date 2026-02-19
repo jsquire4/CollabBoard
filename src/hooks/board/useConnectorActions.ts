@@ -40,8 +40,8 @@ interface UseConnectorActionsDeps {
   }
   markActivity: () => void
   setSnapIndicator: (indicator: { x: number; y: number } | null) => void
-  setShapePalette: (palette: { lineId: string; canvasX: number; canvasY: number; screenX: number; screenY: number } | null) => void
-  shapePalette: { lineId: string; canvasX: number; canvasY: number; screenX: number; screenY: number } | null
+  setShapePalette: (palette: { lineId: string; canvasX: number; canvasY: number; screenX?: number; screenY?: number } | null) => void
+  shapePalette: { lineId: string; canvasX: number; canvasY: number; screenX?: number; screenY?: number } | null
   autoRoutePointsRef: MutableRefObject<Map<string, number[]>>
 }
 
@@ -251,7 +251,7 @@ export function useConnectorActions({
     if (preDragRef.current.size > 0) {
       const patches = Array.from(preDragRef.current.entries()).map(([pid, before]) => ({ id: pid, before }))
       undoStack.push({ type: 'move' as const, patches })
-      preDragRef.current = new Map()
+      preDragRef.current.clear()
     }
 
     setTimeout(() => checkFrameContainment(id), 0)
@@ -294,8 +294,8 @@ export function useConnectorActions({
           lineId: obj.id,
           canvasX: overrides.x2 as number,
           canvasY: overrides.y2 as number,
-          screenX: screenEndX ?? 0,
-          screenY: screenEndY ?? 0,
+          screenX: screenEndX,
+          screenY: screenEndY,
         })
       }
     }
@@ -383,8 +383,6 @@ export function useConnectorActions({
   return {
     connectionIndex,
     followConnectors,
-    computeAllAnchors,
-    resolveSnap,
     handleEndpointDragMove,
     handleEndpointDragEnd,
     handleDrawLineFromAnchor,

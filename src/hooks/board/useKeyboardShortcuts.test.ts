@@ -219,6 +219,70 @@ describe('resolveKeyboardAction (pure function)', () => {
     })
   })
 
+  describe('canEdit=false blocks', () => {
+    it('blocks group shortcut (Ctrl+G)', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'g', ctrlKey: true }),
+        makeState({ canEdit: false })
+      )).toBeNull()
+    })
+
+    it('blocks ungroup shortcut (Ctrl+Shift+G)', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'g', ctrlKey: true, shiftKey: true }),
+        makeState({ canEdit: false })
+      )).toBeNull()
+    })
+
+    it('blocks undo (Ctrl+Z)', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'z', ctrlKey: true }),
+        makeState({ canEdit: false })
+      )).toBeNull()
+    })
+
+    it('blocks redo (Ctrl+Shift+Z)', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'z', ctrlKey: true, shiftKey: true }),
+        makeState({ canEdit: false })
+      )).toBeNull()
+    })
+  })
+
+  describe('anySelectedLocked blocks', () => {
+    it('blocks duplicate (Ctrl+D)', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'd', ctrlKey: true }),
+        makeState({ anySelectedLocked: true })
+      )).toBeNull()
+    })
+
+    it('blocks z-order shortcut (Ctrl+])', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: ']', ctrlKey: true }),
+        makeState({ anySelectedLocked: true })
+      )).toBeNull()
+    })
+  })
+
+  describe('hasSelection=false blocks', () => {
+    it('blocks z-order shortcuts', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: ']', ctrlKey: true }),
+        makeState({ hasSelection: false })
+      )).toBeNull()
+    })
+  })
+
+  describe('Escape with no selection', () => {
+    it('returns clearSelection even when hasSelection is false', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'Escape' }),
+        makeState({ hasSelection: false })
+      )).toBe('clearSelection')
+    })
+  })
+
   describe('unrecognized keys', () => {
     it('returns null for random keys', () => {
       expect(resolveKeyboardAction(

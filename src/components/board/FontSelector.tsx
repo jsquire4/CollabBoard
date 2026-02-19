@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import type { FontStyle } from '@/types/board'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
@@ -38,6 +38,7 @@ interface FontSelectorProps {
   onTextStyleChange?: (updates: { text_align?: string; text_vertical_align?: string; text_color?: string }) => void
   disabled?: boolean
   compact?: boolean
+  dark?: boolean
 }
 
 export function FontSelector({
@@ -52,22 +53,37 @@ export function FontSelector({
   onTextStyleChange,
   disabled,
   compact,
+  dark = false,
 }: FontSelectorProps) {
   const [showPopover, setShowPopover] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
   const popoverPanelRef = useRef<HTMLDivElement>(null)
+  const textColorPickerRef = useRef<HTMLInputElement>(null)
+  const compactButtonRef = useRef<HTMLButtonElement>(null)
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null)
 
   useClickOutside([popoverRef, popoverPanelRef], showPopover, () => setShowPopover(false))
+
+  const dk = dark
+  const labelCls = `text-xs font-medium ${dk ? 'text-slate-400' : 'text-slate-500'}`
+  const btnCls = (active: boolean) =>
+    `rounded px-2 py-1 text-xs font-medium transition disabled:opacity-50 ${
+      active
+        ? 'bg-indigo-100 text-indigo-700'
+        : dk ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+    }`
 
   const content = (
     <div className="w-56 space-y-3 p-3">
       <div>
-        <div className="mb-1 text-xs font-medium text-slate-500">Font</div>
+        <div className={`mb-1 ${labelCls}`}>Font</div>
         <select
           value={fontFamily}
           onChange={(e) => onFontChange({ font_family: e.target.value })}
           disabled={disabled}
-          className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+          className={`w-full rounded border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 ${
+            dk ? 'border-slate-600 bg-slate-800 text-slate-300' : 'border-slate-300 bg-white text-slate-900'
+          }`}
         >
           {FONT_FAMILIES.map((f) => (
             <option key={f.value} value={f.value}>
@@ -77,7 +93,7 @@ export function FontSelector({
         </select>
       </div>
       <div>
-        <div className="mb-1 text-xs font-medium text-slate-500">Size</div>
+        <div className={`mb-1 ${labelCls}`}>Size</div>
         <div className="flex flex-wrap gap-1">
           {FONT_SIZES.map((size) => (
             <button
@@ -85,11 +101,7 @@ export function FontSelector({
               type="button"
               onClick={() => onFontChange({ font_size: size })}
               disabled={disabled}
-              className={`rounded px-2 py-1 text-xs font-medium transition disabled:opacity-50 ${
-                fontSize === size
-                  ? 'bg-indigo-100 text-indigo-700'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
+              className={btnCls(fontSize === size)}
             >
               {size}
             </button>
@@ -97,7 +109,7 @@ export function FontSelector({
         </div>
       </div>
       <div>
-        <div className="mb-1 text-xs font-medium text-slate-500">Style</div>
+        <div className={`mb-1 ${labelCls}`}>Style</div>
         <div className="flex flex-wrap gap-1">
           {FONT_STYLES.map(({ value, label }) => (
             <button
@@ -105,11 +117,7 @@ export function FontSelector({
               type="button"
               onClick={() => onFontChange({ font_style: value })}
               disabled={disabled}
-              className={`rounded px-2 py-1 text-xs font-medium transition disabled:opacity-50 ${
-                fontStyle === value
-                  ? 'bg-indigo-100 text-indigo-700'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
+              className={btnCls(fontStyle === value)}
               style={
                 value === 'bold'
                   ? { fontWeight: 'bold' }
@@ -130,7 +138,7 @@ export function FontSelector({
       {showTextLayout && onTextStyleChange && (
         <>
           <div>
-            <div className="mb-1 text-xs font-medium text-slate-500">Align</div>
+            <div className={`mb-1 ${labelCls}`}>Align</div>
             <div className="flex gap-1">
               {(['left', 'center', 'right'] as const).map((align) => (
                 <button
@@ -138,11 +146,7 @@ export function FontSelector({
                   type="button"
                   onClick={() => onTextStyleChange({ text_align: align })}
                   disabled={disabled}
-                  className={`flex-1 rounded px-2 py-1 text-xs font-medium transition disabled:opacity-50 ${
-                    textAlign === align
-                      ? 'bg-indigo-100 text-indigo-700'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
+                  className={`flex-1 ${btnCls(textAlign === align)}`}
                 >
                   {align.charAt(0).toUpperCase() + align.slice(1)}
                 </button>
@@ -150,7 +154,7 @@ export function FontSelector({
             </div>
           </div>
           <div>
-            <div className="mb-1 text-xs font-medium text-slate-500">Vertical</div>
+            <div className={`mb-1 ${labelCls}`}>Vertical</div>
             <div className="flex gap-1">
               {(['top', 'middle', 'bottom'] as const).map((valign) => (
                 <button
@@ -158,11 +162,7 @@ export function FontSelector({
                   type="button"
                   onClick={() => onTextStyleChange({ text_vertical_align: valign })}
                   disabled={disabled}
-                  className={`flex-1 rounded px-2 py-1 text-xs font-medium transition disabled:opacity-50 ${
-                    textVerticalAlign === valign
-                      ? 'bg-indigo-100 text-indigo-700'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
+                  className={`flex-1 ${btnCls(textVerticalAlign === valign)}`}
                 >
                   {valign.charAt(0).toUpperCase() + valign.slice(1)}
                 </button>
@@ -170,7 +170,7 @@ export function FontSelector({
             </div>
           </div>
           <div>
-            <div className="mb-1 text-xs font-medium text-slate-500">Text Color</div>
+            <div className={`mb-1 ${labelCls}`}>Text Color</div>
             <div className="flex flex-wrap gap-1">
               {TEXT_COLOR_SWATCHES.map((color) => (
                 <button
@@ -179,14 +179,36 @@ export function FontSelector({
                   onClick={() => onTextStyleChange({ text_color: color })}
                   disabled={disabled}
                   className={`h-5 w-5 rounded-full transition hover:scale-110 disabled:opacity-50 ${
-                    color === '#FFFFFF' ? 'border border-slate-300' : ''
+                    color === '#FFFFFF' ? `border ${dk ? 'border-slate-600' : 'border-slate-300'}` : ''
                   } ${
-                    color === textColor ? 'ring-2 ring-slate-700 ring-offset-1' : ''
+                    color === textColor ? `ring-2 ring-slate-700 ${dk ? 'ring-offset-slate-900' : ''} ring-offset-1` : ''
                   }`}
                   style={{ backgroundColor: color }}
                   title={color}
                 />
               ))}
+              {/* Custom color picker */}
+              <button
+                type="button"
+                onClick={() => textColorPickerRef.current?.click()}
+                disabled={disabled}
+                className={`h-5 w-5 rounded-full border border-dashed flex items-center justify-center hover:scale-110 transition disabled:opacity-50 ${
+                  dk ? 'border-slate-500 bg-slate-800' : 'border-slate-400 bg-white'
+                }`}
+                title="Custom color"
+              >
+                <svg className={`h-2.5 w-2.5 ${dk ? 'text-slate-500' : 'text-slate-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m-7-7h14" />
+                </svg>
+              </button>
+              <input
+                ref={textColorPickerRef}
+                type="color"
+                value={textColor}
+                onChange={(e) => onTextStyleChange?.({ text_color: e.target.value })}
+                className="sr-only"
+                tabIndex={-1}
+              />
             </div>
           </div>
         </>
@@ -195,14 +217,9 @@ export function FontSelector({
   )
 
   if (compact) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const buttonRef = useRef<HTMLButtonElement>(null)
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null)
-
     const handleToggle = () => {
-      if (!showPopover && buttonRef.current) {
-        const rect = buttonRef.current.getBoundingClientRect()
+      if (!showPopover && compactButtonRef.current) {
+        const rect = compactButtonRef.current.getBoundingClientRect()
         setPopoverPos({ top: rect.top, left: rect.right + 8 })
       }
       setShowPopover(!showPopover)
@@ -211,17 +228,17 @@ export function FontSelector({
     return (
       <div ref={popoverRef}>
         <button
-          ref={buttonRef}
+          ref={compactButtonRef}
           type="button"
           onClick={handleToggle}
           disabled={disabled}
           aria-label="Font options"
           aria-expanded={showPopover}
           aria-haspopup="dialog"
-          className="flex h-9 w-9 flex-col items-center justify-center rounded-lg transition hover:bg-slate-100 disabled:opacity-50"
+          className={`flex h-9 w-9 flex-col items-center justify-center rounded-lg transition disabled:opacity-50 ${dk ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}
           title="Font options"
         >
-          <svg className="h-5 w-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className={`h-5 w-5 ${dk ? 'text-slate-400' : 'text-slate-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
           </svg>
         </button>
@@ -230,7 +247,7 @@ export function FontSelector({
             ref={popoverPanelRef}
             role="dialog"
             aria-label="Font options"
-            className="fixed z-[200] rounded-xl border border-slate-200 bg-white shadow-xl"
+            className={`fixed z-[200] rounded-xl border shadow-xl ${dk ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}
             style={{ top: popoverPos.top, left: popoverPos.left }}
             onMouseDown={e => e.preventDefault()}
           >
@@ -241,5 +258,5 @@ export function FontSelector({
     )
   }
 
-  return <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-lg">{content}</div>
+  return <div className={`rounded-xl border p-3 shadow-lg ${dk ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}>{content}</div>
 }

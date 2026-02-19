@@ -31,7 +31,7 @@ const BOARD_OBJECT_COLUMNS = [
   'text_align', 'text_vertical_align', 'text_padding', 'text_color',
   'corner_radius', 'title', 'locked_by',
   'sides', 'custom_points',
-  'connect_start_id', 'connect_start_anchor', 'connect_end_id', 'connect_end_anchor',
+  'connect_start_id', 'connect_start_anchor', 'connect_end_id', 'connect_end_anchor', 'waypoints',
   'z_index', 'parent_id', 'created_by', 'created_at', 'updated_at', 'deleted_at',
 ].join(',')
 

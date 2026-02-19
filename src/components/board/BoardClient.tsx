@@ -7,6 +7,8 @@ import { useRealtimeChannel } from '@/hooks/useRealtimeChannel'
 import { usePresence } from '@/hooks/usePresence'
 import { useCursors } from '@/hooks/useCursors'
 import { useUndoStack, UndoEntry } from '@/hooks/useUndoStack'
+import { useDarkMode } from '@/hooks/useDarkMode'
+import { createClient } from '@/lib/supabase/client'
 import { BoardObject, BoardObjectType } from '@/types/board'
 import { BoardRole } from '@/types/sharing'
 import { BoardTopBar } from './BoardTopBar'
@@ -18,6 +20,7 @@ import { GroupBreadcrumb } from './GroupBreadcrumb'
 import { getInitialVertexPoints, isVectorType } from './shapeUtils'
 import { shapeRegistry } from './shapeRegistry'
 import { getShapeAnchors, findNearestAnchor, AnchorPoint } from './anchorPoints'
+import { parseWaypoints } from './autoRoute'
 import type { ShapePreset } from './shapePresets'
 import { scaleCustomPoints } from './shapePresets'
 
@@ -31,15 +34,45 @@ const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canv
   ),
 })
 
+/**
+ * Pick the best anchor on a shape for a connector endpoint.
+ * Uses the connector's OTHER endpoint as reference and picks the nearest anchor.
+ * Returns null for self-loop connectors (both ends on same shape) — keep existing anchor.
+ */
+function pickBestAnchor(
+  connector: BoardObject,
+  endpoint: 'start' | 'end',
+  anchors: AnchorPoint[]
+): { x: number; y: number; anchorId: string } | null {
+  if (anchors.length === 0) return null
+  // Self-loop guard: don't re-select if both ends connect to the same shape
+  if (connector.connect_start_id && connector.connect_start_id === connector.connect_end_id) return null
+  // Reference = the OTHER endpoint
+  const refX = endpoint === 'start' ? (connector.x2 ?? connector.x + connector.width) : connector.x
+  const refY = endpoint === 'start' ? (connector.y2 ?? connector.y + connector.height) : connector.y
+  // Find nearest anchor with no distance limit
+  const best = findNearestAnchor(anchors, refX, refY, Infinity)
+  if (!best) return null
+  return { x: best.x, y: best.y, anchorId: best.id }
+}
+
 interface BoardClientProps {
   userId: string
   boardId: string
   boardName: string
   userRole: BoardRole
   displayName: string
+  initialGridSize?: number
+  initialGridSubdivisions?: number
+  initialGridVisible?: boolean
+  initialSnapToGrid?: boolean
+  initialGridStyle?: string
+  initialCanvasColor?: string
+  initialGridColor?: string
+  initialSubdivisionColor?: string
 }
 
-export function BoardClient({ userId, boardId, boardName, userRole, displayName }: BoardClientProps) {
+export function BoardClient({ userId, boardId, boardName, userRole, displayName, initialGridSize = 40, initialGridSubdivisions = 1, initialGridVisible = true, initialSnapToGrid = false, initialGridStyle = 'lines', initialCanvasColor = '#e8ecf1', initialGridColor = '#b4becd', initialSubdivisionColor = '#b4becd' }: BoardClientProps) {
   const channel = useRealtimeChannel(boardId)
   const { onlineUsers, trackPresence, updatePresence } = usePresence(channel, userId, userRole, displayName)
   const userCount = onlineUsers.length + 1 // include self
@@ -97,6 +130,41 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
   const [vertexEditId, setVertexEditId] = useState<string | null>(null)
   const [pendingEditId, setPendingEditId] = useState<string | null>(null)
   const [snapIndicator, setSnapIndicator] = useState<{ x: number; y: number } | null>(null)
+
+  // Grid settings — initialized from server props, persisted on change
+  const [gridSize, setGridSize] = useState(initialGridSize)
+  const [gridSubdivisions, setGridSubdivisions] = useState(initialGridSubdivisions)
+  const [gridVisible, setGridVisible] = useState(initialGridVisible)
+  const [snapToGrid, setSnapToGrid] = useState(initialSnapToGrid)
+  const [gridStyle, setGridStyle] = useState(initialGridStyle)
+  const [canvasColor, setCanvasColor] = useState(initialCanvasColor)
+  const [gridColor, setGridColor] = useState(initialGridColor)
+  const [subdivisionColor, setSubdivisionColor] = useState(initialSubdivisionColor)
+  const [uiDarkMode, setUiDarkMode] = useDarkMode()
+
+  const supabaseRef = useRef(createClient())
+
+  const updateBoardSettings = useCallback((updates: { grid_size?: number; grid_subdivisions?: number; grid_visible?: boolean; snap_to_grid?: boolean; grid_style?: string; canvas_color?: string; grid_color?: string; subdivision_color?: string }) => {
+    if (updates.grid_size !== undefined) setGridSize(updates.grid_size)
+    if (updates.grid_subdivisions !== undefined) setGridSubdivisions(updates.grid_subdivisions)
+    if (updates.grid_visible !== undefined) setGridVisible(updates.grid_visible)
+    if (updates.snap_to_grid !== undefined) setSnapToGrid(updates.snap_to_grid)
+    if (updates.grid_style !== undefined) setGridStyle(updates.grid_style)
+    if (updates.canvas_color !== undefined) setCanvasColor(updates.canvas_color)
+    if (updates.grid_color !== undefined) setGridColor(updates.grid_color)
+    if (updates.subdivision_color !== undefined) setSubdivisionColor(updates.subdivision_color)
+    // Persist to DB (fire-and-forget)
+    supabaseRef.current.from('boards').update(updates).eq('id', boardId).then()
+  }, [boardId])
+
+  const toggleGridVisible = useCallback(() => {
+    updateBoardSettings({ grid_visible: !gridVisible })
+  }, [gridVisible, updateBoardSettings])
+
+  const toggleSnapToGrid = useCallback(() => {
+    updateBoardSettings({ snap_to_grid: !snapToGrid })
+  }, [snapToGrid, updateBoardSettings])
+
   const undoStack = useUndoStack()
   const MAX_RECENT_COLORS = 6
   const [recentColors, setRecentColors] = useState<string[]>(() => EXPANDED_PALETTE.slice(0, MAX_RECENT_COLORS))
@@ -337,14 +405,22 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
         for (const { connectorId, endpoint } of connections) {
           const connector = objects.get(connectorId)
           if (!connector) continue
-          const anchorId = endpoint === 'start' ? connector.connect_start_anchor : connector.connect_end_anchor
-          if (!anchorId) continue
-          const anchor = anchorMap.get(anchorId)
-          if (!anchor) continue
-          if (endpoint === 'start') {
-            updateObjectDrag(connectorId, { x: anchor.x, y: anchor.y })
+          const best = pickBestAnchor(connector, endpoint, anchors)
+          if (!best) {
+            // Fallback to existing anchor
+            const anchorId = endpoint === 'start' ? connector.connect_start_anchor : connector.connect_end_anchor
+            if (!anchorId) continue
+            const anchor = anchorMap.get(anchorId)
+            if (!anchor) continue
+            if (endpoint === 'start') {
+              updateObjectDrag(connectorId, { x: anchor.x, y: anchor.y })
+            } else {
+              updateObjectDrag(connectorId, { x2: anchor.x, y2: anchor.y })
+            }
+          } else if (endpoint === 'start') {
+            updateObjectDrag(connectorId, { x: best.x, y: best.y })
           } else {
-            updateObjectDrag(connectorId, { x2: anchor.x, y2: anchor.y })
+            updateObjectDrag(connectorId, { x2: best.x, y2: best.y })
           }
         }
       }
@@ -355,7 +431,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
     if (!canEdit) return
     markActivity()
     updateObjectDragEnd(id, { x, y })
-    // Auto-follow connectors on drag end
+    // Auto-follow connectors on drag end — with smart anchor re-selection
     const obj = objects.get(id)
     if (obj && !isVectorType(obj.type)) {
       const movedObj = { ...obj, x, y }
@@ -366,14 +442,22 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
         for (const { connectorId, endpoint } of connections) {
           const connector = objects.get(connectorId)
           if (!connector) continue
-          const anchorId = endpoint === 'start' ? connector.connect_start_anchor : connector.connect_end_anchor
-          if (!anchorId) continue
-          const anchor = anchorMap.get(anchorId)
-          if (!anchor) continue
-          if (endpoint === 'start') {
-            updateObjectDragEnd(connectorId, { x: anchor.x, y: anchor.y })
+          const best = pickBestAnchor(connector, endpoint, anchors)
+          if (!best) {
+            // Fallback to existing anchor
+            const anchorId = endpoint === 'start' ? connector.connect_start_anchor : connector.connect_end_anchor
+            if (!anchorId) continue
+            const anchor = anchorMap.get(anchorId)
+            if (!anchor) continue
+            if (endpoint === 'start') {
+              updateObjectDragEnd(connectorId, { x: anchor.x, y: anchor.y })
+            } else {
+              updateObjectDragEnd(connectorId, { x2: anchor.x, y2: anchor.y })
+            }
+          } else if (endpoint === 'start') {
+            updateObjectDragEnd(connectorId, { x: best.x, y: best.y, connect_start_anchor: best.anchorId })
           } else {
-            updateObjectDragEnd(connectorId, { x2: anchor.x, y2: anchor.y })
+            updateObjectDragEnd(connectorId, { x2: best.x, y2: best.y, connect_end_anchor: best.anchorId })
           }
         }
       }
@@ -540,7 +624,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
       undoStack.push({ type: 'update', patches: [{ id, before }] })
     }
     updateObject(id, updates)
-    // Auto-follow connectors after transform
+    // Auto-follow connectors after transform — with smart anchor re-selection
     if (!isVectorType(obj?.type ?? '')) {
       const transformedObj = { ...obj!, ...updates }
       const anchors = getShapeAnchors(transformedObj)
@@ -550,19 +634,81 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
         for (const { connectorId, endpoint } of connections) {
           const connector = objects.get(connectorId)
           if (!connector) continue
-          const anchorId = endpoint === 'start' ? connector.connect_start_anchor : connector.connect_end_anchor
-          if (!anchorId) continue
-          const anchor = anchorMap.get(anchorId)
-          if (!anchor) continue
-          if (endpoint === 'start') {
-            updateObject(connectorId, { x: anchor.x, y: anchor.y })
+          const best = pickBestAnchor(connector, endpoint, anchors)
+          if (!best) {
+            // Fallback to existing anchor
+            const anchorId = endpoint === 'start' ? connector.connect_start_anchor : connector.connect_end_anchor
+            if (!anchorId) continue
+            const anchor = anchorMap.get(anchorId)
+            if (!anchor) continue
+            if (endpoint === 'start') {
+              updateObject(connectorId, { x: anchor.x, y: anchor.y })
+            } else {
+              updateObject(connectorId, { x2: anchor.x, y2: anchor.y })
+            }
+          } else if (endpoint === 'start') {
+            updateObject(connectorId, { x: best.x, y: best.y, connect_start_anchor: best.anchorId })
           } else {
-            updateObject(connectorId, { x2: anchor.x, y2: anchor.y })
+            updateObject(connectorId, { x2: best.x, y2: best.y, connect_end_anchor: best.anchorId })
           }
         }
       }
     }
   }, [canEdit, objects, updateObject, undoStack, connectionIndex, markActivity])
+
+  // --- Waypoint CRUD handlers ---
+
+  const handleWaypointDragEnd = useCallback((id: string, waypointIndex: number, x: number, y: number) => {
+    if (!canEdit) return
+    markActivity()
+    const obj = objects.get(id)
+    if (!obj) return
+    const waypoints = parseWaypoints(obj.waypoints)
+    if (waypointIndex * 2 + 1 >= waypoints.length) return
+    const before: Partial<BoardObject> = { waypoints: obj.waypoints }
+    const newWaypoints = [...waypoints]
+    newWaypoints[waypointIndex * 2] = x
+    newWaypoints[waypointIndex * 2 + 1] = y
+    undoStack.push({ type: 'update', patches: [{ id, before }] })
+    updateObject(id, { waypoints: JSON.stringify(newWaypoints) })
+  }, [canEdit, objects, updateObject, undoStack, markActivity])
+
+  const handleWaypointInsert = useCallback((id: string, afterSegmentIndex: number) => {
+    if (!canEdit) return
+    markActivity()
+    const obj = objects.get(id)
+    if (!obj) return
+    const waypoints = parseWaypoints(obj.waypoints)
+    const before: Partial<BoardObject> = { waypoints: obj.waypoints }
+    // Build list of all points: start, waypoints, end
+    const x2 = obj.x2 ?? obj.x + obj.width
+    const y2 = obj.y2 ?? obj.y + obj.height
+    const allPts: number[] = [obj.x, obj.y, ...waypoints, x2, y2]
+    // afterSegmentIndex is the segment index (0 = start→first, etc.)
+    // Insert midpoint of segment at allPts[segIdx*2] → allPts[(segIdx+1)*2]
+    const i = afterSegmentIndex * 2
+    const midX = (allPts[i] + allPts[i + 2]) / 2
+    const midY = (allPts[i + 1] + allPts[i + 3]) / 2
+    const newWaypoints = [...waypoints]
+    // Insert at position afterSegmentIndex (in waypoints array, not allPts)
+    newWaypoints.splice(afterSegmentIndex * 2, 0, midX, midY)
+    undoStack.push({ type: 'update', patches: [{ id, before }] })
+    updateObject(id, { waypoints: JSON.stringify(newWaypoints) })
+  }, [canEdit, objects, updateObject, undoStack, markActivity])
+
+  const handleWaypointDelete = useCallback((id: string, waypointIndex: number) => {
+    if (!canEdit) return
+    markActivity()
+    const obj = objects.get(id)
+    if (!obj) return
+    const waypoints = parseWaypoints(obj.waypoints)
+    if (waypointIndex * 2 + 1 >= waypoints.length) return
+    const before: Partial<BoardObject> = { waypoints: obj.waypoints }
+    const newWaypoints = [...waypoints]
+    newWaypoints.splice(waypointIndex * 2, 2)
+    undoStack.push({ type: 'update', patches: [{ id, before }] })
+    updateObject(id, { waypoints: newWaypoints.length > 0 ? JSON.stringify(newWaypoints) : null })
+  }, [canEdit, objects, updateObject, undoStack, markActivity])
 
   const handleDelete = useCallback(() => {
     if (!canEdit) return
@@ -1057,6 +1203,17 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
         userRole={userRole}
         onShareClick={() => setShareOpen(true)}
         onlineUsers={onlineUsers}
+        gridSize={gridSize}
+        gridSubdivisions={gridSubdivisions}
+        gridVisible={gridVisible}
+        snapToGrid={snapToGrid}
+        gridStyle={gridStyle}
+        canvasColor={canvasColor}
+        gridColor={gridColor}
+        subdivisionColor={subdivisionColor}
+        onUpdateBoardSettings={updateBoardSettings}
+        uiDarkMode={uiDarkMode}
+        onToggleDarkMode={() => setUiDarkMode(!uiDarkMode)}
       />
       {activeGroupId && (
         <div className="absolute left-1/2 top-16 z-10 -translate-x-1/2">
@@ -1090,6 +1247,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
           anySelectedLocked={anySelectedLocked}
           activePreset={activePreset}
           onPresetSelect={handlePresetSelect}
+          uiDarkMode={uiDarkMode}
         />
         <div className="relative flex-1 overflow-hidden">
           <CanvasErrorBoundary>
@@ -1161,6 +1319,19 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName 
               snapIndicator={snapIndicator}
               pendingEditId={pendingEditId}
               onPendingEditConsumed={() => setPendingEditId(null)}
+              gridSize={gridSize}
+              gridSubdivisions={gridSubdivisions}
+              gridVisible={gridVisible}
+              snapToGrid={snapToGrid}
+              gridStyle={gridStyle}
+              canvasColor={canvasColor}
+              gridColor={gridColor}
+              subdivisionColor={subdivisionColor}
+              onUpdateBoardSettings={updateBoardSettings}
+              uiDarkMode={uiDarkMode}
+              onWaypointDragEnd={handleWaypointDragEnd}
+              onWaypointInsert={handleWaypointInsert}
+              onWaypointDelete={handleWaypointDelete}
             />
           </CanvasErrorBoundary>
         </div>

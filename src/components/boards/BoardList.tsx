@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { BoardWithRole } from '@/types/sharing'
 import { createClient } from '@/lib/supabase/client'
+import { useDarkModeValue } from '@/hooks/useDarkMode'
 import { BoardCard } from './BoardCard'
 import { NewBoardCard } from './NewBoardCard'
 
@@ -24,6 +25,8 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
   const router = useRouter()
   const supabaseRef = useRef(createClient())
   const supabase = supabaseRef.current
+
+  const dk = useDarkModeValue()
 
   const handleCreate = async () => {
     const name = newName.trim() || 'Untitled Board'
@@ -141,11 +144,11 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
   return (
     <div className="space-y-8">
       {error && (
-        <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+        <p className={`rounded-lg px-4 py-3 text-sm ${dk ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-700'}`}>{error}</p>
       )}
 
       <section>
-        <h2 className="mb-4 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+        <h2 className={`mb-4 text-2xl font-bold tracking-tight sm:text-3xl ${dk ? 'text-white' : 'text-slate-900'}`}>
           My Boards
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -156,6 +159,7 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
                 onCreate={handleCreate}
                 onCancel={() => { setShowNameInput(false); setNewName('') }}
                 onClick={() => setShowNameInput(true)}
+                dark={dk}
               />
               {myBoards.map((board) => (
                   <BoardCard
@@ -171,14 +175,15 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
                     onDelete={handleDelete}
                     onLeave={handleLeaveBoard}
                     onNavigate={(id) => router.push(`/board/${id}`)}
+                    dark={dk}
                   />
                 ))}
         </div>
       </section>
 
       {sharedBoards.length > 0 && (
-        <section className="mt-16 border-t border-slate-200 pt-12">
-          <h2 className="mb-4 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+        <section className={`mt-16 border-t pt-12 ${dk ? 'border-slate-700' : 'border-slate-200'}`}>
+          <h2 className={`mb-4 text-2xl font-bold tracking-tight sm:text-3xl ${dk ? 'text-white' : 'text-slate-900'}`}>
             Boards Shared with Me
           </h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -196,6 +201,7 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
                     onDelete={handleDelete}
                     onLeave={handleLeaveBoard}
                     onNavigate={(id) => router.push(`/board/${id}`)}
+                    dark={dk}
                   />
                 ))}
           </div>

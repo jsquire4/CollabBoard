@@ -18,13 +18,16 @@ interface ColorPickerProps {
   compact?: boolean
   /** Optional label for the compact button tooltip */
   label?: string
+  dark?: boolean
 }
 
-export function ColorPicker({ selectedColor, onColorChange, disabled, compact, label = 'Color' }: ColorPickerProps) {
+export function ColorPicker({ selectedColor, onColorChange, disabled, compact, label = 'Color', dark = false }: ColorPickerProps) {
   const [showPopover, setShowPopover] = useState(false)
   const [customColor, setCustomColor] = useState(selectedColor || '#6366f1')
   const popoverRef = useRef<HTMLDivElement>(null)
   const popoverPanelRef = useRef<HTMLDivElement>(null)
+  const compactButtonRef = useRef<HTMLButtonElement>(null)
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null)
 
   useEffect(() => {
     if (selectedColor && !EXPANDED_PALETTE.includes(selectedColor)) {
@@ -40,9 +43,11 @@ export function ColorPicker({ selectedColor, onColorChange, disabled, compact, l
     onColorChange(color)
   }
 
+  const dk = dark
+
   const pickerContent = (
     <div className="flex flex-col gap-2">
-      <div className="text-xs font-medium text-slate-500">Color</div>
+      <div className={`text-xs font-medium ${dk ? 'text-slate-400' : 'text-slate-500'}`}>Color</div>
       <div className="grid grid-cols-6 gap-1">
         {EXPANDED_PALETTE.map((color) => (
           <button
@@ -51,7 +56,7 @@ export function ColorPicker({ selectedColor, onColorChange, disabled, compact, l
             onClick={() => onColorChange(color)}
             disabled={disabled}
             className={`h-6 w-6 rounded-full transition hover:scale-110 disabled:opacity-50 disabled:hover:scale-100 ${
-              color === selectedColor ? 'ring-2 ring-slate-700 ring-offset-2' : ''
+              color === selectedColor ? `ring-2 ring-slate-700 ${dk ? 'ring-offset-slate-900' : ''} ring-offset-2` : ''
             }`}
             style={{ backgroundColor: color }}
             title={color}
@@ -59,13 +64,13 @@ export function ColorPicker({ selectedColor, onColorChange, disabled, compact, l
         ))}
       </div>
       <div className="space-y-1">
-        <div className="text-xs font-medium text-slate-500">Custom</div>
+        <div className={`text-xs font-medium ${dk ? 'text-slate-400' : 'text-slate-500'}`}>Custom</div>
         <div className="flex gap-2">
           <input
             type="color"
             value={customColor}
             onChange={handleCustomChange}
-            className="h-8 w-12 cursor-pointer rounded border border-slate-300 bg-transparent p-0"
+            className={`h-8 w-12 cursor-pointer rounded border bg-transparent p-0 ${dk ? 'border-slate-600' : 'border-slate-300'}`}
           />
           <input
             type="text"
@@ -75,7 +80,9 @@ export function ColorPicker({ selectedColor, onColorChange, disabled, compact, l
               setCustomColor(v)
               if (/^#[0-9A-Fa-f]{6}$/.test(v)) onColorChange(v)
             }}
-            className="w-20 rounded border border-slate-300 px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+            className={`w-20 rounded border px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-indigo-500 ${
+              dk ? 'border-slate-600 bg-slate-800 text-slate-300' : 'border-slate-300 bg-white text-slate-900'
+            }`}
             placeholder="#000000"
           />
         </div>
@@ -84,12 +91,9 @@ export function ColorPicker({ selectedColor, onColorChange, disabled, compact, l
   )
 
   if (compact) {
-    const buttonRef = useRef<HTMLButtonElement>(null)
-    const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null)
-
     const handleToggle = () => {
-      if (!showPopover && buttonRef.current) {
-        const rect = buttonRef.current.getBoundingClientRect()
+      if (!showPopover && compactButtonRef.current) {
+        const rect = compactButtonRef.current.getBoundingClientRect()
         setPopoverPos({ top: rect.top, left: rect.right + 8 })
       }
       setShowPopover(!showPopover)
@@ -98,18 +102,18 @@ export function ColorPicker({ selectedColor, onColorChange, disabled, compact, l
     return (
       <div ref={popoverRef}>
         <button
-          ref={buttonRef}
+          ref={compactButtonRef}
           type="button"
           onClick={handleToggle}
           disabled={disabled}
           aria-label={label}
           aria-expanded={showPopover}
           aria-haspopup="dialog"
-          className="flex h-9 w-9 flex-col items-center justify-center rounded-lg transition hover:bg-slate-100 disabled:opacity-50"
+          className={`flex h-9 w-9 flex-col items-center justify-center rounded-lg transition disabled:opacity-50 ${dk ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}
           title={label}
         >
           <span
-            className="h-5 w-5 rounded border-2 border-slate-300"
+            className={`h-5 w-5 rounded border-2 ${dk ? 'border-slate-600' : 'border-slate-300'}`}
             style={{ backgroundColor: selectedColor || '#94a3b8' }}
           />
         </button>
@@ -118,7 +122,7 @@ export function ColorPicker({ selectedColor, onColorChange, disabled, compact, l
             ref={popoverPanelRef}
             role="dialog"
             aria-label="Color picker"
-            className="fixed z-[200] w-48 rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
+            className={`fixed z-[200] w-48 rounded-xl border p-3 shadow-xl ${dk ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}
             style={{ top: popoverPos.top, left: popoverPos.left }}
           >
             {pickerContent}

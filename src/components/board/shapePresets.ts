@@ -497,6 +497,12 @@ export const LINE_PRESETS: ShapePreset[] = [
   },
 ]
 
+/** Placeholder entries for future line types (disabled in UI) */
+export const LINE_PLACEHOLDER_PRESETS = [
+  { label: 'Curved Line', iconPath: 'M4 20C4 20 8 4 12 12s8-8 8-8' },
+  { label: 'Rounded Arrow', iconPath: 'M4 20C4 20 8 4 12 12s8-8 8-8 M16 4l4 4-4 4' },
+] as const
+
 export const FRAME_PRESET: ShapePreset = {
   id: 'frame',
   label: 'Frame',

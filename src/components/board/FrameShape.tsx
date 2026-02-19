@@ -45,6 +45,7 @@ export const FrameShape = memo(function FrameShape({
   onDragMove,
   onDragStart,
   editable = true,
+  dragBoundFunc,
   isEditing = false,
 }: FrameShapeProps) {
   const handleDragStart = () => onDragStart?.(object.id)
@@ -101,6 +102,7 @@ export const FrameShape = memo(function FrameShape({
       y={object.y}
       rotation={object.rotation}
       draggable={editable}
+      dragBoundFunc={dragBoundFunc}
       onClick={handleClick}
       onTap={handleClick}
       onDragStart={handleDragStart}

@@ -12,7 +12,8 @@ import { FrameShape } from './FrameShape'
 import { GenericShape } from './GenericShape'
 import { VectorShape } from './VectorShape'
 import { shapeRegistry } from './shapeRegistry'
-import { isVectorType } from './shapeUtils'
+import { isVectorType, snapToGrid } from './shapeUtils'
+import { computeAutoRoute } from './autoRoute'
 import { ContextMenu } from './ContextMenu'
 import { ZoomControls } from './ZoomControls'
 import { RemoteCursorData } from '@/hooks/useCursors'
@@ -275,6 +276,19 @@ interface CanvasProps {
   onActivity?: () => void
   pendingEditId?: string | null
   onPendingEditConsumed?: () => void
+  gridSize?: number
+  gridSubdivisions?: number
+  gridVisible?: boolean
+  snapToGrid?: boolean
+  gridStyle?: string
+  canvasColor?: string
+  gridColor?: string
+  subdivisionColor?: string
+  onUpdateBoardSettings?: (updates: { grid_size?: number; grid_subdivisions?: number; grid_visible?: boolean; snap_to_grid?: boolean; grid_style?: string; canvas_color?: string; grid_color?: string; subdivision_color?: string }) => void
+  uiDarkMode?: boolean
+  onWaypointDragEnd?: (id: string, waypointIndex: number, x: number, y: number) => void
+  onWaypointInsert?: (id: string, afterSegmentIndex: number) => void
+  onWaypointDelete?: (id: string, waypointIndex: number) => void
 }
 
 export function Canvas({
@@ -303,6 +317,19 @@ export function Canvas({
   onActivity,
   pendingEditId,
   onPendingEditConsumed,
+  gridSize = 40,
+  gridSubdivisions = 1,
+  gridVisible = true,
+  snapToGrid: snapToGridEnabled = false,
+  gridStyle = 'lines',
+  canvasColor = '#e8ecf1',
+  gridColor = '#b4becd',
+  subdivisionColor = '#b4becd',
+  onUpdateBoardSettings,
+  uiDarkMode = false,
+  onWaypointDragEnd,
+  onWaypointInsert,
+  onWaypointDelete,
 }: CanvasProps) {
   const canEdit = userRole !== 'viewer'
   const { stagePos, setStagePos, stageScale, handleWheel, zoomIn, zoomOut, resetZoom } = useCanvas()
@@ -320,6 +347,7 @@ export function Canvas({
 
   // Right-click pan state (manual, bypasses Konva drag system)
   const isPanningRef = useRef(false)
+  const didPanRef = useRef(false)  // true if mouse moved during right-click hold
   const [isPanning, setIsPanning] = useState(false)
   const panStartRef = useRef({ x: 0, y: 0 })
   const stagePosAtPanStartRef = useRef({ x: 0, y: 0 })
@@ -487,6 +515,18 @@ export function Canvas({
       } else if (canEdit && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault()
         onUndo?.()
+      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.shiftKey && e.key === ']' && selectedIds.size > 0 && !anySelectedLocked) {
+        e.preventDefault()
+        selectedIds.forEach(id => onBringToFront(id))
+      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.key === ']' && selectedIds.size > 0 && !anySelectedLocked) {
+        e.preventDefault()
+        selectedIds.forEach(id => onBringForward(id))
+      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.shiftKey && e.key === '[' && selectedIds.size > 0 && !anySelectedLocked) {
+        e.preventDefault()
+        selectedIds.forEach(id => onSendToBack(id))
+      } else if (canEdit && (e.ctrlKey || e.metaKey) && e.key === '[' && selectedIds.size > 0 && !anySelectedLocked) {
+        e.preventDefault()
+        selectedIds.forEach(id => onSendBackward(id))
       } else if (e.key === 'Escape') {
         if (vertexEditId) {
           onExitVertexEdit?.()
@@ -506,7 +546,7 @@ export function Canvas({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editingId, selectedIds, activeGroupId, activeTool, onDelete, onDuplicate, onCopy, onPaste, onGroup, onUngroup, onClearSelection, onExitGroup, onCancelTool, canEdit, onUndo, onRedo, anySelectedLocked, vertexEditId, onExitVertexEdit])
+  }, [editingId, selectedIds, activeGroupId, activeTool, onDelete, onDuplicate, onCopy, onPaste, onGroup, onUngroup, onClearSelection, onExitGroup, onCancelTool, canEdit, onUndo, onRedo, anySelectedLocked, vertexEditId, onExitVertexEdit, onBringToFront, onBringForward, onSendBackward, onSendToBack])
 
   // Attach/detach Transformer to effective selected shapes (groups expanded to children)
   useEffect(() => {
@@ -779,6 +819,15 @@ export function Canvas({
     }
   }, [objects, onEnterGroup])
 
+  // Grid snap dragBoundFunc — passed to shapes for Konva-level drag constraint
+  const shapeDragBoundFunc = useMemo(() => {
+    if (!snapToGridEnabled) return undefined
+    return (pos: { x: number; y: number }) => ({
+      x: snapToGrid(pos.x, gridSize, gridSubdivisions),
+      y: snapToGrid(pos.y, gridSize, gridSubdivisions),
+    })
+  }, [snapToGridEnabled, gridSize, gridSubdivisions])
+
   // Handle drag start: notify parent for undo capture
   const handleShapeDragStart = useCallback((id: string) => {
     onDragStartProp?.(id)
@@ -790,10 +839,17 @@ export function Canvas({
     const obj = objects.get(id)
     if (!obj) return
 
-    const dx = x - obj.x
-    const dy = y - obj.y
+    // Apply grid snapping if enabled
+    const finalX = snapToGridEnabled ? snapToGrid(x, gridSize, gridSubdivisions) : x
+    const finalY = snapToGridEnabled ? snapToGrid(y, gridSize, gridSubdivisions) : y
+    if (snapToGridEnabled) {
+      shapeRefs.current.get(id)?.position({ x: finalX, y: finalY })
+    }
 
-    onDragMove(id, x, y)
+    const dx = finalX - obj.x
+    const dy = finalY - obj.y
+
+    onDragMove(id, finalX, finalY)
 
     // Broadcast cursor position during drag — stage onMouseMove doesn't fire
     // while Konva is handling a shape drag, so we push the pointer position here.
@@ -811,7 +867,7 @@ export function Canvas({
     if (obj.type === 'frame') {
       onMoveGroupChildren(id, dx, dy, true)
     }
-  }, [canEdit, objects, onDragMove, onMoveGroupChildren, onCursorMove, stagePos, stageScale])
+  }, [canEdit, objects, onDragMove, onMoveGroupChildren, onCursorMove, stagePos, stageScale, snapToGridEnabled, gridSize, gridSubdivisions])
 
   // Handle drag end with frame containment check and group child movement
   const handleShapeDragEnd = useCallback((id: string, x: number, y: number) => {
@@ -819,10 +875,13 @@ export function Canvas({
     const obj = objects.get(id)
     if (!obj) return
 
-    const dx = x - obj.x
-    const dy = y - obj.y
+    const finalX = snapToGridEnabled ? snapToGrid(x, gridSize, gridSubdivisions) : x
+    const finalY = snapToGridEnabled ? snapToGrid(y, gridSize, gridSubdivisions) : y
 
-    onDragEnd(id, x, y)
+    const dx = finalX - obj.x
+    const dy = finalY - obj.y
+
+    onDragEnd(id, finalX, finalY)
 
     // If this is a frame, move all children (with DB write)
     if (obj.type === 'frame') {
@@ -833,7 +892,7 @@ export function Canvas({
     if (obj.type !== 'frame' && obj.type !== 'group') {
       setTimeout(() => onCheckFrameContainment(id), 0)
     }
-  }, [canEdit, objects, onDragEnd, onMoveGroupChildren, onCheckFrameContainment])
+  }, [canEdit, objects, onDragEnd, onMoveGroupChildren, onCheckFrameContainment, snapToGridEnabled, gridSize, gridSubdivisions])
 
   const handleContextMenu = useCallback((id: string, clientX: number, clientY: number) => {
     if (!canEdit) return
@@ -844,6 +903,8 @@ export function Canvas({
 
   const handleStageContextMenu = useCallback((e: Konva.KonvaEventObject<PointerEvent>) => {
     e.evt.preventDefault()
+    // Suppress context menu if user panned (moved mouse while right-clicking)
+    if (didPanRef.current) return
   }, [])
 
   // Marquee selection (left-click on empty area)
@@ -867,9 +928,11 @@ export function Canvas({
 
     // Draw mode takes priority over marquee
     if (activeTool) {
-      drawStart.current = { x: canvasX, y: canvasY }
+      const sx = snapToGridEnabled ? snapToGrid(canvasX, gridSize, gridSubdivisions) : canvasX
+      const sy = snapToGridEnabled ? snapToGrid(canvasY, gridSize, gridSubdivisions) : canvasY
+      drawStart.current = { x: sx, y: sy }
       isDrawing.current = true
-      setDrawPreview({ x: canvasX, y: canvasY, width: 0, height: 0 })
+      setDrawPreview({ x: sx, y: sy, width: 0, height: 0 })
       return
     }
 
@@ -896,10 +959,12 @@ export function Canvas({
 
     // Draw preview update
     if (isDrawing.current && drawStart.current) {
-      const x = Math.min(drawStart.current.x, canvasX)
-      const y = Math.min(drawStart.current.y, canvasY)
-      const width = Math.abs(canvasX - drawStart.current.x)
-      const height = Math.abs(canvasY - drawStart.current.y)
+      const cx = snapToGridEnabled ? snapToGrid(canvasX, gridSize, gridSubdivisions) : canvasX
+      const cy = snapToGridEnabled ? snapToGrid(canvasY, gridSize, gridSubdivisions) : canvasY
+      const x = Math.min(drawStart.current.x, cx)
+      const y = Math.min(drawStart.current.y, cy)
+      const width = Math.abs(cx - drawStart.current.x)
+      const height = Math.abs(cy - drawStart.current.y)
       setDrawPreview({ x, y, width, height })
       return
     }
@@ -923,8 +988,10 @@ export function Canvas({
       const stage = stageRef.current
       const pos = stage?.getPointerPosition()
       if (pos) {
-        const canvasX = (pos.x - stagePos.x) / stageScale
-        const canvasY = (pos.y - stagePos.y) / stageScale
+        const rawX = (pos.x - stagePos.x) / stageScale
+        const rawY = (pos.y - stagePos.y) / stageScale
+        const canvasX = snapToGridEnabled ? snapToGrid(rawX, gridSize, gridSubdivisions) : rawX
+        const canvasY = snapToGridEnabled ? snapToGrid(rawY, gridSize, gridSubdivisions) : rawY
         const x = Math.min(drawStart.current.x, canvasX)
         const y = Math.min(drawStart.current.y, canvasY)
         const width = Math.abs(canvasX - drawStart.current.x)
@@ -1017,6 +1084,7 @@ export function Canvas({
       if (hit) return
 
       isPanningRef.current = true
+      didPanRef.current = false
       setIsPanning(true)
       panStartRef.current = { x: e.clientX, y: e.clientY }
       stagePosAtPanStartRef.current = { x: stage.x(), y: stage.y() }
@@ -1025,6 +1093,7 @@ export function Canvas({
 
     const onPointerMove = (e: PointerEvent) => {
       if (!isPanningRef.current) return
+      didPanRef.current = true
       const stage = stageRef.current
       if (!stage) return
       const dx = e.clientX - panStartRef.current.x
@@ -1036,7 +1105,22 @@ export function Canvas({
       // Update grid background position live during pan
       const bgEl = containerRef.current
       if (bgEl) {
-        bgEl.style.backgroundPosition = `${newX}px ${newY}px`
+        // Compute per-layer positions matching the grid rendering logic:
+        // dot layers offset by -halfTile so dot centers land on intersections
+        const sc = stageScale
+        const major = gridSize * sc
+        const sub = gridSubdivisions > 1 ? (gridSize / gridSubdivisions) * sc : 0
+        const lineP = `${newX}px ${newY}px`
+        const majDotP = `${newX - major / 2}px ${newY - major / 2}px`
+        const subDotP = sub ? `${newX - sub / 2}px ${newY - sub / 2}px` : ''
+        const showL = gridStyle === 'lines' || gridStyle === 'both'
+        const showD = gridStyle === 'dots' || gridStyle === 'both'
+        const posArr: string[] = []
+        if (gridSubdivisions > 1 && showD) posArr.push(subDotP)
+        if (showD) posArr.push(majDotP)
+        if (showL) posArr.push(lineP, lineP)
+        if (gridSubdivisions > 1 && showL) posArr.push(lineP, lineP)
+        bgEl.style.backgroundPosition = posArr.join(',')
       }
     }
 
@@ -1181,6 +1265,7 @@ export function Canvas({
           onDoubleClick={handleShapeDoubleClick}
           isEditing={editingId === obj.id}
           editable={shapeEditable}
+          dragBoundFunc={shapeDragBoundFunc}
         />
       )
     }
@@ -1201,6 +1286,7 @@ export function Canvas({
             onTransformEnd={onTransformEnd}
             onContextMenu={handleContextMenu}
             editable={shapeEditable}
+            dragBoundFunc={shapeDragBoundFunc}
             isEditing={editingId === obj.id}
             editingField={editingId === obj.id ? editingField : undefined}
           />
@@ -1220,14 +1306,17 @@ export function Canvas({
             onTransformEnd={onTransformEnd}
             onContextMenu={handleContextMenu}
             editable={shapeEditable}
+            dragBoundFunc={shapeDragBoundFunc}
             isEditing={editingId === obj.id}
           />
         )
       case 'line':
+      case 'arrow': {
+        const autoRoutePoints = computeAutoRoute(obj, objects)
         return (
           <VectorShape
             key={obj.id}
-            variant="line"
+            variant={obj.type as 'line' | 'arrow'}
             object={obj}
             onDragEnd={handleShapeDragEnd}
             onDragMove={handleShapeDragMove}
@@ -1238,29 +1327,16 @@ export function Canvas({
             onTransformEnd={onTransformEnd}
             onContextMenu={handleContextMenu}
             editable={shapeEditable}
+            dragBoundFunc={shapeDragBoundFunc}
             onEndpointDragMove={onEndpointDragMove}
             onEndpointDragEnd={onEndpointDragEnd}
+            autoRoutePoints={autoRoutePoints}
+            onWaypointDragEnd={onWaypointDragEnd}
+            onWaypointInsert={onWaypointInsert}
+            onWaypointDelete={onWaypointDelete}
           />
         )
-      case 'arrow':
-        return (
-          <VectorShape
-            key={obj.id}
-            variant="arrow"
-            object={obj}
-            onDragEnd={handleShapeDragEnd}
-            onDragMove={handleShapeDragMove}
-            onDragStart={handleShapeDragStart}
-            isSelected={isSelected}
-            onSelect={handleShapeSelect}
-            shapeRef={handleShapeRef}
-            onTransformEnd={onTransformEnd}
-            onContextMenu={handleContextMenu}
-            editable={shapeEditable}
-            onEndpointDragMove={onEndpointDragMove}
-            onEndpointDragEnd={onEndpointDragEnd}
-          />
-        )
+      }
       case 'group':
         return null
       default:
@@ -1273,13 +1349,100 @@ export function Canvas({
       ref={containerRef}
       className="relative h-full w-full overflow-hidden"
       style={{
-        backgroundColor: '#e8ecf1',
-        backgroundImage: `
-          linear-gradient(rgba(180, 190, 205, 0.4) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(180, 190, 205, 0.4) 1px, transparent 1px)
-        `,
-        backgroundSize: `${40 * stageScale}px ${40 * stageScale}px`,
-        backgroundPosition: `${stagePos.x}px ${stagePos.y}px`,
+        backgroundColor: canvasColor,
+        ...(gridVisible ? (() => {
+          // Fade grid toward canvas color when zoomed out so shapes stay visible.
+          // Full strength at scale >= 1, fully faded at scale <= 0.2.
+          const zoomFade = Math.min(1, Math.max(0, (stageScale - 0.2) / 0.8))
+          // Full alpha at normal zoom — vibrant colors stay clearly visible.
+          // Only the zoom fade reduces these when zoomed out.
+          const majorAlpha = (snapToGridEnabled ? 0.85 : 0.7) * zoomFade
+          const subAlpha = 0.55 * zoomFade
+
+          if (majorAlpha <= 0) return {} // fully faded — skip all patterns
+
+          const majorSize = gridSize * stageScale
+          const subSize = (gridSize / gridSubdivisions) * stageScale
+
+          const images: string[] = []
+          const sizes: string[] = []
+          const positions: string[] = []
+
+          // Blend a hex color toward canvasColor by factor t (0 = original, 1 = canvas)
+          const blendToCanvas = (hex: string, t: number): string => {
+            const parse = (h: string) => {
+              const c = h.replace('#', '')
+              return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)]
+            }
+            const [r1, g1, b1] = parse(hex)
+            const [r2, g2, b2] = parse(canvasColor)
+            const mix = (a: number, b: number) => Math.round(a + (b - a) * t)
+            return `#${mix(r1, r2).toString(16).padStart(2, '0')}${mix(g1, g2).toString(16).padStart(2, '0')}${mix(b1, b2).toString(16).padStart(2, '0')}`
+          }
+
+          // Blend grid colors toward canvas at low zoom (inverseFade: 0 at full zoom, 1 at 0.2x)
+          const colorFade = 1 - zoomFade
+          const fadedGridColor = blendToCanvas(gridColor, colorFade * 0.7)
+          const fadedSubColor = blendToCanvas(subdivisionColor, colorFade * 0.7)
+
+          // Major grid patterns
+          const showLines = gridStyle === 'lines' || gridStyle === 'both'
+          const showDots = gridStyle === 'dots' || gridStyle === 'both'
+          const majorHex = `${fadedGridColor}${Math.round(majorAlpha * 255).toString(16).padStart(2, '0')}`
+          const subHex = `${fadedSubColor}${Math.round(subAlpha * 255).toString(16).padStart(2, '0')}`
+          // Dot radii scale with zoom so they stay visible but don't overwhelm
+          const majorDotR = Math.max(1.5, Math.min(3, 1.5 * stageScale))
+          const subDotR = Math.max(1, Math.min(2, 1 * stageScale))
+
+          // Line layers share the standard position; dot layers are offset by
+          // -halfTile so the center of each dot tile lands on a line intersection.
+          const linePos = `${stagePos.x}px ${stagePos.y}px`
+          const majorDotPos = `${stagePos.x - majorSize / 2}px ${stagePos.y - majorSize / 2}px`
+          const subDotPos = `${stagePos.x - subSize / 2}px ${stagePos.y - subSize / 2}px`
+
+          // Subdivision dots go FIRST (behind major dots) so major dots paint on top
+          if (gridSubdivisions > 1 && showDots) {
+            images.push(
+              `radial-gradient(circle, ${subHex} ${subDotR}px, transparent ${subDotR}px)`,
+            )
+            sizes.push(`${subSize}px ${subSize}px`)
+            positions.push(subDotPos)
+          }
+
+          // Major dots on top of subdivision dots
+          if (showDots) {
+            images.push(
+              `radial-gradient(circle, ${majorHex} ${majorDotR}px, transparent ${majorDotR}px)`,
+            )
+            sizes.push(`${majorSize}px ${majorSize}px`)
+            positions.push(majorDotPos)
+          }
+
+          if (showLines) {
+            images.push(
+              `linear-gradient(${majorHex} 1px, transparent 1px)`,
+              `linear-gradient(90deg, ${majorHex} 1px, transparent 1px)`,
+            )
+            sizes.push(`${majorSize}px ${majorSize}px`, `${majorSize}px ${majorSize}px`)
+            positions.push(linePos, linePos)
+          }
+
+          // Subdivision lines (only when subdivisions > 1)
+          if (gridSubdivisions > 1 && showLines) {
+            images.push(
+              `linear-gradient(${subHex} 1px, transparent 1px)`,
+              `linear-gradient(90deg, ${subHex} 1px, transparent 1px)`,
+            )
+            sizes.push(`${subSize}px ${subSize}px`, `${subSize}px ${subSize}px`)
+            positions.push(linePos, linePos)
+          }
+
+          return {
+            backgroundImage: images.join(','),
+            backgroundSize: sizes.join(','),
+            backgroundPosition: positions.join(','),
+          }
+        })() : {}),
         cursor: isPanning ? 'grabbing' : activeTool ? 'crosshair' : undefined,
       }}
     >
@@ -1570,6 +1733,7 @@ export function Canvas({
           onZoomIn={zoomIn}
           onZoomOut={zoomOut}
           onReset={resetZoom}
+          uiDarkMode={uiDarkMode}
         />
       </div>
 
@@ -1612,6 +1776,9 @@ export function Canvas({
         />
         )
       })()}
+
     </div>
   )
 }
+
+

@@ -27,6 +27,7 @@ export const StickyNote = memo(function StickyNote({
   onDragMove,
   onDragStart,
   editable = true,
+  dragBoundFunc,
   isEditing = false,
   editingField,
 }: StickyNoteProps) {
@@ -90,6 +91,7 @@ export const StickyNote = memo(function StickyNote({
       y={object.y}
       rotation={object.rotation}
       draggable={editable}
+      dragBoundFunc={dragBoundFunc}
       onClick={handleClick}
       onTap={handleClick}
       onDragStart={handleDragStart}

@@ -2,6 +2,15 @@ import Konva from 'konva'
 import { BoardObject, BoardObjectType } from '@/types/board'
 import { shapeRegistry } from './shapeRegistry'
 
+/** Default grid size in canvas units. */
+export const GRID_SIZE = 40
+
+/** Snap a value to the nearest grid step. */
+export function snapToGrid(value: number, gridSize: number = GRID_SIZE, subdivisions: number = 1): number {
+  const step = gridSize / subdivisions
+  return Math.round(value / step) * step
+}
+
 /** Returns true for shape types that use endpoint-based (vector) rendering instead of width/height. */
 export function isVectorType(type: BoardObjectType | string): boolean {
   return type === 'line' || type === 'arrow'
@@ -20,6 +29,7 @@ export interface ShapeProps {
   onDragStart?: (id: string) => void
   onDoubleClick?: (id: string) => void
   editable?: boolean
+  dragBoundFunc?: (pos: { x: number; y: number }) => { x: number; y: number }
   onEndpointDragMove?: (id: string, updates: Partial<BoardObject>) => void
   onEndpointDragEnd?: (id: string, updates: Partial<BoardObject>) => void
 }

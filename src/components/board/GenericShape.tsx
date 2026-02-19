@@ -22,6 +22,7 @@ export const GenericShape = memo(function GenericShape({
   onDragStart,
   onDoubleClick,
   editable = true,
+  dragBoundFunc,
   onStartEdit,
   isEditing = false,
 }: GenericShapeProps) {
@@ -58,6 +59,13 @@ export const GenericShape = memo(function GenericShape({
       rotation: object.rotation,
       opacity: object.opacity ?? 1,
       draggable: editable,
+      ...(dragBoundFunc && !def!.centerOrigin ? { dragBoundFunc } : {}),
+      ...(dragBoundFunc && def!.centerOrigin ? {
+        dragBoundFunc: (pos: { x: number; y: number }) => {
+          const snapped = dragBoundFunc({ x: pos.x - w / 2, y: pos.y - h / 2 })
+          return { x: snapped.x + w / 2, y: snapped.y + h / 2 }
+        },
+      } : {}),
       onClick: handleClick,
       onTap: handleClick,
       onDragStart: handleDragStart,
@@ -195,6 +203,7 @@ export const GenericShape = memo(function GenericShape({
       y={object.y}
       rotation={object.rotation}
       draggable={editable}
+      dragBoundFunc={dragBoundFunc}
       onClick={handleClick}
       onTap={handleClick}
       onDragStart={handleDragStart}

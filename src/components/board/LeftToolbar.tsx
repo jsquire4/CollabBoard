@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, ReactNode } from 'react'
 import { BoardRole } from '@/types/sharing'
 import { ColorPicker } from './ColorPicker'
 import { FontSelector } from './FontSelector'
@@ -11,6 +11,11 @@ import {
   SHAPE_GROUPS,
   FRAME_PRESET,
   LINE_PRESETS,
+  LINE_PLACEHOLDER_PRESETS,
+  TRIANGLE_PRESETS,
+  QUAD_PRESETS,
+  SYMBOL_PRESETS,
+  FLOWCHART_PRESETS,
 } from './shapePresets'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { EXPANDED_PALETTE } from './ColorPicker'
@@ -41,7 +46,21 @@ interface LeftToolbarProps {
   anySelectedLocked?: boolean
   activePreset: ShapePreset | null
   onPresetSelect: (preset: ShapePreset) => void
+  uiDarkMode?: boolean
 }
+
+// IDs that belong to each tool group (for active-state highlighting)
+const BASICS_IDS = ['sticky_note', 'text_box', 'frame']
+const LINES_IDS = ['line', 'arrow']
+const SHAPES_IDS = [
+  'circle',
+  ...['equilateral', 'right_triangle', 'isosceles'],
+  ...['rectangle', 'square', 'parallelogram', 'rhombus', 'trapezoid'],
+]
+const SYMBOLS_IDS = [
+  ...SYMBOL_PRESETS.map(p => p.id),
+  ...FLOWCHART_PRESETS.map(p => p.id),
+]
 
 export function LeftToolbar({
   userRole,
@@ -69,25 +88,32 @@ export function LeftToolbar({
   anySelectedLocked,
   activePreset,
   onPresetSelect,
+  uiDarkMode = false,
 }: LeftToolbarProps) {
   const canEdit = userRole !== 'viewer'
+  const dk = uiDarkMode
   const [openGroupId, setOpenGroupId] = useState<string | null>(null)
   const [ngonSides, setNgonSides] = useState(5)
 
   const closeFlyout = useCallback(() => setOpenGroupId(null), [])
+  const handlePresetSelect = useCallback((p: ShapePreset) => {
+    onPresetSelect(p)
+    closeFlyout()
+  }, [onPresetSelect, closeFlyout])
 
   return (
-    <aside className="flex w-16 shrink-0 flex-col items-center gap-0.5 border-r border-slate-200 bg-white py-2 overflow-y-auto">
+    <aside className={`flex w-16 shrink-0 flex-col items-center gap-0.5 border-r py-2 overflow-y-auto ${dk ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}>
       {canEdit && (
         <>
           {isEditingText ? (
             <div onMouseDown={e => e.preventDefault()}>
               <div className="mb-1 w-full px-1.5">
-                <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 text-center">
+                <div className={`text-[9px] font-semibold uppercase tracking-wider text-center ${dk ? 'text-slate-500' : 'text-slate-400'}`}>
                   Text
                 </div>
               </div>
               <FontSelector
+                dark={dk}
                 fontFamily={selectedFontFamily}
                 fontSize={selectedFontSize}
                 fontStyle={selectedFontStyle}
@@ -102,108 +128,146 @@ export function LeftToolbar({
             </div>
           ) : (
             <>
-              {/* ── Essentials: Sticky Note + Frame ── */}
-              <SectionLabel text="Basics" />
-              {STANDALONE_PRESETS.filter(p => p.id === 'sticky_note' || p.id === 'text_box').map(preset => (
-                <PresetButton
-                  key={preset.id}
-                  preset={preset}
-                  isActive={activePreset?.id === preset.id || (!activePreset && activeTool === preset.dbType)}
-                  onSelect={onPresetSelect}
-                />
-              ))}
-              <PresetButton
-                preset={FRAME_PRESET}
-                isActive={activePreset?.id === 'frame' || (!activePreset && activeTool === 'frame')}
-                onSelect={onPresetSelect}
-              />
-              <PlaceholderButton label="Connector" iconPath="M4 20h2a4 4 0 0 0 4-4v-8a4 4 0 0 1 4-4h2 M18 4l2 4-2 4" />
-              <PlaceholderButton label="Web Frame" iconPath="M3 3h18v18H3z M3 9h18 M9 9v12" />
-              <PlaceholderButton label="File" iconPath="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M9 13h6 M9 17h4" />
-
-              <Divider />
+              {/* ── Basics ── */}
+              <ToolGroupButton
+                id="basics"
+                label="Basics"
+                iconPath="M4 4h16v13.17L14.17 22H4V4z M14 17v5 M14 22h6"
+                isOpen={openGroupId === 'basics'}
+                isActive={!!activePreset && BASICS_IDS.includes(activePreset.id)}
+                onToggle={() => setOpenGroupId(prev => prev === 'basics' ? null : 'basics')}
+                onClose={closeFlyout}
+                dark={dk}
+              >
+                <FlyoutHeader dark={dk} text="Basics" />
+                <div className="grid grid-cols-3 gap-1" style={{ minWidth: '140px' }}>
+                  {STANDALONE_PRESETS.filter(p => p.id === 'sticky_note' || p.id === 'text_box').map(preset => (
+                    <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} dark={dk} />
+                  ))}
+                  <FlyoutPresetButton preset={FRAME_PRESET} activePreset={activePreset} onSelect={handlePresetSelect} dark={dk} />
+                  <FlyoutPlaceholder label="Connector" iconPath="M4 20h2a4 4 0 0 0 4-4v-8a4 4 0 0 1 4-4h2 M18 4l2 4-2 4" dark={dk} />
+                  <FlyoutPlaceholder label="Web Frame" iconPath="M3 3h18v18H3z M3 9h18 M9 9v12" dark={dk} />
+                  <FlyoutPlaceholder label="File" iconPath="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M9 13h6 M9 17h4" dark={dk} />
+                </div>
+              </ToolGroupButton>
 
               {/* ── Lines ── */}
-              <SectionLabel text="Lines" />
-              {LINE_PRESETS.map(preset => (
-                <PresetButton
-                  key={preset.id}
-                  preset={preset}
-                  isActive={activePreset?.id === preset.id || (!activePreset && activeTool === preset.dbType)}
-                  onSelect={onPresetSelect}
-                />
-              ))}
+              <ToolGroupButton
+                id="lines"
+                label="Lines"
+                iconPath="M5 12h14"
+                isOpen={openGroupId === 'lines'}
+                isActive={!!activePreset && LINES_IDS.includes(activePreset.id)}
+                onToggle={() => setOpenGroupId(prev => prev === 'lines' ? null : 'lines')}
+                onClose={closeFlyout}
+                dark={dk}
+              >
+                <FlyoutHeader dark={dk} text="Lines" />
+                <div className="grid grid-cols-2 gap-1" style={{ minWidth: '120px' }}>
+                  {LINE_PRESETS.map(preset => (
+                    <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} dark={dk} />
+                  ))}
+                  {LINE_PLACEHOLDER_PRESETS.map(p => (
+                    <FlyoutPlaceholder key={p.label} label={p.label} iconPath={p.iconPath} dark={dk} />
+                  ))}
+                </div>
+              </ToolGroupButton>
 
-              <Divider />
+              {/* ── Shapes ── */}
+              <ToolGroupButton
+                id="shapes"
+                label="Shapes"
+                iconPath="M3 3h18v18H3z"
+                isOpen={openGroupId === 'shapes'}
+                isActive={!!activePreset && SHAPES_IDS.includes(activePreset.id)}
+                onToggle={() => setOpenGroupId(prev => prev === 'shapes' ? null : 'shapes')}
+                onClose={closeFlyout}
+                dark={dk}
+              >
+                <div style={{ minWidth: '180px' }}>
+                  <FlyoutHeader dark={dk} text="Circle" />
+                  <div className="grid grid-cols-3 gap-1 mb-2">
+                    {STANDALONE_PRESETS.filter(p => p.id === 'circle').map(preset => (
+                      <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} dark={dk} />
+                    ))}
+                  </div>
+                  <FlyoutHeader dark={dk} text="Triangles" />
+                  <div className="grid grid-cols-3 gap-1 mb-2">
+                    {TRIANGLE_PRESETS.map(preset => (
+                      <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} dark={dk} />
+                    ))}
+                  </div>
+                  <FlyoutHeader dark={dk} text="Quadrilaterals" />
+                  <div className="grid grid-cols-3 gap-1">
+                    {QUAD_PRESETS.map(preset => (
+                      <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} dark={dk} />
+                    ))}
+                  </div>
+                </div>
+              </ToolGroupButton>
 
-              {/* ── Shapes: circle, polygon groups, N-gon ── */}
-              <SectionLabel text="Shapes" />
-              {STANDALONE_PRESETS.filter(p => p.id === 'circle').map(preset => (
-                <PresetButton
-                  key={preset.id}
-                  preset={preset}
-                  isActive={activePreset?.id === preset.id || (!activePreset && activeTool === preset.dbType)}
-                  onSelect={onPresetSelect}
-                />
-              ))}
-              {SHAPE_GROUPS.filter(g => g.id === 'triangles' || g.id === 'quads').map(group => (
-                <ShapeGroupButton
-                  key={group.id}
-                  group={group}
-                  isOpen={openGroupId === group.id}
-                  activePreset={activePreset}
-                  onToggle={() => setOpenGroupId(prev => prev === group.id ? null : group.id)}
-                  onPresetSelect={(p) => { onPresetSelect(p); closeFlyout() }}
-                  onClose={closeFlyout}
-                />
-              ))}
+              {/* ── N-gon ── */}
               <NgonGroupButton
                 isOpen={openGroupId === 'ngon'}
                 activePreset={activePreset}
                 sides={ngonSides}
                 onSidesChange={setNgonSides}
                 onToggle={() => setOpenGroupId(prev => prev === 'ngon' ? null : 'ngon')}
-                onPresetSelect={(p) => { onPresetSelect(p); closeFlyout() }}
+                onPresetSelect={handlePresetSelect}
                 onClose={closeFlyout}
+                dark={dk}
               />
 
-              <Divider />
-
-              {/* ── Symbols: stars/shapes + flowchart ── */}
-              <SectionLabel text="Symbols" />
-              {SHAPE_GROUPS.filter(g => g.id === 'symbols' || g.id === 'flowchart').map(group => (
-                <ShapeGroupButton
-                  key={group.id}
-                  group={group}
-                  isOpen={openGroupId === group.id}
-                  activePreset={activePreset}
-                  onToggle={() => setOpenGroupId(prev => prev === group.id ? null : group.id)}
-                  onPresetSelect={(p) => { onPresetSelect(p); closeFlyout() }}
-                  onClose={closeFlyout}
-                />
-              ))}
+              {/* ── Symbols ── */}
+              <ToolGroupButton
+                id="symbols"
+                label="Symbols"
+                iconPath="M12 2l2.9 6.3 6.9.8-5 5.1 1.2 6.9L12 17.8 6 21.1l1.2-6.9-5-5.1 6.9-.8z"
+                isOpen={openGroupId === 'symbols'}
+                isActive={!!activePreset && SYMBOLS_IDS.includes(activePreset.id)}
+                onToggle={() => setOpenGroupId(prev => prev === 'symbols' ? null : 'symbols')}
+                onClose={closeFlyout}
+                dark={dk}
+              >
+                <div style={{ minWidth: '160px' }}>
+                  <FlyoutHeader dark={dk} text="Stars & Shapes" />
+                  <div className="grid grid-cols-3 gap-1 mb-2">
+                    {SYMBOL_PRESETS.map(preset => (
+                      <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} dark={dk} />
+                    ))}
+                  </div>
+                  <FlyoutHeader dark={dk} text="Flowchart" />
+                  <div className="grid grid-cols-3 gap-1">
+                    {FLOWCHART_PRESETS.map(preset => (
+                      <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} dark={dk} />
+                    ))}
+                  </div>
+                </div>
+              </ToolGroupButton>
             </>
           )}
 
           {/* ── Selection tools ── */}
           {hasSelection && (
             <div className={anySelectedLocked ? 'opacity-50 pointer-events-none' : ''}>
-              <Divider />
+              <Divider dark={dk} />
               <ColorPicker
                 selectedColor={selectedColor}
                 onColorChange={onColorChange}
                 compact
+                dark={dk}
                 label="Fill"
               />
               <BorderColorButton
                 currentColor={selectedStrokeColor}
                 onColorChange={onStrokeColorChange}
+                dark={dk}
               />
-              <Divider />
+              <Divider dark={dk} />
               <button
                 type="button"
                 onClick={onDuplicate}
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100"
+                className={`flex h-9 w-9 items-center justify-center rounded-lg transition ${dk ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}
                 title="Duplicate (Ctrl+D)"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -214,7 +278,7 @@ export function LeftToolbar({
                 <button
                   type="button"
                   onClick={onGroup}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100"
+                  className={`flex h-9 w-9 items-center justify-center rounded-lg transition ${dk ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}
                   title="Group (Ctrl+G)"
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -226,7 +290,7 @@ export function LeftToolbar({
                 <button
                   type="button"
                   onClick={onUngroup}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100"
+                  className={`flex h-9 w-9 items-center justify-center rounded-lg transition ${dk ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}
                   title="Ungroup (Ctrl+Shift+G)"
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -238,7 +302,7 @@ export function LeftToolbar({
               <button
                 type="button"
                 onClick={onDelete}
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-red-500 transition hover:bg-red-50"
+                className={`flex h-9 w-9 items-center justify-center rounded-lg transition ${dk ? 'text-red-400 hover:bg-red-950' : 'text-red-500 hover:bg-red-50'}`}
                 title="Delete (Del)"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -249,80 +313,48 @@ export function LeftToolbar({
           )}
         </>
       )}
+
     </aside>
   )
 }
 
 /* ── Shared small components ── */
 
-function SectionLabel({ text }: { text: string }) {
-  return (
-    <div className="mb-1 w-full px-1.5">
-      <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 text-center">
-        {text}
-      </div>
-    </div>
-  )
+function Divider({ dark = false }: { dark?: boolean }) {
+  return <div className={`my-1 h-px w-8 ${dark ? 'bg-slate-700' : 'bg-slate-200'}`} />
 }
 
-function Divider() {
-  return <div className="my-1 h-px w-8 bg-slate-200" />
-}
-
-/** SVG icon rendered from a path string in a 24×24 viewBox */
-function PresetIcon({ iconPath, className = 'h-4.5 w-4.5' }: { iconPath: string; className?: string }) {
+/** SVG icon rendered from a path string in a 24x24 viewBox */
+function PresetIcon({ iconPath, className = 'h-4.5 w-4.5', dark = false }: { iconPath: string; className?: string; dark?: boolean }) {
   return (
-    <svg className={`${className} text-slate-900`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <svg className={`${className} ${dark ? 'text-current' : 'text-slate-900'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <path d={iconPath} />
     </svg>
   )
 }
 
-/* ── Single preset button ── */
+/* ── ToolGroupButton: flexible flyout wrapper ── */
 
-function PresetButton({ preset, isActive, onSelect }: {
-  preset: ShapePreset
-  isActive: boolean
-  onSelect: (p: ShapePreset) => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(preset)}
-      className={`flex h-9 w-9 flex-col items-center justify-center rounded-lg transition ${
-        isActive ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'
-      }`}
-      title={preset.label}
-    >
-      <PresetIcon iconPath={preset.iconPath} />
-    </button>
-  )
-}
-
-/* ── Placeholder button for upcoming features ── */
-
-function PlaceholderButton({ label, iconPath }: { label: string; iconPath: string }) {
-  return (
-    <button
-      type="button"
-      disabled
-      className="flex h-9 w-9 flex-col items-center justify-center rounded-lg text-slate-300 cursor-not-allowed"
-      title={`${label} (coming soon)`}
-    >
-      <PresetIcon iconPath={iconPath} />
-    </button>
-  )
-}
-
-/* ── Shape group button with flyout ── */
-
-function ShapeGroupButton({ group, isOpen, activePreset, onToggle, onPresetSelect, onClose }: {
-  group: { id: string; label: string; iconPath: string; presets: ShapePreset[] }
+function ToolGroupButton({
+  id,
+  label,
+  iconPath,
+  isOpen,
+  isActive,
+  onToggle,
+  onClose,
+  children,
+  dark = false,
+}: {
+  id: string
+  label: string
+  iconPath: string
   isOpen: boolean
-  activePreset: ShapePreset | null
+  isActive: boolean
   onToggle: () => void
-  onPresetSelect: (p: ShapePreset) => void
   onClose: () => void
+  children: ReactNode
+  dark?: boolean
 }) {
   const btnRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -330,15 +362,12 @@ function ShapeGroupButton({ group, isOpen, activePreset, onToggle, onPresetSelec
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
   useClickOutside([containerRef, panelRef], isOpen, onClose)
 
-  const hasActiveChild = group.presets.some(p => p.id === activePreset?.id)
-
   useEffect(() => {
     if (!isOpen || !btnRef.current) return
     const rect = btnRef.current.getBoundingClientRect()
     const top = rect.top
     const left = rect.right + 8
     setPos({ top, left })
-    // After render, check if flyout overflows viewport and adjust
     const rafId = requestAnimationFrame(() => {
       const panel = panelRef.current
       if (!panel) return
@@ -359,48 +388,78 @@ function ShapeGroupButton({ group, isOpen, activePreset, onToggle, onPresetSelec
         type="button"
         onClick={onToggle}
         className={`relative flex h-9 w-9 flex-col items-center justify-center rounded-lg transition ${
-          hasActiveChild || isOpen ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'
+          isActive || isOpen
+            ? 'bg-indigo-100 text-indigo-700'
+            : dark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
         }`}
-        title={group.label}
+        title={label}
       >
-        <PresetIcon iconPath={group.iconPath} />
-        {/* Flyout indicator triangle */}
-        <span className="absolute right-0.5 bottom-0.5 text-[7px] leading-none text-slate-400">&#9656;</span>
+        <PresetIcon iconPath={iconPath} dark={dark} />
+        <span className={`absolute right-0.5 bottom-0.5 text-[7px] leading-none ${dark ? 'text-slate-600' : 'text-slate-400'}`}>&#9656;</span>
       </button>
       {isOpen && (
         <div
           ref={panelRef}
-          className="fixed z-[200] rounded-xl border border-slate-200 bg-white p-2 shadow-xl"
+          className={`fixed z-[200] rounded-xl border p-2 shadow-xl ${dark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}
           style={{ top: pos.top, left: pos.left }}
         >
-          <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 px-1">
-            {group.label}
-          </div>
-          <div className="grid grid-cols-3 gap-1" style={{ minWidth: '120px' }}>
-            {group.presets.map(preset => (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => onPresetSelect(preset)}
-                className={`flex flex-col items-center justify-center rounded-lg p-1.5 transition ${
-                  activePreset?.id === preset.id ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-                title={preset.label}
-              >
-                <PresetIcon iconPath={preset.iconPath} className="h-5 w-5" />
-                <span className="text-[8px] mt-0.5 leading-tight truncate w-full text-center">{preset.label}</span>
-              </button>
-            ))}
-          </div>
+          {children}
         </div>
       )}
     </div>
   )
 }
 
+/* ── Flyout sub-components ── */
+
+function FlyoutHeader({ text, dark = false }: { text: string; dark?: boolean }) {
+  return (
+    <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 px-1 ${dark ? 'text-slate-500' : 'text-slate-400'}`}>
+      {text}
+    </div>
+  )
+}
+
+function FlyoutPresetButton({ preset, activePreset, onSelect, dark = false }: {
+  preset: ShapePreset
+  activePreset: ShapePreset | null
+  onSelect: (p: ShapePreset) => void
+  dark?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(preset)}
+      className={`flex flex-col items-center justify-center rounded-lg p-1.5 transition ${
+        activePreset?.id === preset.id ? 'bg-indigo-100 text-indigo-700' : dark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
+      }`}
+      title={preset.label}
+    >
+      <PresetIcon iconPath={preset.iconPath} className="h-5 w-5" dark={dark} />
+      <span className={`text-[8px] mt-0.5 leading-tight truncate w-full text-center ${dark ? 'text-slate-400' : ''}`}>{preset.label}</span>
+    </button>
+  )
+}
+
+function FlyoutPlaceholder({ label, iconPath, dark = false }: { label: string; iconPath: string; dark?: boolean }) {
+  return (
+    <button
+      type="button"
+      disabled
+      className={`flex flex-col items-center justify-center rounded-lg p-1.5 cursor-not-allowed ${dark ? 'text-slate-600' : 'text-slate-300'}`}
+      title={`${label} (coming soon)`}
+    >
+      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <path d={iconPath} />
+      </svg>
+      <span className="text-[8px] mt-0.5 leading-tight truncate w-full text-center">{label}</span>
+    </button>
+  )
+}
+
 /* ── N-gon group with slider ── */
 
-function NgonGroupButton({ isOpen, activePreset, sides, onSidesChange, onToggle, onPresetSelect, onClose }: {
+function NgonGroupButton({ isOpen, activePreset, sides, onSidesChange, onToggle, onPresetSelect, onClose, dark = false }: {
   isOpen: boolean
   activePreset: ShapePreset | null
   sides: number
@@ -408,6 +467,7 @@ function NgonGroupButton({ isOpen, activePreset, sides, onSidesChange, onToggle,
   onToggle: () => void
   onPresetSelect: (p: ShapePreset) => void
   onClose: () => void
+  dark?: boolean
 }) {
   const btnRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -456,24 +516,25 @@ function NgonGroupButton({ isOpen, activePreset, sides, onSidesChange, onToggle,
         type="button"
         onClick={onToggle}
         className={`relative flex h-9 w-9 flex-col items-center justify-center rounded-lg transition ${
-          isNgonActive || isOpen ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'
+          isNgonActive || isOpen
+            ? 'bg-indigo-100 text-indigo-700'
+            : dark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
         }`}
         title="N-gon"
       >
-        {/* Heptagon icon */}
-        <PresetIcon iconPath="M12 2L20.5 6.5 22 15.5 16 22H8L2 15.5 3.5 6.5Z" />
-        <span className="absolute right-0.5 bottom-0.5 text-[7px] leading-none text-slate-400">&#9656;</span>
+        <PresetIcon iconPath="M12 2L20.5 6.5 22 15.5 16 22H8L2 15.5 3.5 6.5Z" dark={dark} />
+        <span className={`absolute right-0.5 bottom-0.5 text-[7px] leading-none ${dark ? 'text-slate-600' : 'text-slate-400'}`}>&#9656;</span>
       </button>
       {isOpen && (
         <div
           ref={panelRef}
-          className="fixed z-[200] w-48 rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
+          className={`fixed z-[200] w-48 rounded-xl border p-3 shadow-xl ${dark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}
           style={{ top: pos.top, left: pos.left }}
         >
-          <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+          <div className={`text-[10px] font-semibold uppercase tracking-wider mb-2 ${dark ? 'text-slate-500' : 'text-slate-400'}`}>
             Regular Polygon
           </div>
-          <div className="text-xs font-medium text-slate-600 mb-2">Sides: {sides}</div>
+          <div className={`text-xs font-medium mb-2 ${dark ? 'text-slate-300' : 'text-slate-600'}`}>Sides: {sides}</div>
           <input
             type="range"
             min={3}
@@ -506,9 +567,11 @@ const BORDER_COLORS = EXPANDED_PALETTE.slice(0, 12)
 function BorderColorButton({
   currentColor,
   onColorChange,
+  dark = false,
 }: {
   currentColor?: string | null
   onColorChange: (color: string | null) => void
+  dark?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -533,7 +596,7 @@ function BorderColorButton({
         ref={btnRef}
         type="button"
         onClick={handleToggle}
-        className="flex h-9 w-9 flex-col items-center justify-center rounded-lg transition hover:bg-slate-100"
+        className={`flex h-9 w-9 flex-col items-center justify-center rounded-lg transition ${dark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}
         title="Border color"
       >
         <span
@@ -547,10 +610,10 @@ function BorderColorButton({
       {open && popoverPos && (
         <div
           ref={panelRef}
-          className="fixed z-[200] w-44 rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
+          className={`fixed z-[200] w-44 rounded-xl border p-3 shadow-xl ${dark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}
           style={{ top: popoverPos.top, left: popoverPos.left }}
         >
-          <div className="text-xs font-medium text-slate-500 mb-2">Border</div>
+          <div className={`text-xs font-medium mb-2 ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Border</div>
           <div className="grid grid-cols-6 gap-1">
             <button
               type="button"

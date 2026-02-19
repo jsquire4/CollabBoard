@@ -4,6 +4,14 @@ export interface Board {
   created_by: string
   created_at: string
   updated_at: string
+  grid_size: number
+  grid_subdivisions: number
+  grid_visible: boolean
+  snap_to_grid: boolean
+  grid_style: string
+  canvas_color: string
+  grid_color: string
+  subdivision_color: string
 }
 
 export type BoardObjectType =
@@ -63,6 +71,7 @@ export interface BoardObject {
   connect_start_anchor?: string | null
   connect_end_id?: string | null
   connect_end_anchor?: string | null
+  waypoints?: string | null
   field_clocks?: Record<string, { ts: number; c: number; n: string }>
   deleted_at?: string | null
 }

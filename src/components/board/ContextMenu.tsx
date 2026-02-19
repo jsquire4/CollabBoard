@@ -118,6 +118,7 @@ export function ContextMenu({
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   const [showAllColors, setShowAllColors] = useState(false)
+  const [pos, setPos] = useState({ x: position.x, y: position.y })
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -131,9 +132,20 @@ export function ContextMenu({
     return () => window.removeEventListener('mousedown', handleClickOutside)
   }, [onClose])
 
-  const menuWidth = 200
-  const x = position.x + menuWidth > window.innerWidth ? position.x - menuWidth : position.x
-  const y = Math.min(position.y, window.innerHeight - 40)
+  // Clamp position so menu stays within viewport
+  useEffect(() => {
+    const el = menuRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    let nx = position.x
+    let ny = position.y
+    if (nx + rect.width > vw) nx = Math.max(0, vw - rect.width - 8)
+    if (ny + rect.height > vh) ny = Math.max(0, vh - rect.height - 8)
+    if (nx !== pos.x || ny !== pos.y) setPos({ x: nx, y: ny })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [position.x, position.y])
 
   return (
     <div
@@ -141,8 +153,8 @@ export function ContextMenu({
       className="min-w-[180px] max-h-[80vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl"
       style={{
         position: 'fixed',
-        top: y,
-        left: x,
+        top: pos.y,
+        left: pos.x,
         zIndex: 200,
       }}
     >
@@ -193,18 +205,62 @@ export function ContextMenu({
         <>
           <div className="my-1 h-px bg-slate-200" />
           <div className="px-3 py-1 text-xs font-medium text-slate-500">Layer</div>
-          {onBringToFront && (
-            <MenuItem onClick={() => { onBringToFront(); onClose() }} label="Bring to Front" />
-          )}
-          {onBringForward && (
-            <MenuItem onClick={() => { onBringForward(); onClose() }} label="Bring Forward" />
-          )}
-          {onSendBackward && (
-            <MenuItem onClick={() => { onSendBackward(); onClose() }} label="Send Backward" />
-          )}
-          {onSendToBack && (
-            <MenuItem onClick={() => { onSendToBack(); onClose() }} label="Send to Back" />
-          )}
+          <div className="flex items-center gap-1 px-2 py-1">
+            {onBringToFront && (
+              <button
+                type="button"
+                onClick={() => { onBringToFront(); onClose() }}
+                className="rounded p-1.5 text-slate-600 transition hover:bg-slate-100"
+                title="Bring to Front (Ctrl+Shift+])"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 11V5h6M19 13v6h-6" />
+                  <rect x="3" y="3" width="8" height="8" rx="1" strokeWidth={2} fill="none" />
+                  <rect x="13" y="13" width="8" height="8" rx="1" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
+                </svg>
+              </button>
+            )}
+            {onBringForward && (
+              <button
+                type="button"
+                onClick={() => { onBringForward(); onClose() }}
+                className="rounded p-1.5 text-slate-600 transition hover:bg-slate-100"
+                title="Bring Forward (Ctrl+])"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 11l5-5 5 5" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12" />
+                </svg>
+              </button>
+            )}
+            {onSendBackward && (
+              <button
+                type="button"
+                onClick={() => { onSendBackward(); onClose() }}
+                className="rounded p-1.5 text-slate-600 transition hover:bg-slate-100"
+                title="Send Backward (Ctrl+[)"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 13l5 5 5-5" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 18V6" />
+                </svg>
+              </button>
+            )}
+            {onSendToBack && (
+              <button
+                type="button"
+                onClick={() => { onSendToBack(); onClose() }}
+                className="rounded p-1.5 text-slate-600 transition hover:bg-slate-100"
+                title="Send to Back (Ctrl+Shift+[)"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <rect x="13" y="3" width="8" height="8" rx="1" strokeWidth={2} fill="none" />
+                  <rect x="3" y="13" width="8" height="8" rx="1" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 13v6h-6M5 11V5h6" />
+                </svg>
+              </button>
+            )}
+          </div>
         </>
       )}
 

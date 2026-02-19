@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { BoardRole, BoardMember, BoardInvite, BoardShareLink } from '@/types/sharing'
+import { toast } from 'sonner'
 
 interface ShareDialogProps {
   boardId: string
@@ -49,6 +50,11 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
       supabase.from('board_share_links').select('*').eq('board_id', boardId).eq('is_active', true).limit(1),
     ])
 
+    if (membersRes.error || invitesRes.error || linksRes.error) {
+      toast.error('Failed to load sharing data')
+      setLoading(false)
+      return
+    }
     if (membersRes.data) {
       setMembers(membersRes.data as BoardMember[])
     }
@@ -131,7 +137,9 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
       .update({ role: newRole })
       .eq('id', memberId)
 
-    if (!error) {
+    if (error) {
+      toast.error('Failed to change role')
+    } else {
       setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: newRole } : m))
     }
   }
@@ -145,7 +153,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
     })
 
     if (error) {
-      console.error('Failed to transfer ownership:', error.message)
+      toast.error('Failed to transfer ownership')
     }
 
     setTransferTarget(null)
@@ -158,7 +166,9 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
       .delete()
       .eq('id', memberId)
 
-    if (!error) {
+    if (error) {
+      toast.error('Failed to remove member')
+    } else {
       setMembers(prev => prev.filter(m => m.id !== memberId))
     }
   }
@@ -169,7 +179,9 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
       .delete()
       .eq('id', inviteId)
 
-    if (!error) {
+    if (error) {
+      toast.error('Failed to cancel invite')
+    } else {
       setInvites(prev => prev.filter(i => i.id !== inviteId))
     }
   }
@@ -188,7 +200,9 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
       .select()
       .single()
 
-    if (!error && data) {
+    if (error) {
+      toast.error('Failed to generate link')
+    } else if (data) {
       setShareLink(data as BoardShareLink)
     }
   }
@@ -201,7 +215,9 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
       .update({ is_active: false })
       .eq('id', shareLink.id)
 
-    if (!error) {
+    if (error) {
+      toast.error('Failed to deactivate link')
+    } else {
       setShareLink(null)
     }
   }

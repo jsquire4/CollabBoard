@@ -1,6 +1,7 @@
 import { createClient } from './server'
 import { Board } from '@/types/board'
 import { BoardRole, BoardWithRole, BoardCardSummary } from '@/types/sharing'
+import { logger } from '@/lib/logger'
 
 export async function fetchBoardsGrouped(): Promise<{
   myBoards: (BoardWithRole & { summary?: BoardCardSummary })[]
@@ -22,7 +23,7 @@ export async function fetchBoardsGrouped(): Promise<{
     .limit(200)
 
   if (error) {
-    console.error('Failed to fetch boards:', error.message)
+    logger.error({ message: 'Failed to fetch boards', operation: 'fetchBoardsGrouped', userId: user.id, error })
     return { myBoards: [], sharedWithMe: [] }
   }
 
@@ -80,7 +81,7 @@ async function acceptPendingInvites(userId: string, email: string) {
 
   for (const invite of invites) {
     // Add user as member (ignore conflict if already member)
-    await supabase
+    const { error: upsertError } = await supabase
       .from('board_members')
       .upsert({
         board_id: invite.board_id,
@@ -88,12 +89,18 @@ async function acceptPendingInvites(userId: string, email: string) {
         role: invite.role,
         added_by: invite.invited_by,
       }, { onConflict: 'board_id,user_id' })
+    if (upsertError) {
+      logger.warn({ message: 'Failed to accept invite', operation: 'acceptPendingInvites', userId, error: upsertError })
+    }
 
     // Delete the invite
-    await supabase
+    const { error: deleteError } = await supabase
       .from('board_invites')
       .delete()
       .eq('id', invite.id)
+    if (deleteError) {
+      logger.warn({ message: 'Failed to delete processed invite', operation: 'acceptPendingInvites', userId, error: deleteError })
+    }
   }
 }
 

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { BoardWithRole } from '@/types/sharing'
 import { createClient } from '@/lib/supabase/client'
 import { useDarkModeValue } from '@/hooks/useDarkMode'
+import { toast } from 'sonner'
 import { BoardCard } from './BoardCard'
 import { NewBoardCard } from './NewBoardCard'
 
@@ -20,7 +21,6 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
   const [showNameInput, setShowNameInput] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
-  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const supabaseRef = useRef(createClient())
   const supabase = supabaseRef.current
@@ -29,7 +29,6 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
 
   const handleCreate = async () => {
     const name = newName.trim() || 'Untitled Board'
-    setError(null)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
@@ -40,7 +39,7 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
       .single()
 
     if (error) {
-      setError(`Failed to create board: ${error.message || 'Unknown error'}`)
+      toast.error('Failed to create board')
       return
     }
     setNewName('')
@@ -60,7 +59,9 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
       .update({ name })
       .eq('id', id)
 
-    if (!error) {
+    if (error) {
+      toast.error('Failed to rename board')
+    } else {
       setMyBoards(prev => prev.map(b => b.id === id ? { ...b, name } : b))
     }
     setEditingId(null)
@@ -72,7 +73,10 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
       .delete()
       .eq('id', id)
 
-    if (error) return
+    if (error) {
+      toast.error('Failed to delete board')
+      return
+    }
     setMyBoards(prev => prev.filter(b => b.id !== id))
   }
 
@@ -86,12 +90,14 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
       .eq('board_id', boardId)
       .eq('user_id', user.id)
 
-    if (error) return
+    if (error) {
+      toast.error('Failed to leave board')
+      return
+    }
     setSharedBoards(prev => prev.filter(b => b.id !== boardId))
   }
 
   const handleDuplicateBoard = async (boardId: string, boardName: string) => {
-    setError(null)
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -111,7 +117,7 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
         .single()
 
       if (boardError || !newBoard) {
-        setError('Failed to duplicate board.')
+        toast.error('Failed to duplicate board')
         return
       }
 
@@ -142,8 +148,7 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
         for (let i = 0; i < copies.length; i += CHUNK_SIZE) {
           const { error: chunkError } = await supabase.from('board_objects').insert(copies.slice(i, i + CHUNK_SIZE))
           if (chunkError) {
-            console.error('Failed to duplicate board objects chunk:', chunkError.message)
-            setError('Failed to duplicate board objects.')
+            toast.error('Failed to duplicate board objects')
             return
           }
         }
@@ -151,16 +156,12 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
 
       setMyBoards(prev => [{ ...newBoard, role: 'owner' as const }, ...prev])
     } catch {
-      setError('Failed to duplicate board.')
+      toast.error('Failed to duplicate board')
     }
   }
 
   return (
     <div className="space-y-8">
-      {error && (
-        <p className={`rounded-lg px-4 py-3 text-sm ${dk ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-700'}`}>{error}</p>
-      )}
-
       <section>
         <h2 className={`mb-4 text-2xl font-bold tracking-tight sm:text-3xl ${dk ? 'text-white' : 'text-slate-900'}`}>
           My Boards

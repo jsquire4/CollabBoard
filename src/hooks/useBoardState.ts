@@ -12,6 +12,8 @@ import { FieldClocks } from '@/lib/crdt/merge'
 import { useBroadcast, BoardChange, CRDT_ENABLED } from '@/hooks/board/useBroadcast'
 import { usePersistence } from '@/hooks/board/usePersistence'
 import { useRemoteSelection } from '@/hooks/board/useRemoteSelection'
+import { toast } from 'sonner'
+import { createBoardLogger } from '@/lib/logger'
 export { coalesceBroadcastQueue } from '@/hooks/board/useBroadcast'
 export type { BoardChange } from '@/hooks/board/useBroadcast'
 
@@ -123,6 +125,9 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     channel, userId, setObjects, fieldClocksRef, hlcRef,
   })
 
+  const notify = useCallback((msg: string) => toast.error(msg), [])
+  const log = useMemo(() => createBoardLogger(boardId, userId), [boardId, userId])
+
   // Persistence: DB CRUD + optimistic updates + broadcast on success
   const {
     loadObjects, reconcileOnReconnect,
@@ -135,6 +140,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     getDescendants, getMaxZIndex,
     queueBroadcast, stampChange, stampCreate,
     fieldClocksRef, hlcRef,
+    notify, log,
   })
 
   // Load on mount
@@ -470,7 +476,8 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       .from('board_objects')
       .insert(insertRow)
     if (insertError) {
-      console.error('Failed to save group:', insertError.message)
+      log.error({ message: 'Failed to save group', operation: 'groupSelected', objectId: groupId, error: insertError })
+      notify('Failed to create group')
       return null
     }
 
@@ -485,12 +492,15 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
         .update(childUpdate)
         .eq('id', obj.id)
         .then(({ error }: { error: { message: string } | null }) => {
-          if (error) console.error('Failed to update child parent_id:', error.message)
+          if (error) {
+            log.error({ message: 'Failed to update child parent_id', operation: 'groupSelected', error })
+            notify('Failed to update group member')
+          }
         })
     }))
 
     return groupObj
-  }, [canEdit, selectedIds, objects, boardId, userId, queueBroadcast, stampCreate, stampChange])
+  }, [canEdit, selectedIds, objects, boardId, userId, queueBroadcast, stampCreate, stampChange, notify, log])
 
   const ungroupSelected = useCallback(() => {
     if (!canEdit) return
@@ -516,7 +526,10 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
           .update({ deleted_at: new Date().toISOString() })
           .eq('id', id)
           .then(({ error }: { error: { message: string } | null }) => {
-            if (error) console.error('Failed to soft-delete group:', error.message)
+            if (error) {
+              log.error({ message: 'Failed to soft-delete group', operation: 'ungroupSelected', objectId: id, error })
+              notify('Failed to ungroup')
+            }
           })
       } else {
         fieldClocksRef.current.delete(id)
@@ -526,12 +539,15 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
           .delete()
           .eq('id', id)
           .then(({ error }: { error: { message: string } | null }) => {
-            if (error) console.error('Failed to delete group:', error.message)
+            if (error) {
+              log.error({ message: 'Failed to delete group', operation: 'ungroupSelected', objectId: id, error })
+              notify('Failed to ungroup')
+            }
           })
       }
     }
     setSelectedIds(new Set())
-  }, [canEdit, selectedIds, objects, getChildren, updateObject, queueBroadcast])
+  }, [canEdit, selectedIds, objects, getChildren, updateObject, queueBroadcast, notify, log])
 
   // ── Frame containment ───────────────────────────────────────────
 

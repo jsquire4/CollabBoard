@@ -31,6 +31,7 @@ import { getShapeAnchors } from './anchorPoints'
 import type { ShapePreset } from './shapePresets'
 import { scaleCustomPoints } from './shapePresets'
 import { BoardProvider, BoardContextValue } from '@/contexts/BoardContext'
+import { ConnectionBanner, ConnectionStatus } from '@/components/ui/ConnectionBanner'
 
 // Konva is client-only — must disable SSR
 const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canvas })), {
@@ -132,6 +133,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const [uiDarkMode, setUiDarkMode] = useDarkMode()
 
   const supabaseRef = useRef(createClient())
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connected')
 
   const updateBoardSettings = useCallback((updates: { grid_size?: number; grid_subdivisions?: number; grid_visible?: boolean; snap_to_grid?: boolean; grid_style?: string; canvas_color?: string; grid_color?: string; subdivision_color?: string }) => {
     if (updates.grid_size !== undefined) setGridSize(updates.grid_size)
@@ -167,19 +169,69 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
 
   // Subscribe LAST — after all hooks have registered their .on() listeners.
   const hasConnectedRef = useRef(false)
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectAttemptRef = useRef(0)
+  const MAX_RECONNECT_ATTEMPTS = 5
+
   useEffect(() => {
     if (!channel) return
+
+    const attemptReconnect = () => {
+      if (reconnectAttemptRef.current >= MAX_RECONNECT_ATTEMPTS) {
+        setConnectionStatus('disconnected')
+        return
+      }
+      // Clear any pending timer to avoid duplicate reconnects
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
+      }
+      setConnectionStatus('reconnecting')
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttemptRef.current), 16000)
+      reconnectAttemptRef.current += 1
+      reconnectTimerRef.current = setTimeout(() => {
+        channel.subscribe()
+      }, delay)
+    }
+
     channel.subscribe((status) => {
       if (status === 'SUBSCRIBED') {
+        if (reconnectTimerRef.current) {
+          clearTimeout(reconnectTimerRef.current)
+          reconnectTimerRef.current = null
+        }
+        reconnectAttemptRef.current = 0
+        setConnectionStatus('connected')
         trackPresence()
         if (hasConnectedRef.current) {
           reconcileOnReconnect()
         } else {
           hasConnectedRef.current = true
         }
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        setConnectionStatus('disconnected')
+        attemptReconnect()
       }
     })
+
+    return () => {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
+      }
+      reconnectAttemptRef.current = 0
+    }
   }, [channel, trackPresence, reconcileOnReconnect])
+
+  // Auth expiry detection
+  useEffect(() => {
+    const { data: { subscription } } = supabaseRef.current.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setConnectionStatus('auth_expired')
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   const canEdit = userRole !== 'viewer'
 
@@ -616,6 +668,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         uiDarkMode={uiDarkMode}
         onToggleDarkMode={() => setUiDarkMode(!uiDarkMode)}
       />
+      <ConnectionBanner status={connectionStatus} />
       {activeGroupId && (
         <div className="absolute left-1/2 top-16 z-10 -translate-x-1/2">
           <GroupBreadcrumb activeGroupId={activeGroupId} onExit={exitGroup} />

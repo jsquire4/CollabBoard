@@ -79,7 +79,10 @@ describe('boardsApi', () => {
       const result = await fetchBoardsGrouped()
 
       expect(result).toEqual({ myBoards: [], sharedWithMe: [] })
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to fetch boards:', 'DB error')
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to fetch boards'),
+        expect.any(String)
+      )
       consoleSpy.mockRestore()
     })
 

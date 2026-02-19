@@ -8,6 +8,8 @@ import { HLC, tickHLC, hlcGreaterThan } from '@/lib/crdt/hlc'
 import { FieldClocks } from '@/lib/crdt/merge'
 import { shapeRegistry } from '@/components/board/shapeRegistry'
 import { BoardChange, CRDT_ENABLED } from '@/hooks/board/useBroadcast'
+import { fireAndRetry, retryWithRollback } from '@/lib/retryWithRollback'
+import { BoardLogger } from '@/lib/logger'
 
 // Explicit column list for board_objects queries (avoids pulling large JSONB when not needed)
 const BOARD_OBJECT_COLUMNS = [
@@ -56,6 +58,8 @@ export interface UsePersistenceDeps {
   stampCreate: (objectId: string, obj: Partial<BoardObject>) => FieldClocks | undefined
   fieldClocksRef: React.RefObject<Map<string, FieldClocks>>
   hlcRef: React.MutableRefObject<HLC>
+  notify: (msg: string) => void
+  log: BoardLogger
 }
 
 // ── Hook ────────────────────────────────────────────────────────────
@@ -66,6 +70,7 @@ export function usePersistence({
   getDescendants, getMaxZIndex,
   queueBroadcast, stampChange, stampCreate,
   fieldClocksRef, hlcRef,
+  notify, log,
 }: UsePersistenceDeps) {
   // Track in-flight insert promises so callers can await persistence before
   // setting FK references (e.g. connect_end_id on a connector pointing at a
@@ -86,7 +91,8 @@ export function usePersistence({
       .limit(5000) as unknown as { data: (BoardObject & { field_clocks?: FieldClocks })[] | null; error: { message: string } | null }
 
     if (error) {
-      console.error('Failed to load board objects:', error.message)
+      log.error({ message: 'Failed to load board objects', operation: 'loadObjects', error })
+      notify('Failed to load board')
       return
     }
 
@@ -120,7 +126,7 @@ export function usePersistence({
       .is('deleted_at', null)
 
     if (error) {
-      console.error('Failed to fetch DB state for reconciliation:', error.message)
+      log.warn({ message: 'Failed to fetch DB state for reconciliation', operation: 'reconcileOnReconnect', error })
       return
     }
 
@@ -171,7 +177,7 @@ export function usePersistence({
         body: { boardId, changes: localWins },
       })
       if (fnError) {
-        console.error('Failed to reconcile on reconnect:', fnError.message)
+        log.warn({ message: 'Failed to reconcile on reconnect', operation: 'reconcileOnReconnect', error: fnError })
       }
     }
 
@@ -242,30 +248,28 @@ export function usePersistence({
       return next
     })
 
-    // Persist to Supabase, then broadcast on success
+    // Persist to Supabase with retry, then broadcast on success
     const { id: _id, created_at: _ca, updated_at: _ua, field_clocks: _fc, deleted_at: _da, ...insertData } = obj
     const insertRow = CRDT_ENABLED
       ? { ...insertData, id: obj.id, field_clocks: fieldClocksRef.current.get(id) ?? {} }
       : { ...insertData, id: obj.id }
-    const insertPromise = Promise.resolve(supabase
-      .from('board_objects')
-      .insert(insertRow)
-      .then(({ error }: { error: { message: string } | null }) => {
-        persistPromisesRef.current.delete(id)
-        if (error) {
-          console.error('Failed to save object:', error.message)
-          setObjects(prev => { const next = new Map(prev); next.delete(id); return next })
-          fieldClocksRef.current.delete(id)
-          return false
-        } else {
-          queueBroadcast([{ action: 'create', object: obj, clocks }])
-          return true
-        }
-      }))
+    const insertPromise = retryWithRollback({
+      operation: () => supabase.from('board_objects').insert(insertRow),
+      rollback: () => {
+        setObjects(prev => { const next = new Map(prev); next.delete(id); return next })
+        fieldClocksRef.current.delete(id)
+      },
+      onError: () => notify('Failed to save shape'),
+      logError: (err, attempt) => log.error({ message: 'Failed to save object', operation: 'addObject', objectId: id, error: err }),
+    }).then(ok => {
+      persistPromisesRef.current.delete(id)
+      if (ok) queueBroadcast([{ action: 'create', object: obj, clocks }])
+      return ok
+    })
     persistPromisesRef.current.set(id, insertPromise)
 
     return obj
-  }, [userId, boardId, canEdit, getMaxZIndex, queueBroadcast, stampCreate])
+  }, [userId, boardId, canEdit, getMaxZIndex, queueBroadcast, stampCreate, notify, log])
 
   // ── Add with explicit ID (for undo-delete) ─────────────────────
 
@@ -284,19 +288,18 @@ export function usePersistence({
     const insertRow = CRDT_ENABLED
       ? { ...insertData, id: obj.id, field_clocks: fieldClocksRef.current.get(obj.id) ?? {} }
       : { ...insertData, id: obj.id }
-    supabase
-      .from('board_objects')
-      .upsert(insertRow, { onConflict: 'id' })
-      .then(({ error }: { error: { message: string } | null }) => {
-        if (error) {
-          console.error('Failed to re-insert object:', error.message)
-          setObjects(prev => { const next = new Map(prev); next.delete(obj.id); return next })
-          fieldClocksRef.current.delete(obj.id)
-        } else {
-          queueBroadcast([{ action: 'create', object: obj, clocks }])
-        }
-      })
-  }, [canEdit, queueBroadcast, stampCreate])
+    fireAndRetry({
+      operation: () => supabase.from('board_objects').upsert(insertRow, { onConflict: 'id' }),
+      rollback: () => {
+        setObjects(prev => { const next = new Map(prev); next.delete(obj.id); return next })
+        fieldClocksRef.current.delete(obj.id)
+      },
+      onError: () => notify('Failed to save shape'),
+      logError: (err) => log.error({ message: 'Failed to re-insert object', operation: 'addObjectWithId', objectId: obj.id, error: err }),
+    }).then(ok => {
+      if (ok) queueBroadcast([{ action: 'create', object: obj, clocks }])
+    })
+  }, [canEdit, queueBroadcast, stampCreate, notify, log])
 
   // ── Update ──────────────────────────────────────────────────────
 
@@ -323,27 +326,23 @@ export function usePersistence({
     const changedFields = Object.keys(updates).filter(k => k !== 'updated_at')
     const clocks = stampChange(id, changedFields)
 
-    // Persist to Supabase, then broadcast on success
+    // Persist to Supabase with retry, then broadcast on success
     const dbUpdate: Record<string, unknown> = { ...updates, updated_at: new Date().toISOString() }
     if (CRDT_ENABLED) {
       dbUpdate.field_clocks = fieldClocksRef.current.get(id) ?? {}
       dbUpdate.deleted_at = null // Clear tombstone — add-wins: any update resurrects
     }
-    supabase
-      .from('board_objects')
-      .update(dbUpdate)
-      .eq('id', id)
-      .then(({ error }: { error: { message: string } | null }) => {
-        if (error) {
-          console.error('Failed to update object:', error.message)
-          if (previousObj) {
-            setObjects(prev => { const next = new Map(prev); next.set(id, previousObj); return next })
-          }
-        } else {
-          queueBroadcast([{ action: 'update', object: { id, ...updates }, clocks }])
-        }
-      })
-  }, [canEdit, queueBroadcast, stampChange])
+    fireAndRetry({
+      operation: () => supabase.from('board_objects').update(dbUpdate).eq('id', id),
+      rollback: previousObj ? () => {
+        setObjects(prev => { const next = new Map(prev); next.set(id, previousObj); return next })
+      } : undefined,
+      onError: () => notify('Failed to save changes'),
+      logError: (err) => log.error({ message: 'Failed to update object', operation: 'updateObject', objectId: id, error: err }),
+    }).then(ok => {
+      if (ok) queueBroadcast([{ action: 'update', object: { id, ...updates }, clocks }])
+    })
+  }, [canEdit, queueBroadcast, stampChange, notify, log])
 
   // ── Delete ──────────────────────────────────────────────────────
 
@@ -356,6 +355,21 @@ export function usePersistence({
     // Also delete all descendants
     const descendants = getDescendants(id)
     const idsToDelete = [id, ...descendants.map(d => d.id)]
+
+    // Capture snapshots for rollback
+    const snapshots = new Map<string, BoardObject>()
+    for (const did of idsToDelete) {
+      const obj = objectsRef.current.get(did)
+      if (obj) snapshots.set(did, { ...obj })
+    }
+
+    const rollbackDelete = () => {
+      setObjects(prev => {
+        const next = new Map(prev)
+        for (const [did, obj] of snapshots) next.set(did, obj)
+        return next
+      })
+    }
 
     // Stamp a delete clock (used for add-wins comparison on remote)
     const deleteClock = CRDT_ENABLED ? (() => {
@@ -381,13 +395,13 @@ export function usePersistence({
 
     if (CRDT_ENABLED) {
       const now = new Date().toISOString()
-      const { error: softDeleteError } = await supabase
-        .from('board_objects')
-        .update({ deleted_at: now })
-        .in('id', idsToDelete)
-      if (softDeleteError) {
-        console.error('Failed to soft-delete objects:', softDeleteError.message)
-      } else {
+      const ok = await retryWithRollback({
+        operation: () => supabase.from('board_objects').update({ deleted_at: now }).in('id', idsToDelete),
+        rollback: rollbackDelete,
+        onError: () => notify('Failed to delete'),
+        logError: (err) => log.error({ message: 'Failed to soft-delete objects', operation: 'deleteObject', objectId: id, error: err }),
+      })
+      if (ok) {
         queueBroadcast(idsToDelete.map(did => ({
           action: 'delete' as const,
           object: { id: did } as BoardObject,
@@ -398,23 +412,25 @@ export function usePersistence({
       // Hard-delete: children first (parallel), then parent (FK constraint)
       const childIds = descendants.map(d => d.id)
       if (childIds.length > 0) {
-        const { error: childError } = await supabase
-          .from('board_objects')
-          .delete()
-          .in('id', childIds)
-        if (childError) {
-          console.error('Failed to delete children:', childError.message)
-          return
-        }
+        const childOk = await retryWithRollback({
+          operation: () => supabase.from('board_objects').delete().in('id', childIds),
+          rollback: rollbackDelete,
+          onError: () => notify('Failed to delete'),
+          logError: (err) => log.error({ message: 'Failed to delete children', operation: 'deleteObject', objectId: id, error: err }),
+        })
+        if (!childOk) return
       }
-      const { error } = await supabase.from('board_objects').delete().eq('id', id)
-      if (error) {
-        console.error('Failed to delete object:', error.message)
-      } else {
+      const ok = await retryWithRollback({
+        operation: () => supabase.from('board_objects').delete().eq('id', id),
+        rollback: rollbackDelete,
+        onError: () => notify('Failed to delete'),
+        logError: (err) => log.error({ message: 'Failed to delete object', operation: 'deleteObject', objectId: id, error: err }),
+      })
+      if (ok) {
         queueBroadcast(idsToDelete.map(did => ({ action: 'delete' as const, object: { id: did } as BoardObject })))
       }
     }
-  }, [canEdit, getDescendants, queueBroadcast])
+  }, [canEdit, getDescendants, queueBroadcast, notify, log])
 
   // ── Duplicate ─────────────────────────────────────────────────
 
@@ -489,27 +505,31 @@ export function usePersistence({
       const parentRow = CRDT_ENABLED
         ? { ...parentInsert, id: parentObj.id, field_clocks: fieldClocksRef.current.get(parentObj.id) ?? {} }
         : { ...parentInsert, id: parentObj.id }
-      supabase
-        .from('board_objects')
-        .insert(parentRow)
-        .then(({ error }: { error: { message: string } | null }) => {
-          if (error) {
-            console.error('Failed to save duplicated parent:', error.message)
-            return
-          }
-          for (const obj of childObjs) {
-            const { id: _cid, created_at: _cca, updated_at: _cua, field_clocks: _cfc, deleted_at: _cda, ...childInsert } = obj
-            const childRow = CRDT_ENABLED
-              ? { ...childInsert, id: obj.id, field_clocks: fieldClocksRef.current.get(obj.id) ?? {} }
-              : { ...childInsert, id: obj.id }
-            supabase
-              .from('board_objects')
-              .insert(childRow)
-              .then(({ error: childErr }: { error: { message: string } | null }) => {
-                if (childErr) console.error('Failed to save duplicated child:', childErr.message)
-              })
-          }
+      const rollbackDup = () => {
+        setObjects(prev => {
+          const next = new Map(prev)
+          for (const obj of newObjects) next.delete(obj.id)
+          return next
         })
+      }
+      fireAndRetry({
+        operation: () => supabase.from('board_objects').insert(parentRow),
+        rollback: rollbackDup,
+        onError: () => notify('Failed to duplicate'),
+        logError: (err) => log.error({ message: 'Failed to save duplicated parent', operation: 'duplicateObject', objectId: parentObj.id, error: err }),
+      }).then(ok => {
+        if (!ok) return
+        for (const obj of childObjs) {
+          const { id: _cid, created_at: _cca, updated_at: _cua, field_clocks: _cfc, deleted_at: _cda, ...childInsert } = obj
+          const childRow = CRDT_ENABLED
+            ? { ...childInsert, id: obj.id, field_clocks: fieldClocksRef.current.get(obj.id) ?? {} }
+            : { ...childInsert, id: obj.id }
+          fireAndRetry({
+            operation: () => supabase.from('board_objects').insert(childRow),
+            logError: (err) => log.error({ message: 'Failed to save duplicated child', operation: 'duplicateObject', objectId: obj.id, error: err }),
+          })
+        }
+      })
 
       setSelectedIds(new Set([groupId]))
       return newObjects[0]
@@ -523,7 +543,7 @@ export function usePersistence({
     const newObj = addObject(original.type, original.x + 20, original.y + 20, dupOverrides)
     if (newObj) setSelectedIds(new Set([newObj.id]))
     return newObj
-  }, [addObject, canEdit, getDescendants, getMaxZIndex, userId, queueBroadcast, stampCreate])
+  }, [addObject, canEdit, getDescendants, getMaxZIndex, userId, queueBroadcast, stampCreate, notify, log])
 
   // ── Persist Z-index batch ─────────────────────────────────────
 
@@ -537,7 +557,7 @@ export function usePersistence({
       return supabase.from('board_objects').update(patch).eq('id', u.id)
     })).then(results => {
       for (const { error } of results) {
-        if (error) console.error('Failed to update z_index:', error.message)
+        if (error) log.warn({ message: 'Failed to update z_index', operation: 'persistZIndexBatch', error })
       }
     })
   }, [])
@@ -567,6 +587,9 @@ export function usePersistence({
     if (!canEdit) return
     if (checkLocked(objectsRef, id)) return
 
+    // Capture pre-update state for rollback BEFORE optimistic update
+    const previousObj = objectsRef.current.get(id)
+
     const now = new Date().toISOString()
     setObjects(prev => {
       const existing = prev.get(id)
@@ -585,14 +608,15 @@ export function usePersistence({
       dbUpdate.field_clocks = fieldClocksRef.current.get(id) ?? {}
       dbUpdate.deleted_at = null
     }
-    supabase
-      .from('board_objects')
-      .update(dbUpdate)
-      .eq('id', id)
-      .then(({ error }: { error: { message: string } | null }) => {
-        if (error) console.error('Failed to update object:', error.message)
-      })
-  }, [canEdit, queueBroadcast, stampChange])
+    fireAndRetry({
+      operation: () => supabase.from('board_objects').update(dbUpdate).eq('id', id),
+      rollback: previousObj ? () => {
+        setObjects(prev => { const next = new Map(prev); next.set(id, previousObj); return next })
+      } : undefined,
+      onError: () => notify('Failed to save position'),
+      logError: (err) => log.error({ message: 'Failed to update object drag end', operation: 'updateObjectDragEnd', objectId: id, error: err }),
+    })
+  }, [canEdit, queueBroadcast, stampChange, notify, log])
 
   // ── Move group children ───────────────────────────────────────
 
@@ -657,12 +681,16 @@ export function usePersistence({
         }
         return supabase.from('board_objects').update(patch).eq('id', d.id)
       })).then(results => {
-        for (const { error } of results) {
-          if (error) console.error('Failed to update child position:', error.message)
+        const anyError = results.some(r => r.error)
+        if (anyError) {
+          for (const { error } of results) {
+            if (error) log.error({ message: 'Failed to update child position', operation: 'moveGroupChildren', error })
+          }
+          notify('Failed to save group move')
         }
       })
     }
-  }, [canEdit, getDescendants, queueBroadcast, stampChange])
+  }, [canEdit, getDescendants, queueBroadcast, stampChange, notify, log])
 
   return {
     loadObjects,

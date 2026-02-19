@@ -99,6 +99,8 @@ function makeDeps(overrides?: Partial<UsePersistenceDeps>): UsePersistenceDeps {
     stampCreate: vi.fn(),
     fieldClocksRef: { current: new Map<string, FieldClocks>() },
     hlcRef: { current: createHLC('user-1') },
+    notify: vi.fn(),
+    log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
     ...overrides,
   }
 }
@@ -144,19 +146,23 @@ describe('usePersistence', () => {
   })
 
   it('loadObjects does not call setObjects when fetch errors', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const chain = chainMock({ data: null, error: { message: 'Failed to load' } })
     mockFrom.mockReturnValue(chain)
     const setObjects = vi.fn()
+    const notify = vi.fn()
+    const logMock = { error: vi.fn(), warn: vi.fn(), info: vi.fn() }
 
-    const { result } = renderHook(() => usePersistence(makeDeps({ setObjects })))
+    const { result } = renderHook(() => usePersistence(makeDeps({ setObjects, notify, log: logMock })))
 
     await act(async () => {
       await result.current.loadObjects()
     })
 
     expect(setObjects).not.toHaveBeenCalled()
-    consoleSpy.mockRestore()
+    expect(logMock.error).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Failed to load board objects', operation: 'loadObjects' })
+    )
+    expect(notify).toHaveBeenCalledWith('Failed to load board')
   })
 
   it('loadObjects calls setObjects with empty map when data is empty', async () => {
@@ -735,14 +741,17 @@ describe('usePersistence', () => {
   })
 
   it('moveGroupChildren DB failure logs error', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const chain = chainMock({ error: { message: 'db fail' } })
     mockFrom.mockReturnValue(chain)
     const child = makeRectangle({ id: 'c1', parent_id: 'g1', x: 10, y: 10 })
     const setObjects = vi.fn()
+    const notify = vi.fn()
+    const logMock = { error: vi.fn(), warn: vi.fn(), info: vi.fn() }
     const deps = makeDeps({
       setObjects,
       getDescendants: vi.fn(() => [child]),
+      notify,
+      log: logMock,
     })
     const { result } = renderHook(() => usePersistence(deps))
 
@@ -750,12 +759,11 @@ describe('usePersistence', () => {
 
     // Wait for the Promise.all to resolve
     await waitFor(() => {
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Failed to update child position:',
-        'db fail'
+      expect(logMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Failed to update child position', operation: 'moveGroupChildren' })
       )
     })
-    consoleSpy.mockRestore()
+    expect(notify).toHaveBeenCalledWith('Failed to save group move')
   })
 
   it('reconcileOnReconnect DB fetch error returns early', async () => {
@@ -764,23 +772,21 @@ describe('usePersistence', () => {
     const originalCRDT = crdtModule.CRDT_ENABLED
     Object.defineProperty(crdtModule, 'CRDT_ENABLED', { value: true, writable: true, configurable: true })
 
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const chain = chainMock({ data: null, error: { message: 'fetch failed' } })
     mockFrom.mockReturnValue(chain)
     const setObjects = vi.fn()
-    const deps = makeDeps({ setObjects })
+    const logMock = { error: vi.fn(), warn: vi.fn(), info: vi.fn() }
+    const deps = makeDeps({ setObjects, log: logMock })
     const { result } = renderHook(() => usePersistence(deps))
 
     await act(async () => { await result.current.reconcileOnReconnect() })
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      'Failed to fetch DB state for reconciliation:',
-      'fetch failed'
+    expect(logMock.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Failed to fetch DB state for reconciliation', operation: 'reconcileOnReconnect' })
     )
     // loadObjects should NOT have been called after error
     // (setObjects is only called by loadObjects, not by reconcile error path)
     expect(setObjects).not.toHaveBeenCalled()
-    consoleSpy.mockRestore()
     Object.defineProperty(crdtModule, 'CRDT_ENABLED', { value: originalCRDT, writable: true, configurable: true })
   })
 

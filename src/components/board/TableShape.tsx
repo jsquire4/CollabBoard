@@ -1,9 +1,9 @@
-import { memo, useMemo } from 'react'
+import { memo, useMemo, useRef, useCallback } from 'react'
 import { Group, Rect, Text, Line } from 'react-konva'
 import Konva from 'konva'
 import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
 import { parseTableData, getColumnXOffsets, getRowYOffsets, getTableWidth, getTableHeight, resizeColumn, resizeRow, serializeTableData } from '@/lib/table/tableUtils'
-import { DEFAULT_HEADER_HEIGHT } from '@/lib/table/tableTypes'
+import { DEFAULT_HEADER_HEIGHT, TableData } from '@/lib/table/tableTypes'
 
 interface TableShapeProps extends ShapeProps {
   onStartCellEdit?: (id: string, textNode: Konva.Text, row: number, col: number) => void
@@ -43,6 +43,14 @@ export const TableShape = memo(function TableShape({
   const rowYOffsets = useMemo(() => data ? getRowYOffsets(data) : [], [data])
   const tableWidth = useMemo(() => data ? getTableWidth(data) : object.width, [data, object.width])
   const tableHeight = useMemo(() => data ? getTableHeight(data) : object.height, [data, object.height])
+
+  // Refs so drag handlers always read the latest values without stale closures
+  const dataRef = useRef<TableData | null>(null)
+  dataRef.current = data
+  const colXOffsetsRef = useRef<number[]>([])
+  colXOffsetsRef.current = colXOffsets
+  const rowYOffsetsRef = useRef<number[]>([])
+  rowYOffsetsRef.current = rowYOffsets
 
   const handleDragStart = () => onDragStart?.(object.id)
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -101,41 +109,45 @@ export const TableShape = memo(function TableShape({
     }
   }
 
-  // Column resize handlers
-  const handleColResizeDragMove = (colIndex: number, e: Konva.KonvaEventObject<DragEvent>) => {
+  // Column resize handlers — useCallback with refs to avoid stale closure issues
+  const handleColResizeDragMove = useCallback((_colIndex: number, e: Konva.KonvaEventObject<DragEvent>) => {
     // Constrain vertical movement
     e.target.y(0)
-  }
+  }, [])
 
-  const handleColResizeDragEnd = (colIndex: number, e: Konva.KonvaEventObject<DragEvent>) => {
-    if (!data || !onTableDataChange) return
+  const handleColResizeDragEnd = useCallback((colIndex: number, e: Konva.KonvaEventObject<DragEvent>) => {
+    const currentData = dataRef.current
+    if (!currentData || !onTableDataChange) return
+    const currentColXOffsets = colXOffsetsRef.current
     const node = e.target
-    const dx = node.x() - (colXOffsets[colIndex] + data.columns[colIndex].width - RESIZE_HANDLE_WIDTH / 2)
-    const newWidth = data.columns[colIndex].width + dx
-    const newData = resizeColumn(data, colIndex, newWidth)
+    const dx = node.x() - (currentColXOffsets[colIndex] + currentData.columns[colIndex].width - RESIZE_HANDLE_WIDTH / 2)
+    const newWidth = currentData.columns[colIndex].width + dx
+    const newData = resizeColumn(currentData, colIndex, newWidth)
     onTableDataChange(object.id, serializeTableData(newData))
     // Reset handle position
-    node.x(colXOffsets[colIndex] + newData.columns[colIndex].width - RESIZE_HANDLE_WIDTH / 2)
+    node.x(currentColXOffsets[colIndex] + newData.columns[colIndex].width - RESIZE_HANDLE_WIDTH / 2)
     node.y(0)
-  }
+  }, [onTableDataChange, object.id])
 
-  // Row resize handlers
-  const handleRowResizeDragMove = (rowIndex: number, e: Konva.KonvaEventObject<DragEvent>) => {
+  // Row resize handlers — useCallback with refs to avoid stale closure issues
+  const handleRowResizeDragMove = useCallback((_rowIndex: number, e: Konva.KonvaEventObject<DragEvent>) => {
     // Constrain horizontal movement
     e.target.x(0)
-  }
+  }, [])
 
-  const handleRowResizeDragEnd = (rowIndex: number, e: Konva.KonvaEventObject<DragEvent>) => {
-    if (!data || !onTableDataChange) return
+  const handleRowResizeDragEnd = useCallback((rowIndex: number, e: Konva.KonvaEventObject<DragEvent>) => {
+    const currentData = dataRef.current
+    if (!currentData || !onTableDataChange) return
+    const currentRowYOffsets = rowYOffsetsRef.current
     const node = e.target
-    const dy = node.y() - (rowYOffsets[rowIndex] + data.rows[rowIndex].height - RESIZE_HANDLE_WIDTH / 2)
-    const newHeight = data.rows[rowIndex].height + dy
-    const newData = resizeRow(data, rowIndex, newHeight)
+    const dy = node.y() - (currentRowYOffsets[rowIndex] + currentData.rows[rowIndex].height - RESIZE_HANDLE_WIDTH / 2)
+    const newHeight = currentData.rows[rowIndex].height + dy
+    const newData = resizeRow(currentData, rowIndex, newHeight)
     onTableDataChange(object.id, serializeTableData(newData))
     // Reset handle position
     node.x(0)
-    node.y(rowYOffsets[rowIndex] + newData.rows[rowIndex].height - RESIZE_HANDLE_WIDTH / 2)
-  }
+    node.y(currentRowYOffsets[rowIndex] + newData.rows[rowIndex].height - RESIZE_HANDLE_WIDTH / 2)
+  }, [onTableDataChange, object.id])
 
   const outline = getOutlineProps(object, isSelected)
   const shadow = getShadowProps(object)
@@ -149,8 +161,17 @@ export const TableShape = memo(function TableShape({
         y={object.y}
         rotation={object.rotation}
         draggable={editable}
+        dragBoundFunc={dragBoundFunc}
         onClick={handleClick}
         onTap={handleClick}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragMove={handleDragMove}
+        onTransformEnd={handleTransformEnd}
+        onContextMenu={(e) => {
+          e.evt.preventDefault()
+          onContextMenu(object.id, e.evt.clientX, e.evt.clientY)
+        }}
         opacity={object.opacity ?? 1}
       >
         <Rect
@@ -167,7 +188,7 @@ export const TableShape = memo(function TableShape({
           width={object.width - CELL_PAD * 2}
           height={object.height - CELL_PAD * 2}
           text="Empty table"
-          fontSize={13}
+          fontSize={CELL_FONT_SIZE}
           fill="#9CA3AF"
           align="center"
           verticalAlign="middle"
@@ -258,30 +279,16 @@ export const TableShape = memo(function TableShape({
 
           return (
             <Group key={`cell-${row.id}-${col.id}`}>
-              {/* Cell background */}
-              {cell?.bg_color && (
-                <Rect
-                  name={`cellbg:${rowIdx}:${colIdx}`}
-                  x={x}
-                  y={y}
-                  width={col.width}
-                  height={row.height}
-                  fill={cell.bg_color}
-                  listening={true}
-                />
-              )}
-              {/* Invisible click target for cells without bg */}
-              {!cell?.bg_color && (
-                <Rect
-                  name={`cellbg:${rowIdx}:${colIdx}`}
-                  x={x}
-                  y={y}
-                  width={col.width}
-                  height={row.height}
-                  fill="transparent"
-                  listening={true}
-                />
-              )}
+              {/* Cell background / click target */}
+              <Rect
+                name={`cellbg:${rowIdx}:${colIdx}`}
+                x={x}
+                y={y}
+                width={col.width}
+                height={row.height}
+                fill={cell?.bg_color || 'transparent'}
+                listening={true}
+              />
               {/* Cell text — hidden when being edited */}
               {!editing && (
                 <Text

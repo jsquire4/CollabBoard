@@ -5,7 +5,6 @@ import { renderHook, act } from '@testing-library/react'
 import { useTextEditing, UseTextEditingDeps, getTextCharLimit, STICKY_TITLE_CHAR_LIMIT } from './useTextEditing'
 import { BoardObject } from '@/types/board'
 import { createMockStage } from '@/test/mocks/konva'
-import { makeTable } from '@/test/boardObjectFactory'
 
 function makeDeps(overrides?: Partial<UseTextEditingDeps>): UseTextEditingDeps {
   return {

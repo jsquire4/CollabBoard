@@ -84,15 +84,21 @@ export function getShadowProps(obj: BoardObject) {
  * (they may change identity but are functionally equivalent).
  */
 export function areShapePropsEqual(
-  prev: { object: BoardObject; isSelected: boolean; editable?: boolean; isEditing?: boolean; editingField?: string },
-  next: { object: BoardObject; isSelected: boolean; editable?: boolean; isEditing?: boolean; editingField?: string },
+  prev: { object: BoardObject; isSelected: boolean; editable?: boolean; isEditing?: boolean; editingField?: string; editingCellCoords?: { row: number; col: number } | null },
+  next: { object: BoardObject; isSelected: boolean; editable?: boolean; isEditing?: boolean; editingField?: string; editingCellCoords?: { row: number; col: number } | null },
 ): boolean {
+  const prevCoords = prev.editingCellCoords
+  const nextCoords = next.editingCellCoords
+  const coordsEqual =
+    prevCoords === nextCoords ||
+    (prevCoords != null && nextCoords != null && prevCoords.row === nextCoords.row && prevCoords.col === nextCoords.col)
   return (
     prev.object === next.object &&
     prev.isSelected === next.isSelected &&
     prev.editable === next.editable &&
     prev.isEditing === next.isEditing &&
-    prev.editingField === next.editingField
+    prev.editingField === next.editingField &&
+    coordsEqual
   )
 }
 

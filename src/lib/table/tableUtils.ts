@@ -42,14 +42,14 @@ export function createDefaultTableData(cols: number, rows: number): TableData {
  * Adds an empty cell for the new column in every existing row.
  */
 export function addColumn(data: TableData, afterIndex?: number): TableData {
-  const newCol: TableColumn = {
-    id: crypto.randomUUID(),
-    name: `Column ${data.columns.length + 1}`,
-    width: DEFAULT_COL_WIDTH,
-  }
-
   const insertAt =
     afterIndex === undefined ? data.columns.length : afterIndex + 1
+
+  const newCol: TableColumn = {
+    id: crypto.randomUUID(),
+    name: `Column ${insertAt + 1}`,
+    width: DEFAULT_COL_WIDTH,
+  }
 
   const columns = [
     ...data.columns.slice(0, insertAt),
@@ -70,6 +70,7 @@ export function addColumn(data: TableData, afterIndex?: number): TableData {
  * Guard: returns unchanged data when only 1 column exists.
  */
 export function deleteColumn(data: TableData, colIndex: number): TableData {
+  if (colIndex < 0 || colIndex >= data.columns.length) return data
   if (data.columns.length <= 1) return data
 
   const colId = data.columns[colIndex].id

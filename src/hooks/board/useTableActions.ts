@@ -121,6 +121,8 @@ export function useTableActions({
     const data = parseTableData(obj.table_data)
     if (!data) return
 
+    if (rowIndex < 0 || rowIndex >= data.rows.length) return
+
     const colId = data.columns[colIndex]?.id
     if (!colId) return
 

@@ -207,6 +207,68 @@ describe('useTableActions', () => {
     })
   })
 
+  describe('handleTableDataChange', () => {
+    it('calls updateObject with the new table_data and computed width/height, and pushes undo entry', () => {
+      const originalTableData = createDefaultTableData(3, 3)
+      const originalSerialized = serializeTableData(originalTableData)
+      const table = makeTable({ id: 't1', table_data: originalSerialized })
+      const deps = makeDeps({
+        objects: objectsMap(table),
+        selectedIds: new Set(['t1']),
+      })
+      const { result } = renderHook(() => useTableActions(deps))
+
+      // Build new table data with an extra row to pass in as the updated state
+      const newTableData = createDefaultTableData(3, 4)
+      const newSerialized = serializeTableData(newTableData)
+      act(() => result.current.handleTableDataChange('t1', newSerialized))
+
+      expect(deps.updateObject).toHaveBeenCalledTimes(1)
+      const [calledId, updates] = deps.updateObject.mock.calls[0]
+      expect(calledId).toBe('t1')
+      expect(updates.table_data).toBe(newSerialized)
+
+      const expectedWidth = 3 * DEFAULT_COL_WIDTH
+      const expectedHeight = DEFAULT_HEADER_HEIGHT + 4 * DEFAULT_ROW_HEIGHT
+      expect(updates.width).toBe(expectedWidth)
+      expect(updates.height).toBe(expectedHeight)
+
+      expect(deps.undoStack.push).toHaveBeenCalledWith({
+        type: 'update',
+        patches: [{ id: 't1', before: { table_data: originalSerialized, width: table.width, height: table.height } }],
+      })
+    })
+
+    it('is a no-op when canEdit is false', () => {
+      const tableData = createDefaultTableData(3, 3)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({
+        canEdit: false,
+        objects: objectsMap(table),
+      })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleTableDataChange('t1', serialized))
+
+      expect(deps.updateObject).not.toHaveBeenCalled()
+      expect(deps.undoStack.push).not.toHaveBeenCalled()
+    })
+
+    it('is a no-op when the id is not found in objects', () => {
+      const tableData = createDefaultTableData(3, 3)
+      const serialized = serializeTableData(tableData)
+      const deps = makeDeps({
+        objects: new Map(),
+        selectedIds: new Set(),
+      })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleTableDataChange('nonexistent', serialized))
+
+      expect(deps.updateObject).not.toHaveBeenCalled()
+      expect(deps.undoStack.push).not.toHaveBeenCalled()
+    })
+  })
+
   describe('handleCellTextUpdate', () => {
     it('updates cell text and calls updateObject with new table_data', () => {
       const tableData = createDefaultTableData(3, 3)

@@ -57,6 +57,10 @@ export function useTextEditing({
   const [editText, setEditText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  // Set to true in the boundary branch of handleCellKeyDown to signal that
+  // the current cell was already saved, so handleFinishEdit should skip it.
+  const cellAlreadySavedRef = useRef(false)
+
   // Track last double-click for triple-click detection on geometric shapes
   const lastDblClickRef = useRef<{ id: string; time: number } | null>(null)
 
@@ -122,7 +126,10 @@ export function useTextEditing({
   const handleFinishEdit = useCallback(() => {
     if (editingId) {
       if (editingCellCoords) {
-        onUpdateTableCell?.(editingId, editingCellCoords.row, editingCellCoords.col, editText)
+        if (!cellAlreadySavedRef.current) {
+          onUpdateTableCell?.(editingId, editingCellCoords.row, editingCellCoords.col, editText)
+        }
+        cellAlreadySavedRef.current = false
         setEditingCellCoords(null)
       } else if (editingField === 'title') {
         onUpdateTitle(editingId, editText.slice(0, STICKY_TITLE_CHAR_LIMIT))
@@ -236,7 +243,8 @@ export function useTextEditing({
       const cellText = data.rows[next.row]?.cells?.[colId]?.text ?? ''
       setEditText(cellText)
     } else {
-      // At boundary, finish editing
+      // At boundary: cell was already saved above; signal handleFinishEdit to skip
+      cellAlreadySavedRef.current = true
       handleFinishEdit()
     }
   }, [editingId, editingCellCoords, objects, editText, onUpdateTableCell, handleFinishEdit])

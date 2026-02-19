@@ -11,12 +11,11 @@ import { HLC, createHLC, tickHLC } from '@/lib/crdt/hlc'
 import { FieldClocks } from '@/lib/crdt/merge'
 import { useBroadcast, BoardChange, CRDT_ENABLED } from '@/hooks/board/useBroadcast'
 import { usePersistence } from '@/hooks/board/usePersistence'
+import { useRemoteSelection } from '@/hooks/board/useRemoteSelection'
 export { coalesceBroadcastQueue } from '@/hooks/board/useBroadcast'
 export type { BoardChange } from '@/hooks/board/useBroadcast'
 
 const COLOR_PALETTE = ['#FFEB3B', '#FF9800', '#E91E63', '#9C27B0', '#2196F3', '#4CAF50']
-
-const SELECTION_BROADCAST_DEBOUNCE_MS = 50
 
 export function useBoardState(userId: string, boardId: string, userRole: BoardRole = 'viewer', channel?: RealtimeChannel | null, onlineUsers?: OnlineUser[]) {
   const [objects, setObjects] = useState<Map<string, BoardObject>>(new Map())
@@ -25,7 +24,6 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
-  const [remoteSelections, setRemoteSelections] = useState<Map<string, Set<string>>>(new Map())
   const supabaseRef = useRef(createClient())
   const supabase = supabaseRef.current
 
@@ -597,85 +595,11 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     updateObject(id, { locked_by: null })
   }, [canEdit, updateObject])
 
-  // ── Remote selection broadcasting ───────────────────────────────
+  // ── Remote selection (extracted to useRemoteSelection) ──────────
 
-  const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => {
-    if (!channel) return
-
-    if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current)
-    selectionTimerRef.current = setTimeout(() => {
-      if ((channel as unknown as { state: string }).state !== 'joined') return
-      channel.send({
-        type: 'broadcast',
-        event: 'selection',
-        payload: { user_id: userId, selected_ids: Array.from(selectedIds) },
-      })
-    }, SELECTION_BROADCAST_DEBOUNCE_MS)
-
-    return () => {
-      if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current)
-    }
-  }, [selectedIds, channel, userId])
-
-  // Batched remote selection updates (10ms window to coalesce rapid changes)
-  const pendingSelectionsRef = useRef<Map<string, string[]>>(new Map())
-  const selectionFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const flushSelections = useCallback(() => {
-    const pending = pendingSelectionsRef.current
-    if (pending.size === 0) return
-    setRemoteSelections(prev => {
-      const next = new Map(prev)
-      for (const [uid, ids] of pending) {
-        if (ids.length === 0) {
-          next.delete(uid)
-        } else {
-          next.set(uid, new Set(ids))
-        }
-      }
-      return next
-    })
-    pendingSelectionsRef.current = new Map()
-    selectionFlushTimerRef.current = null
-  }, [])
-
-  useEffect(() => {
-    if (!channel) return
-
-    const handler = ({ payload }: { payload: { user_id: string; selected_ids: string[] } }) => {
-      if (payload.user_id === userId) return
-      pendingSelectionsRef.current.set(payload.user_id, payload.selected_ids)
-      if (!selectionFlushTimerRef.current) {
-        selectionFlushTimerRef.current = setTimeout(flushSelections, 10)
-      }
-    }
-
-    channel.on('broadcast', { event: 'selection' }, handler)
-    return () => {
-      if (selectionFlushTimerRef.current) {
-        clearTimeout(selectionFlushTimerRef.current)
-        selectionFlushTimerRef.current = null
-      }
-    }
-  }, [channel, userId, flushSelections])
-
-  // Clean up remote selections when a user leaves
-  useEffect(() => {
-    if (!onlineUsers) return
-    const onlineIds = new Set(onlineUsers.map(u => u.user_id))
-    setRemoteSelections(prev => {
-      let changed = false
-      const next = new Map(prev)
-      for (const uid of next.keys()) {
-        if (!onlineIds.has(uid)) {
-          next.delete(uid)
-          changed = true
-        }
-      }
-      return changed ? next : prev
-    })
-  }, [onlineUsers])
+  const { remoteSelections } = useRemoteSelection({
+    channel, userId, selectedIds, onlineUsers,
+  })
 
   return {
     objects,

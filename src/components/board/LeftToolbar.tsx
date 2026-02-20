@@ -16,6 +16,9 @@ import {
   QUAD_PRESETS,
   SYMBOL_PRESETS,
   FLOWCHART_PRESETS,
+  AGENT_PRESETS,
+  DATA_PRESETS,
+  CONTENT_PRESETS,
 } from './shapePresets'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { useFlyoutPosition } from '@/hooks/useFlyoutPosition'
@@ -70,7 +73,9 @@ interface LeftToolbarProps {
 
 // IDs that belong to each tool group (for active-state highlighting)
 const BASICS_IDS = ['sticky_note', 'text_box', 'frame', 'table']
-const LINES_IDS = ['line', 'arrow']
+const LINES_IDS = ['line', 'arrow', 'data_connector']
+const AGENTS_IDS = ['agent', 'agent_output', 'context_object', 'data_connector', 'api_object']
+const CONTENT_IDS = ['text', 'status_badge', 'section_header', 'metric_card', 'checklist']
 const SHAPES_IDS = [
   'circle',
   ...['equilateral', 'right_triangle', 'isosceles'],
@@ -165,6 +170,33 @@ export function LeftToolbar({
             </div>
           ) : (
             <>
+              {/* ── Agents ── */}
+              <ToolGroupButton
+                id="agents"
+                label="Agents"
+                iconPath="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                isOpen={openGroupId === 'agents'}
+                isActive={!!activePreset && AGENTS_IDS.includes(activePreset.id)}
+                onToggle={() => setOpenGroupId(prev => prev === 'agents' ? null : 'agents')}
+                onClose={closeFlyout}
+                dark={dk}
+              >
+                <div style={{ minWidth: '160px' }}>
+                  <FlyoutHeader dark={dk} text="Agents" />
+                  <div className="grid grid-cols-3 gap-1 mb-2">
+                    {AGENT_PRESETS.map(preset => (
+                      <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} dark={dk} />
+                    ))}
+                  </div>
+                  <FlyoutHeader dark={dk} text="Data" />
+                  <div className="grid grid-cols-3 gap-1">
+                    {DATA_PRESETS.map(preset => (
+                      <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} dark={dk} />
+                    ))}
+                  </div>
+                </div>
+              </ToolGroupButton>
+
               {/* ── Basics ── */}
               <ToolGroupButton
                 id="basics"
@@ -277,6 +309,27 @@ export function LeftToolbar({
                   <FlyoutHeader dark={dk} text="Flowchart" />
                   <div className="grid grid-cols-3 gap-1">
                     {FLOWCHART_PRESETS.map(preset => (
+                      <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} dark={dk} />
+                    ))}
+                  </div>
+                </div>
+              </ToolGroupButton>
+
+              {/* ── Content ── */}
+              <ToolGroupButton
+                id="content"
+                label="Content"
+                iconPath="M4 6h16M4 10h16M4 14h16M4 18h16"
+                isOpen={openGroupId === 'content'}
+                isActive={!!activePreset && CONTENT_IDS.includes(activePreset.id)}
+                onToggle={() => setOpenGroupId(prev => prev === 'content' ? null : 'content')}
+                onClose={closeFlyout}
+                dark={dk}
+              >
+                <div style={{ minWidth: '160px' }}>
+                  <FlyoutHeader dark={dk} text="Content" />
+                  <div className="grid grid-cols-3 gap-1">
+                    {CONTENT_PRESETS.map(preset => (
                       <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} dark={dk} />
                     ))}
                   </div>

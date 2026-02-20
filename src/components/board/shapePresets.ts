@@ -531,3 +531,48 @@ export const SHAPE_GROUPS: ShapeGroup[] = [
 ]
 
 // scaleCustomPoints is re-exported from @/lib/geometry/customPoints (see top of file).
+
+// ── Agent presets ────────────────────────────────────────────
+
+export const AGENT_PRESETS: ShapePreset[] = [
+  { id: 'agent', label: 'Agent', dbType: 'agent', defaultWidth: 200, defaultHeight: 140,
+    iconPath: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
+    overrides: { color: '#EEF2FF', agent_state: 'idle' } },
+  { id: 'agent_output', label: 'Output', dbType: 'agent_output', defaultWidth: 240, defaultHeight: 160,
+    iconPath: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+    overrides: { color: '#F0FDF4' } },
+  { id: 'context_object', label: 'Context', dbType: 'context_object', defaultWidth: 180, defaultHeight: 100,
+    iconPath: 'M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z',
+    overrides: { color: '#F1F5F9' } },
+]
+
+// ── Data presets ─────────────────────────────────────────────
+
+export const DATA_PRESETS: ShapePreset[] = [
+  { id: 'data_connector', label: 'Data Link', dbType: 'data_connector', defaultWidth: 120, defaultHeight: 2,
+    iconPath: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1',
+    overrides: { color: '#7C3AED', stroke_color: '#7C3AED', stroke_width: 2 } },
+  { id: 'api_object', label: 'API', dbType: 'api_object', defaultWidth: 180, defaultHeight: 100,
+    iconPath: 'M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+    overrides: { color: '#FEF3C7' } },
+]
+
+// ── Content presets ───────────────────────────────────────────
+
+export const CONTENT_PRESETS: ShapePreset[] = [
+  { id: 'text', label: 'Text', dbType: 'text', defaultWidth: 200, defaultHeight: 60,
+    iconPath: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
+    overrides: { color: 'transparent' }, autoEdit: true },
+  { id: 'status_badge', label: 'Status', dbType: 'status_badge', defaultWidth: 100, defaultHeight: 32,
+    iconPath: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
+    overrides: { color: '#22C55E', text: 'Status' } },
+  { id: 'section_header', label: 'Section', dbType: 'section_header', defaultWidth: 400, defaultHeight: 40,
+    iconPath: 'M4 6h16M4 12h8m-8 6h16',
+    overrides: { color: 'transparent', text: 'Section Title' } },
+  { id: 'metric_card', label: 'Metric', dbType: 'metric_card', defaultWidth: 160, defaultHeight: 100,
+    iconPath: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+    overrides: { color: '#FFFFFF', text: '0' } },
+  { id: 'checklist', label: 'Checklist', dbType: 'checklist', defaultWidth: 200, defaultHeight: 160,
+    iconPath: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
+    overrides: { color: '#FFFFFF', text: '\u2610 Item 1\n\u2610 Item 2\n\u2610 Item 3' } },
+]

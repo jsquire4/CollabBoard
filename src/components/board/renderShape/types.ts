@@ -37,8 +37,13 @@ export interface TableShapeCallbacks {
   handleDeleteColumnAt: (id: string, colIndex: number) => void
 }
 
+// Additional callbacks for agent shapes
+export interface AgentShapeCallbacks {
+  onAgentClick?: (id: string) => void
+}
+
 // Combined type for backward compat
-export type ShapeCallbacks = BaseShapeCallbacks & Partial<VectorShapeCallbacks> & Partial<TableShapeCallbacks>
+export type ShapeCallbacks = BaseShapeCallbacks & Partial<VectorShapeCallbacks> & Partial<TableShapeCallbacks> & Partial<AgentShapeCallbacks>
 
 export interface ShapeState {
   selectedIds: Set<string>

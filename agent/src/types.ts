@@ -14,6 +14,18 @@ export type BoardObjectType =
   | 'ngon'
   | 'table'
   | 'file'
+  | 'data_connector'
+  | 'context_object'
+  | 'agent'
+  | 'agent_output'
+  | 'text'
+  | 'status_badge'
+  | 'section_header'
+  | 'metric_card'
+  | 'checklist'
+  | 'api_object'
+
+export const BOARD_OBJECT_TYPES = ['sticky_note', 'rectangle', 'circle', 'frame', 'group', 'line', 'triangle', 'chevron', 'arrow', 'parallelogram', 'ngon', 'table', 'file', 'data_connector', 'context_object', 'agent', 'agent_output', 'text', 'status_badge', 'section_header', 'metric_card', 'checklist', 'api_object'] as const
 
 export interface BoardObject {
   id: string
@@ -68,6 +80,14 @@ export interface BoardObject {
   file_size?: number | null
   field_clocks?: FieldClocks
   deleted_at?: string | null
+  agent_state?: string | null
+  agent_session_id?: string | null
+  source_agent_id?: string | null
+  file_id?: string | null
+  deck_id?: string | null
+  slide_index?: number | null
+  is_slide?: boolean | null
+  formula?: string | null
 }
 
 export interface BoardMessage {

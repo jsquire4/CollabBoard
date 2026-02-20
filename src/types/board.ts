@@ -12,6 +12,13 @@ export interface Board {
   canvas_color: string
   grid_color: string
   subdivision_color: string
+  premium_agent_slots?: number
+}
+
+export interface BoardMember {
+  user_id: string
+  role: string
+  can_use_agents?: boolean
 }
 
 export type BoardObjectType =
@@ -28,6 +35,16 @@ export type BoardObjectType =
   | 'ngon'
   | 'table'
   | 'file'
+  | 'data_connector'
+  | 'context_object'
+  | 'agent'
+  | 'agent_output'
+  | 'text'
+  | 'status_badge'
+  | 'section_header'
+  | 'metric_card'
+  | 'checklist'
+  | 'api_object'
 
 export type FontStyle = 'normal' | 'bold' | 'italic' | 'bold italic'
 

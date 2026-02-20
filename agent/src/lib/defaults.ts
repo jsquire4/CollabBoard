@@ -104,6 +104,10 @@ const SHAPE_DEFAULTS: Record<string, ShapeDefaults> = {
     width: 180, height: 100, color: '#FEF3C7',
     text: '',
   },
+  group: {
+    width: 0, height: 0, color: 'transparent',
+    text: '',
+  },
 }
 
 export function getShapeDefaults(type: string): ShapeDefaults {

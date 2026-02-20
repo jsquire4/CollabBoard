@@ -53,8 +53,8 @@ export const VectorShape = memo(function VectorShape({
   }
 
   // Resolve marker types — backward compat: arrows default to filled triangle end
-  const markerStart: MarkerType = (object.marker_start as MarkerType) ?? 'none'
-  const markerEnd: MarkerType = (object.marker_end as MarkerType) ?? (variant === 'arrow' ? 'arrow' : 'none')
+  const markerStart: MarkerType = (object.marker_start ?? 'none') as MarkerType
+  const markerEnd: MarkerType = (object.marker_end ?? (variant === 'arrow' ? 'arrow' : 'none')) as MarkerType
 
   // Compute endpoint
   const x2 = object.x2

@@ -278,6 +278,22 @@ shapeRegistry.set('context_object', {
   }),
 })
 
+// ── Standalone Text ─────────────────────────────────────────
+shapeRegistry.set('text', {
+  strategy: 'rect',
+  defaultWidth: 200,
+  defaultHeight: 40,
+  defaultColor: 'transparent',
+  defaultOverrides: { text: '' },
+  konvaProps: () => ({ fill: 'transparent', stroke: 'transparent', strokeWidth: 0, cornerRadius: 0 }),
+  getTextInset: (w, h, padding) => ({
+    x: padding,
+    y: 0,
+    width: w - 2 * padding,
+    height: h,
+  }),
+})
+
 // ── Agent Output ────────────────────────────────────────────
 shapeRegistry.set('agent_output', {
   strategy: 'rect',

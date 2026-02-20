@@ -73,7 +73,7 @@ interface LeftToolbarProps {
 
 // IDs that belong to each tool group (for active-state highlighting)
 const BASICS_IDS = ['sticky_note', 'text_box', 'frame', 'table']
-const LINES_IDS = ['line', 'arrow', 'data_connector']
+const LINES_IDS = ['line', 'arrow']
 const AGENTS_IDS = ['agent', 'agent_output', 'context_object', 'data_connector', 'api_object']
 const CONTENT_IDS = ['text', 'status_badge', 'section_header', 'metric_card', 'checklist']
 const SHAPES_IDS = [

@@ -165,6 +165,7 @@ export const FrameShape = memo(function FrameShape({
             height={20}
             fill="#6366F1"
             cornerRadius={4}
+            listening={false}
           />
           <Text
             x={object.width - 36}
@@ -178,6 +179,7 @@ export const FrameShape = memo(function FrameShape({
             fill="white"
             align="center"
             verticalAlign="middle"
+            listening={false}
           />
         </>
       )}

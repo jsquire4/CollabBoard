@@ -17,7 +17,7 @@ export function isVectorType(obj: BoardObject): obj is VectorObject
 export function isVectorType(type: BoardObjectType | string): boolean
 export function isVectorType(typeOrObj: BoardObjectType | string | BoardObject): boolean {
   const t = typeof typeOrObj === 'string' ? typeOrObj : typeOrObj.type
-  return t === 'line' || t === 'arrow'
+  return t === 'line' || t === 'arrow' || t === 'data_connector'
 }
 
 /** Common props shared by all shape components. */

@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS comments (
 -- ============================================================
 
 ALTER TABLE board_objects ADD COLUMN IF NOT EXISTS file_id           UUID REFERENCES files(id) ON DELETE SET NULL;
-ALTER TABLE board_objects ADD COLUMN IF NOT EXISTS agent_state       TEXT;
+ALTER TABLE board_objects ADD COLUMN IF NOT EXISTS agent_state       TEXT CHECK (agent_state IN ('idle', 'thinking', 'done', 'error'));
 ALTER TABLE board_objects ADD COLUMN IF NOT EXISTS agent_session_id  UUID;
 ALTER TABLE board_objects ADD COLUMN IF NOT EXISTS source_agent_id   UUID REFERENCES board_objects(id) ON DELETE SET NULL;
 ALTER TABLE board_objects ADD COLUMN IF NOT EXISTS deck_id           UUID REFERENCES decks(id) ON DELETE SET NULL;
@@ -196,6 +196,13 @@ CREATE POLICY "Board members can view file shares"
   ON file_board_shares FOR SELECT
   USING (is_board_member(board_id, auth.uid()));
 
+-- Board editors (owner / manager) can remove file shares
+CREATE POLICY "Board editors can remove file shares"
+  ON file_board_shares FOR DELETE
+  USING (
+    get_board_role(board_id, auth.uid()) IN ('owner', 'manager', 'editor')
+  );
+
 -- ----------------------------------------------------------
 -- decks
 -- ----------------------------------------------------------
@@ -246,7 +253,8 @@ CREATE POLICY "Board members can post comments"
 -- Comment authors can update their own comments
 CREATE POLICY "Comment authors can update their comments"
   ON comments FOR UPDATE
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
 -- Comment authors or board managers can delete comments
 CREATE POLICY "Comment authors and managers can delete comments"

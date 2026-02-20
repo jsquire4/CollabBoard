@@ -38,7 +38,7 @@ export const AgentShape = memo(function AgentShape({
   const shadow = getShadowProps(object)
 
   const stateColor = AGENT_STATE_COLORS[object.agent_state ?? 'idle']
-  const ringRadius = Math.min(w, h) / 2 - 8
+  const ringRadius = Math.max(0, Math.min(w, h) / 2 - 8)
 
   const handleClick = () => {
     onSelect(object.id)

@@ -1,7 +1,5 @@
 'use client'
 
-import { useState } from 'react'
-
 export interface ApiObjectPanelProps {
   objectId: string
   isOpen: boolean
@@ -9,9 +7,6 @@ export interface ApiObjectPanelProps {
 }
 
 export function ApiObjectPanel({ isOpen, onClose }: ApiObjectPanelProps) {
-  const [url, setUrl] = useState('')
-  const [method, setMethod] = useState<'GET' | 'POST' | 'PUT' | 'DELETE'>('GET')
-
   if (!isOpen) return null
 
   return (
@@ -31,14 +26,14 @@ export function ApiObjectPanel({ isOpen, onClose }: ApiObjectPanelProps) {
         </button>
       </div>
 
-      {/* Form */}
+      {/* Form — disabled stub, wiring in Phase 2 */}
       <div className="p-4 space-y-4">
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Method</label>
           <select
-            value={method}
-            onChange={(e) => setMethod(e.target.value as typeof method)}
-            className="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
+            disabled
+            defaultValue="GET"
+            className="w-full rounded border border-slate-200 px-3 py-2 text-sm opacity-50 cursor-not-allowed"
           >
             <option value="GET">GET</option>
             <option value="POST">POST</option>
@@ -50,10 +45,9 @@ export function ApiObjectPanel({ isOpen, onClose }: ApiObjectPanelProps) {
           <label className="block text-xs font-medium text-slate-600 mb-1">Endpoint URL</label>
           <input
             type="text"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            disabled
             placeholder="https://api.example.com/endpoint"
-            className="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
+            className="w-full rounded border border-slate-200 px-3 py-2 text-sm opacity-50 cursor-not-allowed"
           />
         </div>
         <p className="text-xs text-slate-400">
@@ -70,8 +64,8 @@ export function ApiObjectPanel({ isOpen, onClose }: ApiObjectPanelProps) {
           Cancel
         </button>
         <button
-          onClick={() => console.warn('api config stub — Phase 2')}
-          className="px-4 py-2 rounded-lg bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-600 transition-colors"
+          disabled
+          className="px-4 py-2 rounded-lg bg-indigo-500 text-white text-sm font-medium opacity-40 cursor-not-allowed"
         >
           Save
         </button>

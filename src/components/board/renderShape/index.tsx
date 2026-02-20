@@ -12,6 +12,8 @@ import { ShapeCallbacks, ShapeState } from './types'
 
 export type { ShapeCallbacks, ShapeState, BaseShapeCallbacks, VectorShapeCallbacks, TableShapeCallbacks, AgentShapeCallbacks } from './types'
 
+const noop = () => {}
+
 export function renderShape(
   obj: BoardObject,
   state: ShapeState,
@@ -173,7 +175,7 @@ export function renderShape(
           onDoubleClick={handleShapeDoubleClick}
           editable={shapeEditable}
           dragBoundFunc={shapeDragBoundFunc}
-          onAgentClick={onAgentClick ?? (() => {})}
+          onAgentClick={onAgentClick ?? noop}
         />
       )
     case 'group':

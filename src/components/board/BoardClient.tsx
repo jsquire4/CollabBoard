@@ -540,10 +540,9 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
 
   // ── Mutations context (all callbacks for Canvas + child components) ──
   const handleAgentClick = useCallback((id: string) => {
-    const obj = objects.get(id)
-    if (!obj) return
-    setAgentChatPanel({ objectId: id, position: { x: obj.x + obj.width + 16, y: obj.y } })
-  }, [objects])
+    // TODO Phase 2: convert canvas world coords to screen coords using stagePos + stageScale
+    setAgentChatPanel({ objectId: id, position: { x: 20, y: 80 } })
+  }, [])
 
   const mutationsValue: BoardMutationsContextValue = useMemo(() => ({
     onDrawShape: handleDrawShape,

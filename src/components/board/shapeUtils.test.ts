@@ -39,9 +39,10 @@ describe('shapeUtils', () => {
   })
 
   describe('isVectorType', () => {
-    it('returns true for line and arrow', () => {
+    it('returns true for line, arrow, and data_connector', () => {
       expect(isVectorType('line')).toBe(true)
       expect(isVectorType('arrow')).toBe(true)
+      expect(isVectorType('data_connector')).toBe(true)
     })
 
     it('returns false for other types', () => {

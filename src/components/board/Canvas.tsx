@@ -58,6 +58,7 @@ export function Canvas() {
     onUpdateTableCell, onTableDataChange,
     onAddRow, onDeleteRow, onAddColumn, onDeleteColumn,
     onAddRowAt, onDeleteRowAt, onAddColumnAt, onDeleteColumnAt,
+    onAgentClick,
   } = useBoardMutations()
   // ── Read shared state from context ──────────────────────────────
   const {
@@ -378,6 +379,7 @@ export function Canvas() {
     handleStartCellEdit, handleTableDataChange: onTableDataChange,
     handleAddRowAt: onAddRowAt, handleDeleteRowAt: onDeleteRowAt,
     handleAddColumnAt: onAddColumnAt, handleDeleteColumnAt: onDeleteColumnAt,
+    onAgentClick,
   }), [
     handleShapeDragEnd, handleShapeDragMove, handleShapeDragStart,
     handleShapeSelect, handleShapeRef, onTransformEnd, handleContextMenu,
@@ -387,6 +389,7 @@ export function Canvas() {
     getAutoRoutePoints, autoRoutePointsRef,
     handleStartCellEdit, onTableDataChange,
     onAddRowAt, onDeleteRowAt, onAddColumnAt, onDeleteColumnAt,
+    onAgentClick,
   ])
 
   return (

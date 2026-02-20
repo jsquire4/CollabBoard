@@ -30,7 +30,7 @@ vi.mock('@/components/board/anchorPoints', () => ({
 }))
 
 vi.mock('@/components/board/shapeUtils', () => ({
-  isVectorType: (type: string) => type === 'line' || type === 'arrow',
+  isVectorType: (type: string) => type === 'line' || type === 'arrow' || type === 'data_connector',
 }))
 
 vi.mock('@/components/board/autoRoute', () => ({

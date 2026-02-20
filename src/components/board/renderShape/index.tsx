@@ -1,14 +1,18 @@
 import React from 'react'
 import { BoardObject, VectorObject, TableObject } from '@/types/board'
+import { AgentObject } from '@/types/boardObject'
 import { StickyNote } from '../StickyNote'
 import { FrameShape } from '../FrameShape'
 import { GenericShape } from '../GenericShape'
 import { VectorShape } from '../VectorShape'
 import { TableShape } from '../TableShape'
+import { AgentShape } from '../AgentShape'
 import { shapeRegistry } from '../shapeRegistry'
 import { ShapeCallbacks, ShapeState } from './types'
 
-export type { ShapeCallbacks, ShapeState, BaseShapeCallbacks, VectorShapeCallbacks, TableShapeCallbacks } from './types'
+export type { ShapeCallbacks, ShapeState, BaseShapeCallbacks, VectorShapeCallbacks, TableShapeCallbacks, AgentShapeCallbacks } from './types'
+
+const noop = () => {}
 
 export function renderShape(
   obj: BoardObject,
@@ -25,6 +29,7 @@ export function renderShape(
     getAutoRoutePoints, autoRoutePointsRef,
     handleStartCellEdit, handleTableDataChange,
     handleAddRowAt, handleDeleteRowAt, handleAddColumnAt, handleDeleteColumnAt,
+    onAgentClick,
   } = callbacks
 
   const isSelected = selectedIds.has(obj.id)
@@ -94,7 +99,8 @@ export function renderShape(
         />
       )
     case 'line':
-    case 'arrow': {
+    case 'arrow':
+    case 'data_connector': {
       const autoRoutePoints = getAutoRoutePoints ? getAutoRoutePoints(obj) : null
       // Populate ref so BoardClient can use auto-route points for waypoint insertion
       if (autoRoutePointsRef) {
@@ -107,7 +113,7 @@ export function renderShape(
       return (
         <VectorShape
           key={obj.id}
-          variant={obj.type as 'line' | 'arrow'}
+          variant={obj.type as 'line' | 'arrow' | 'data_connector'}
           object={obj as VectorObject}
           onDragEnd={handleShapeDragEnd}
           onDragMove={handleShapeDragMove}
@@ -151,6 +157,25 @@ export function renderShape(
           onDeleteRowAt={handleDeleteRowAt}
           onAddColumnAt={handleAddColumnAt}
           onDeleteColumnAt={handleDeleteColumnAt}
+        />
+      )
+    case 'agent':
+      return (
+        <AgentShape
+          key={obj.id}
+          object={obj as AgentObject}
+          onDragEnd={handleShapeDragEnd}
+          onDragMove={handleShapeDragMove}
+          onDragStart={handleShapeDragStart}
+          isSelected={isSelected}
+          onSelect={handleShapeSelect}
+          shapeRef={handleShapeRef}
+          onTransformEnd={onTransformEnd}
+          onContextMenu={handleContextMenu}
+          onDoubleClick={handleShapeDoubleClick}
+          editable={shapeEditable}
+          dragBoundFunc={shapeDragBoundFunc}
+          onAgentClick={onAgentClick ?? noop}
         />
       )
     case 'group':

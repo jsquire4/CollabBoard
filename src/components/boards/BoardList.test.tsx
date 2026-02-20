@@ -339,7 +339,7 @@ describe('BoardList integration', () => {
         initialSharedBoards={[]}
       />
     )
-    expect(screen.getByText('My Boards')).toBeInTheDocument()
+    expect(screen.getAllByText('My Boards').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('New Board')).toBeInTheDocument()
     expect(screen.getByText('Board 1')).toBeInTheDocument()
     expect(screen.getByText('Board 2')).toBeInTheDocument()

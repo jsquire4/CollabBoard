@@ -127,6 +127,7 @@ export interface BoardMutationsContextValue {
 
   // Vertex edit
   vertexEditId: string | null
+  onAgentClick?: (id: string) => void
 }
 
 const BoardMutationsContext = createContext<BoardMutationsContextValue | null>(null)

@@ -7,6 +7,7 @@ import { useCanvas } from '@/hooks/useCanvas'
 import { useModifierKeys } from '@/hooks/useModifierKeys'
 import { BoardObject, BoardObjectType } from '@/types/board'
 import { useBoardContext } from '@/contexts/BoardContext'
+import { useBoardMutations } from '@/contexts/BoardMutationsContext'
 import { useStageInteractions } from '@/hooks/board/useStageInteractions'
 import { useRemoteCursors } from '@/hooks/board/useRemoteCursors'
 import { useRightClickPan } from '@/hooks/board/useRightClickPan'
@@ -20,6 +21,7 @@ import { useShapeDrag } from '@/hooks/board/useShapeDrag'
 import { useContextMenu } from '@/hooks/board/useContextMenu'
 import { shapeRegistry } from './shapeRegistry'
 import { isVectorType } from './shapeUtils'
+import { getGroupBoundingBox as getGroupBoundingBoxPure, isObjectInViewport } from '@/lib/geometry/bbox'
 import { renderShape, ShapeCallbacks, ShapeState } from './renderShape'
 import { computeAutoRoute } from './autoRoute'
 import { RemoteSelectionHighlights } from './RemoteSelectionHighlights'
@@ -27,131 +29,36 @@ import { LockIconOverlay } from './LockIconOverlay'
 import { CanvasOverlays } from './CanvasOverlays'
 import { RichTextStaticLayer } from './RichTextStaticLayer'
 import { RICH_TEXT_ENABLED } from '@/lib/richText'
-import type { RemoteCursorData } from '@/hooks/useCursors'
 
 // Shape types that support triple-click text editing (all registry shapes)
 const TRIPLE_CLICK_TEXT_TYPES = new Set(shapeRegistry.keys())
 
-interface CanvasProps {
-  // Command callbacks (not in context — explicit for testability)
-  onDrawShape?: (type: BoardObjectType, x: number, y: number, width: number, height: number) => void
-  onCancelTool?: () => void
-  onSelect: (id: string | null, opts?: { shift?: boolean; ctrl?: boolean }) => void
-  onSelectObjects: (ids: string[]) => void
-  onClearSelection: () => void
-  onEnterGroup: (groupId: string, selectChildId?: string) => void
-  onExitGroup: () => void
-  onDragEnd: (id: string, x: number, y: number) => void
-  onDragMove?: (id: string, x: number, y: number) => void
-  onUpdateText: (id: string, text: string) => void
-  onUpdateTitle: (id: string, title: string) => void
-  onUpdateRichText?: (id: string, json: string, before: { text: string; rich_text: string | null }) => void
-  onEditorReady?: (editor: Editor) => void
-  onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
-  onDelete: () => void
-  onDuplicate: () => void
-  onCopy?: () => void
-  onPaste?: () => void
-  onColorChange: (color: string) => void
-  onBringToFront: (id: string) => void
-  onBringForward: (id: string) => void
-  onSendBackward: (id: string) => void
-  onSendToBack: (id: string) => void
-  onGroup: () => void
-  onUngroup: () => void
-  canGroup: boolean
-  canUngroup: boolean
-  onStrokeStyleChange?: (updates: { stroke_color?: string | null; stroke_width?: number; stroke_dash?: string }) => void
-  onOpacityChange?: (opacity: number) => void
-  onMarkerChange?: (updates: { marker_start?: string; marker_end?: string }) => void
-  onDragStart?: (id: string) => void
-  onUndo?: () => void
-  onRedo?: () => void
-  onCheckFrameContainment: (id: string) => void
-  onMoveGroupChildren: (parentId: string, dx: number, dy: number, skipDb?: boolean) => void
-  recentColors?: string[]
-  colors: string[]
-  selectedColor?: string
-  onEndpointDragMove?: (id: string, updates: Partial<BoardObject>) => void
-  onEndpointDragEnd?: (id: string, updates: Partial<BoardObject>) => void
-  onCursorMove?: (x: number, y: number) => void
-  onCursorUpdate?: (fn: (cursors: Map<string, RemoteCursorData>) => void) => void
-  onEditingChange?: (isEditing: boolean) => void
-  anySelectedLocked?: boolean
-  onLock?: () => void
-  onUnlock?: () => void
-  canLock?: boolean
-  canUnlock?: boolean
-  vertexEditId?: string | null
-  onEditVertices?: () => void
-  onExitVertexEdit?: () => void
-  onVertexDragEnd?: (id: string, index: number, x: number, y: number) => void
-  onVertexInsert?: (id: string, afterIndex: number) => void
-  canEditVertices?: boolean
-  snapIndicator?: { x: number; y: number } | null
-  onActivity?: () => void
-  pendingEditId?: string | null
-  onPendingEditConsumed?: () => void
-  onUpdateBoardSettings?: (updates: { grid_size?: number; grid_subdivisions?: number; grid_visible?: boolean; snap_to_grid?: boolean; grid_style?: string; canvas_color?: string; grid_color?: string; subdivision_color?: string }) => void
-  onWaypointDragEnd?: (id: string, waypointIndex: number, x: number, y: number) => void
-  onWaypointInsert?: (id: string, afterSegmentIndex: number) => void
-  onWaypointDelete?: (id: string, waypointIndex: number) => void
-  autoRoutePointsRef?: React.MutableRefObject<Map<string, number[]>>
-  onDrawLineFromAnchor?: (type: BoardObjectType, startShapeId: string, startAnchor: string, startX: number, startY: number, endX: number, endY: number, screenEndX?: number, screenEndY?: number) => void
-  onUpdateTableCell?: (id: string, row: number, col: number, text: string) => void
-  onTableDataChange?: (id: string, tableData: string) => void
-  onAddRow?: () => void
-  onDeleteRow?: () => void
-  onAddColumn?: () => void
-  onDeleteColumn?: () => void
-  onAddRowAt?: (id: string, beforeIndex: number) => void
-  onDeleteRowAt?: (id: string, rowIndex: number) => void
-  onAddColumnAt?: (id: string, beforeIndex: number) => void
-  onDeleteColumnAt?: (id: string, colIndex: number) => void
-}
-
-export function Canvas({
-  onDrawShape, onCancelTool,
-  onSelect, onSelectObjects, onClearSelection, onEnterGroup, onExitGroup,
-  onDragEnd, onDragMove, onUpdateText, onUpdateTitle, onUpdateRichText, onEditorReady, onTransformEnd,
-  onDelete, onDuplicate, onCopy, onPaste, onColorChange,
-  onBringToFront, onBringForward, onSendBackward, onSendToBack,
-  onGroup, onUngroup, canGroup, canUngroup,
-  onStrokeStyleChange,
-  onOpacityChange,
-  onMarkerChange,
-  onDragStart: onDragStartProp,
-  onUndo, onRedo,
-  onCheckFrameContainment, onMoveGroupChildren,
-  recentColors, colors, selectedColor,
-  onEndpointDragMove, onEndpointDragEnd,
-  onCursorMove, onCursorUpdate,
-  onEditingChange,
-  anySelectedLocked,
-  onLock, onUnlock, canLock, canUnlock,
-  vertexEditId, onEditVertices, onExitVertexEdit, onVertexDragEnd, onVertexInsert,
-  canEditVertices,
-  snapIndicator,
-  onActivity,
-  pendingEditId,
-  onPendingEditConsumed,
-  onUpdateBoardSettings,
-  onWaypointDragEnd,
-  onWaypointInsert,
-  onWaypointDelete,
-  autoRoutePointsRef,
-  onDrawLineFromAnchor,
-  onUpdateTableCell,
-  onTableDataChange,
-  onAddRow,
-  onDeleteRow,
-  onAddColumn,
-  onDeleteColumn,
-  onAddRowAt,
-  onDeleteRowAt,
-  onAddColumnAt,
-  onDeleteColumnAt,
-}: CanvasProps) {
+export function Canvas() {
+  // ── Read mutations from context (formerly 75+ props from BoardClient) ──
+  const {
+    onDrawShape, onCancelTool,
+    onSelect, onSelectObjects, onClearSelection, onEnterGroup, onExitGroup,
+    onDragEnd, onDragMove, onUpdateText, onUpdateTitle, onUpdateRichText, onEditorReady, onTransformEnd,
+    onDelete, onDuplicate, onCopy, onPaste, onColorChange,
+    onBringToFront, onBringForward, onSendBackward, onSendToBack,
+    onGroup, onUngroup, canGroup, canUngroup,
+    onStrokeStyleChange, onOpacityChange, onMarkerChange,
+    onDragStart: onDragStartProp, onUndo, onRedo,
+    onCheckFrameContainment, onMoveGroupChildren,
+    recentColors, colors, selectedColor,
+    onEndpointDragMove, onEndpointDragEnd,
+    onCursorMove, onCursorUpdate,
+    onEditingChange,
+    anySelectedLocked, onLock, onUnlock, canLock, canUnlock,
+    vertexEditId, onEditVertices, onExitVertexEdit, onVertexDragEnd, onVertexInsert,
+    canEditVertices, snapIndicator,
+    onActivity, pendingEditId, onPendingEditConsumed,
+    onWaypointDragEnd, onWaypointInsert, onWaypointDelete,
+    autoRoutePointsRef, onDrawLineFromAnchor,
+    onUpdateTableCell, onTableDataChange,
+    onAddRow, onDeleteRow, onAddColumn, onDeleteColumn,
+    onAddRowAt, onDeleteRowAt, onAddColumnAt, onDeleteColumnAt,
+  } = useBoardMutations()
   // ── Read shared state from context ──────────────────────────────
   const {
     objects, sortedObjects, selectedIds, activeGroupId, activeTool,
@@ -209,7 +116,6 @@ export function Canvas({
 
   const {
     contextMenu, setContextMenu, handleContextMenu, handleStageContextMenu,
-    contextTargetId, handleCtxBringToFront, handleCtxBringForward, handleCtxSendBackward, handleCtxSendToBack,
   } = useContextMenu({
     onSelect, onBringToFront, onBringForward, onSendBackward, onSendToBack,
     didPanRef, onActivity,
@@ -227,7 +133,7 @@ export function Canvas({
     for (const id of selectedIds) {
       const obj = objects.get(id)
       // Skip locked shapes — they should not be part of the Transformer
-      if (isObjectLocked?.(id)) continue
+      if (isObjectLocked(id)) continue
       if (obj?.type === 'group') {
         for (const d of getDescendants(id)) {
           if (d.type !== 'group' && !isVectorType(d.type)) ids.add(d.id)
@@ -313,7 +219,7 @@ export function Canvas({
   // Keyboard shortcuts (delegated to extracted hook)
   useKeyboardShortcuts({
     editingId, canEdit, selectedIds, activeGroupId, activeTool,
-    vertexEditId: vertexEditId ?? null, anySelectedLocked: anySelectedLocked ?? false,
+    vertexEditId, anySelectedLocked,
     onDelete, onDuplicate, onCopy, onPaste, onGroup, onUngroup,
     onClearSelection, onExitGroup, onCancelTool, onUndo, onRedo,
     onExitVertexEdit,
@@ -391,7 +297,7 @@ export function Canvas({
 
   // Handle shape click with modifier keys + triple-click detection
   const handleShapeSelect = useCallback((id: string) => {
-    onActivity?.()
+    onActivity()
     // Triple-click detection: a click shortly after a double-click on the same shape
     const prev = lastDblClickRef.current
     if (prev && prev.id === id && Date.now() - prev.time < 500) {
@@ -438,44 +344,14 @@ export function Canvas({
     const right = (-stagePos.x + dimensions.width) / stageScale + margin
     const bottom = (-stagePos.y + dimensions.height) / stageScale + margin
 
-    return sortedObjects.filter(obj => {
-      if (obj.type === 'group' || obj.type === 'file') return false // groups and files render nothing on canvas
-      if (isVectorType(obj.type)) {
-        const ex2 = obj.x2 ?? obj.x + obj.width
-        const ey2 = obj.y2 ?? obj.y + obj.height
-        const objLeft = Math.min(obj.x, ex2)
-        const objTop = Math.min(obj.y, ey2)
-        const objRight = Math.max(obj.x, ex2)
-        const objBottom = Math.max(obj.y, ey2)
-        return objRight >= left && objLeft <= right && objBottom >= top && objTop <= bottom
-      }
-      return (obj.x + obj.width) >= left && obj.x <= right &&
-             (obj.y + obj.height) >= top && obj.y <= bottom
-    })
+    return sortedObjects.filter(obj => isObjectInViewport(obj, left, top, right, bottom))
   }, [sortedObjects, stagePos, stageScale, dimensions])
 
   // Compute group bounding boxes for visual treatment
-  const getGroupBoundingBox = useCallback((groupId: string) => {
-    const children = getDescendants(groupId).filter(c => c.type !== 'group')
-    if (children.length === 0) return null
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-    for (const c of children) {
-      if (isVectorType(c.type)) {
-        const cx2 = c.x2 ?? c.x + c.width
-        const cy2 = c.y2 ?? c.y + c.height
-        minX = Math.min(minX, c.x, cx2)
-        minY = Math.min(minY, c.y, cy2)
-        maxX = Math.max(maxX, c.x, cx2)
-        maxY = Math.max(maxY, c.y, cy2)
-      } else {
-        minX = Math.min(minX, c.x)
-        minY = Math.min(minY, c.y)
-        maxX = Math.max(maxX, c.x + c.width)
-        maxY = Math.max(maxY, c.y + c.height)
-      }
-    }
-    return { x: minX - 8, y: minY - 8, width: maxX - minX + 16, height: maxY - minY + 16 }
-  }, [getDescendants])
+  const getGroupBoundingBox = useCallback(
+    (groupId: string) => getGroupBoundingBoxPure(groupId, getDescendants),
+    [getDescendants]
+  )
 
   // Determine which groups are selected (for drop shadow visual)
   const selectedGroupIds = useMemo(() => {
@@ -489,7 +365,7 @@ export function Canvas({
 
   // Shape rendering state + callbacks (stable references for renderShape)
   const shapeState: ShapeState = useMemo(() => ({
-    selectedIds, isObjectLocked: isObjectLocked ?? (() => false), canEdit, editingId, editingField, editingCellCoords,
+    selectedIds, isObjectLocked, canEdit, editingId, editingField, editingCellCoords,
   }), [selectedIds, isObjectLocked, canEdit, editingId, editingField, editingCellCoords])
 
   const shapeCallbacks: ShapeCallbacks = useMemo(() => ({
@@ -601,7 +477,7 @@ export function Canvas({
           {visibleObjects.map(obj => renderShape(obj, shapeState, shapeCallbacks))}
 
           {/* Lock icon overlays for locked shapes */}
-          <LockIconOverlay visibleObjects={visibleObjects} isObjectLocked={isObjectLocked ?? (() => false)} />
+          <LockIconOverlay visibleObjects={visibleObjects} isObjectLocked={isObjectLocked} />
 
           {/* Marquee selection rectangle */}
           {marquee && (
@@ -825,34 +701,7 @@ export function Canvas({
         uiDarkMode={uiDarkMode}
         contextMenu={contextMenu}
         setContextMenu={setContextMenu}
-        onDelete={onDelete}
-        onDuplicate={onDuplicate}
-        onColorChange={onColorChange}
         recentColors={recentColors}
-        colors={colors}
-        selectedColor={selectedColor}
-        onStrokeStyleChange={onStrokeStyleChange}
-        onOpacityChange={onOpacityChange}
-        handleCtxBringToFront={handleCtxBringToFront}
-        handleCtxBringForward={handleCtxBringForward}
-        handleCtxSendBackward={handleCtxSendBackward}
-        handleCtxSendToBack={handleCtxSendToBack}
-        onGroup={onGroup}
-        onUngroup={onUngroup}
-        canGroup={canGroup}
-        canUngroup={canUngroup}
-        isObjectLocked={isObjectLocked ?? (() => false)}
-        onLock={onLock}
-        onUnlock={onUnlock}
-        canLock={canLock}
-        canUnlock={canUnlock}
-        onEditVertices={onEditVertices}
-        canEditVertices={canEditVertices}
-        onMarkerChange={onMarkerChange}
-        onAddRow={onAddRow}
-        onDeleteRow={onDeleteRow}
-        onAddColumn={onAddColumn}
-        onDeleteColumn={onDeleteColumn}
         onCellKeyDown={handleCellKeyDown}
       />
 

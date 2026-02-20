@@ -315,35 +315,51 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     persistZIndexBatch(dbUpdates, now)
   }, [canEdit, getZOrderSet, getMinZIndex, queueBroadcast, persistZIndexBatch, stampChange])
 
-  const bringForward = useCallback((id: string) => {
+  // Shared helper: swap `set` with the adjacent neighbor in the given direction.
+  // direction === 1  → bring forward (swap with next-higher neighbor)
+  // direction === -1 → send backward (swap with next-lower neighbor)
+  const applyZOrderSwap = useCallback((id: string, direction: 1 | -1) => {
     if (!canEdit) return
     const obj = objects.get(id)
     if (!obj) return
     const set = getZOrderSet(id)
-    const maxInSet = Math.max(...set.map(o => o.z_index))
     const setIds = new Set(set.map(o => o.id))
+
+    // When moving forward we anchor on the set's max z; backward on the set's min z.
+    const setEdge = direction === 1
+      ? Math.max(...set.map(o => o.z_index))
+      : Math.min(...set.map(o => o.z_index))
+
+    // Sort neighbors so we can find the immediately adjacent one.
     const sorted = Array.from(objects.values())
       .filter(o => !setIds.has(o.id) && o.parent_id === obj.parent_id)
-      .sort((a, b) => a.z_index - b.z_index)
-    const nextHigher = sorted.find(o => o.z_index > maxInSet)
-    if (!nextHigher) return
+      .sort((a, b) => direction * (a.z_index - b.z_index))
+    const neighbor = sorted.find(o => direction * o.z_index > direction * setEdge)
+    if (!neighbor) return
 
-    const nextSet = getZOrderSet(nextHigher.id)
-    const maxNext = Math.max(...nextSet.map(o => o.z_index))
-    const fwdDelta = maxNext - maxInSet
-    const bwdDelta = set.length > 1 ? maxInSet - Math.min(...set.map(s => s.z_index)) + 1 : 1
+    const nextSet = getZOrderSet(neighbor.id)
+    // How far the moving set travels (positive = forward).
+    const setSpan = set.length > 1 ? Math.max(...set.map(o => o.z_index)) - Math.min(...set.map(o => o.z_index)) + 1 : 1
+    const neighborEdge = direction === 1
+      ? Math.max(...nextSet.map(o => o.z_index))
+      : Math.min(...nextSet.map(o => o.z_index))
+
+    // The moving set shifts by the gap between its edge and the neighbor's far edge.
+    const setDelta = direction * (direction * neighborEdge - direction * setEdge)
+    // The neighbor set shifts back by the moving set's span.
+    const neighborDelta = -direction * setSpan
 
     const now = new Date().toISOString()
     const changes: BoardChange[] = []
     const dbUpdates: { id: string; z_index: number }[] = []
     for (const o of set) {
-      const newZ = o.z_index + fwdDelta
+      const newZ = o.z_index + setDelta
       const clocks = stampChange(o.id, ['z_index'])
       changes.push({ action: 'update', object: { id: o.id, z_index: newZ }, clocks })
       dbUpdates.push({ id: o.id, z_index: newZ })
     }
     for (const o of nextSet) {
-      const newZ = o.z_index - bwdDelta
+      const newZ = o.z_index + neighborDelta
       const clocks = stampChange(o.id, ['z_index'])
       changes.push({ action: 'update', object: { id: o.id, z_index: newZ }, clocks })
       dbUpdates.push({ id: o.id, z_index: newZ })
@@ -351,12 +367,12 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     setObjects(prev => {
       const next = new Map(prev)
       for (const o of set) {
-        const newZ = o.z_index + fwdDelta
+        const newZ = o.z_index + setDelta
         const existing = next.get(o.id)
         if (existing) next.set(o.id, { ...existing, z_index: newZ, updated_at: now })
       }
       for (const o of nextSet) {
-        const newZ = o.z_index - bwdDelta
+        const newZ = o.z_index + neighborDelta
         const existing = next.get(o.id)
         if (existing) next.set(o.id, { ...existing, z_index: newZ, updated_at: now })
       }
@@ -365,57 +381,14 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     queueBroadcast(changes)
     persistZIndexBatch(dbUpdates, now)
   }, [objects, canEdit, getZOrderSet, queueBroadcast, persistZIndexBatch, stampChange])
+
+  const bringForward = useCallback((id: string) => {
+    applyZOrderSwap(id, 1)
+  }, [applyZOrderSwap])
 
   const sendBackward = useCallback((id: string) => {
-    if (!canEdit) return
-    const obj = objects.get(id)
-    if (!obj) return
-    const set = getZOrderSet(id)
-    const minInSet = Math.min(...set.map(o => o.z_index))
-    const setIds = new Set(set.map(o => o.id))
-    const sorted = Array.from(objects.values())
-      .filter(o => !setIds.has(o.id) && o.parent_id === obj.parent_id)
-      .sort((a, b) => b.z_index - a.z_index)
-    const nextLower = sorted.find(o => o.z_index < minInSet)
-    if (!nextLower) return
-
-    const nextSet = getZOrderSet(nextLower.id)
-    const minNext = Math.min(...nextSet.map(o => o.z_index))
-    const bwdDelta = minInSet - minNext
-    const fwdDelta = set.length > 1 ? Math.max(...set.map(s => s.z_index)) - minInSet + 1 : 1
-
-    const now = new Date().toISOString()
-    const changes: BoardChange[] = []
-    const dbUpdates: { id: string; z_index: number }[] = []
-    for (const o of set) {
-      const newZ = o.z_index - bwdDelta
-      const clocks = stampChange(o.id, ['z_index'])
-      changes.push({ action: 'update', object: { id: o.id, z_index: newZ }, clocks })
-      dbUpdates.push({ id: o.id, z_index: newZ })
-    }
-    for (const o of nextSet) {
-      const newZ = o.z_index + fwdDelta
-      const clocks = stampChange(o.id, ['z_index'])
-      changes.push({ action: 'update', object: { id: o.id, z_index: newZ }, clocks })
-      dbUpdates.push({ id: o.id, z_index: newZ })
-    }
-    setObjects(prev => {
-      const next = new Map(prev)
-      for (const o of set) {
-        const newZ = o.z_index - bwdDelta
-        const existing = next.get(o.id)
-        if (existing) next.set(o.id, { ...existing, z_index: newZ, updated_at: now })
-      }
-      for (const o of nextSet) {
-        const newZ = o.z_index + fwdDelta
-        const existing = next.get(o.id)
-        if (existing) next.set(o.id, { ...existing, z_index: newZ, updated_at: now })
-      }
-      return next
-    })
-    queueBroadcast(changes)
-    persistZIndexBatch(dbUpdates, now)
-  }, [objects, canEdit, getZOrderSet, queueBroadcast, persistZIndexBatch, stampChange])
+    applyZOrderSwap(id, -1)
+  }, [applyZOrderSwap])
 
   // ── Group / Ungroup ─────────────────────────────────────────────
 

@@ -137,10 +137,24 @@ Deploy to [Vercel](https://vercel.com) and set the same environment variables po
 |---------|-------------|
 | `npm run dev` | Start development server |
 | `npm run build` | Production build |
-| `npm run test` | Run tests (CRDT merge, HLC) |
 | `npx tsc --noEmit` | Type check |
 | `npx supabase start` | Start local Supabase (Docker) |
 | `npx supabase db push` | Apply migrations |
+
+### Testing
+
+| Command | Description |
+|---------|-------------|
+| `npm run test` | Unit tests (Vitest) — CRDT, hooks, components, ~47 test files |
+| `npm run test:watch` | Unit tests in watch mode |
+| `npm run test:stress` | Stress tests — 500+ objects, CRDT convergence, undo, reconnect |
+| `npm run test:e2e` | E2E smoke tests (Playwright, chromium) |
+| `npm run test:e2e:stress` | E2E performance + load — board metrics, 500-shape load, multi-user |
+| `npm run test:e2e:load` | Multi-user load test only (list reporter, JSON/HTML reports) |
+| `npm run test:all` | Full suite: unit + stress + E2E + performance |
+| `npm run seed:500` | Seed a board with 500 shapes for load testing |
+
+**E2E requirements:** Set `TEST_BOARD_JOIN_TOKEN` in `.env.local` (share-link token from a board) for board-performance and multi-user-load tests.
 
 ## Project Structure
 

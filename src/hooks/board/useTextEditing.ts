@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import Konva from 'konva'
 import { BoardObject } from '@/types/board'
 import { nextCell, parseTableData } from '@/lib/table/tableUtils'
+import { TEXTAREA_BASE_STYLE } from '@/lib/textConstants'
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -101,7 +102,7 @@ export function useTextEditing({
     const textColor = field === 'title' ? (obj.text_color ?? '#374151') : (obj.text_color ?? '#000000')
     const textAlign = (obj.text_align ?? (obj.type === 'sticky_note' ? 'left' : 'center')) as React.CSSProperties['textAlign']
     setTextareaStyle({
-      position: 'absolute',
+      ...TEXTAREA_BASE_STYLE,
       top: `${textRect.y}px`,
       left: `${textRect.x}px`,
       width: `${textRect.width}px`,
@@ -111,16 +112,8 @@ export function useTextEditing({
       fontWeight: isBold || field === 'title' ? 'bold' : 'normal',
       fontStyle: isItalic ? 'italic' : 'normal',
       textAlign,
-      padding: '0px',
-      margin: '0px',
-      border: 'none',
-      outline: 'none',
-      resize: 'none',
-      background: 'transparent',
       color: textColor,
-      overflow: 'hidden',
       lineHeight: field === 'title' ? '1.3' : '1.2',
-      zIndex: 100,
     })
   }, [objects, stageScale, canEdit, tryEnterGroup, onActivity])
 
@@ -173,7 +166,7 @@ export function useTextEditing({
     setEditText(initialText)
 
     setTextareaStyle({
-      position: 'absolute',
+      ...TEXTAREA_BASE_STYLE,
       top: `${textRect.y}px`,
       left: `${textRect.x}px`,
       width: `${textRect.width}px`,
@@ -183,16 +176,8 @@ export function useTextEditing({
       fontWeight: row === -1 ? 'bold' : 'normal',
       fontStyle: 'normal',
       textAlign: 'left',
-      padding: '0px',
-      margin: '0px',
-      border: 'none',
-      outline: 'none',
-      resize: 'none',
-      background: 'transparent',
       color: obj.text_color ?? '#000000',
-      overflow: 'hidden',
       lineHeight: '1.2',
-      zIndex: 100,
     })
   }, [objects, stageScale, canEdit, onActivity])
 

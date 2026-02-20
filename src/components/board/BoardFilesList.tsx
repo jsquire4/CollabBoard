@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import type { BoardObject } from '@/types/board'
+import type { BoardObject, FileObject } from '@/types/board'
 
 interface BoardFilesListProps {
   objects: Map<string, BoardObject>
@@ -25,10 +25,10 @@ function mimeIcon(mime: string | null | undefined): string {
 
 export function BoardFilesList({ objects, onDelete }: BoardFilesListProps) {
   const files = useMemo(() => {
-    const result: BoardObject[] = []
+    const result: FileObject[] = []
     for (const obj of objects.values()) {
-      if (obj.type === 'file' && obj.storage_path) {
-        result.push(obj)
+      if (obj.type === 'file' && obj.storage_path && obj.file_name && obj.mime_type) {
+        result.push(obj as FileObject)
       }
     }
     return result.sort((a, b) => a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0)

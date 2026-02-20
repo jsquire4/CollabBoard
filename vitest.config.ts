@@ -11,9 +11,16 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    exclude: ['src/**/*.stress.test.ts', 'node_modules', 'dist'],
     setupFiles: ['./src/test/setup.ts'],
     coverage: {
       provider: 'v8',
+      thresholds: {
+        statements: 78,
+        branches: 65,
+        functions: 75,
+        lines: 80,
+      },
       exclude: [
         'src/lib/supabase/client.ts',
         'src/**/*.test.{ts,tsx}',

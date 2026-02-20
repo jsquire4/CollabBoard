@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { BoardRole } from '@/types/sharing'
 import { OnlineUser } from '@/hooks/usePresence'
+import { useClickOutside } from '@/hooks/useClickOutside'
 
 type BoardSettingsUpdate = {
   grid_size?: number
@@ -258,26 +259,7 @@ function GridSettingsPopover({
   const panelRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
 
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node) &&
-          btnRef.current && !btnRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [open])
+  useClickOutside([panelRef, btnRef], open, () => setOpen(false))
 
   const handleToggle = () => {
     if (!open && btnRef.current) {
@@ -306,6 +288,7 @@ function GridSettingsPopover({
       {open && (
         <div
           ref={panelRef}
+          onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
           className={`fixed z-[300] w-64 rounded-xl border p-3 shadow-xl ${dark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}
           style={{ top: pos.top, left: pos.left }}
         >
@@ -433,17 +416,7 @@ function GridThemeFlyout({
   const panelRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
 
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node) &&
-          btnRef.current && !btnRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])
+  useClickOutside([panelRef, btnRef], open, () => setOpen(false))
 
   const handleToggle = () => {
     if (!open && btnRef.current) {
@@ -487,6 +460,7 @@ function GridThemeFlyout({
       {open && (
         <div
           ref={panelRef}
+          onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
           className={`fixed z-[400] w-64 rounded-xl border p-3 shadow-xl ${dark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}
           style={{ top: pos.top, left: pos.left }}
         >

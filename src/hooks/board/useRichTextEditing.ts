@@ -8,6 +8,8 @@ import { TIPTAP_EXTENSIONS } from '@/lib/richtext/extensions'
 import { extractPlainText, plainTextToTipTap } from '@/lib/richText'
 import type { TipTapDoc } from '@/types/board'
 import { STICKY_TITLE_CHAR_LIMIT } from './useTextEditing'
+import { useSyncRef } from '@/hooks/useSyncRef'
+import { TEXTAREA_BASE_STYLE } from '@/lib/textConstants'
 
 export interface RichTextBeforeState {
   text: string
@@ -43,8 +45,7 @@ export function useRichTextEditing({
   const [editingField, setEditingField] = useState<'text' | 'title'>('text')
   const [overlayStyle, setOverlayStyle] = useState<React.CSSProperties>({})
   const lastDblClickRef = useRef<{ id: string; time: number } | null>(null)
-  const editingIdRef = useRef<string | null>(null)
-  useEffect(() => { editingIdRef.current = editingId }, [editingId])
+  const editingIdRef = useSyncRef(editingId)
 
   // Snapshot of object state at edit start for correct undo (fix: captures before live broadcasts mutate text)
   const beforeEditRef = useRef<RichTextBeforeState | null>(null)
@@ -55,8 +56,7 @@ export function useRichTextEditing({
   const geometricEditTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Ref for onUpdateText so the useEditor onUpdate closure always calls the latest version
-  const onUpdateTextRef = useRef(onUpdateText)
-  useEffect(() => { onUpdateTextRef.current = onUpdateText }, [onUpdateText])
+  const onUpdateTextRef = useSyncRef(onUpdateText)
 
   // For plain text textarea (title editing)
   const [editText, setEditText] = useState('')
@@ -81,14 +81,10 @@ export function useRichTextEditing({
   }, [enabled])
 
   // Refs for commit helper — avoids circular dependency between handleStartEdit and handleFinishEdit
-  const editingFieldRef = useRef(editingField)
-  useEffect(() => { editingFieldRef.current = editingField }, [editingField])
-  const editTextRef = useRef(editText)
-  useEffect(() => { editTextRef.current = editText }, [editText])
-  const onUpdateTitleRef = useRef(onUpdateTitle)
-  useEffect(() => { onUpdateTitleRef.current = onUpdateTitle }, [onUpdateTitle])
-  const onUpdateRichTextRef = useRef(onUpdateRichText)
-  useEffect(() => { onUpdateRichTextRef.current = onUpdateRichText }, [onUpdateRichText])
+  const editingFieldRef = useSyncRef(editingField)
+  const editTextRef = useSyncRef(editText)
+  const onUpdateTitleRef = useSyncRef(onUpdateTitle)
+  const onUpdateRichTextRef = useSyncRef(onUpdateRichText)
 
   // Commit the current edit (if any) — reads from refs so it can be called from handleStartEdit
   const commitCurrentEdit = useCallback(() => {
@@ -148,7 +144,7 @@ export function useRichTextEditing({
       const textColor = obj.text_color ?? '#374151'
       const textAlign = (obj.text_align ?? 'left') as React.CSSProperties['textAlign']
       setTextareaStyle({
-        position: 'absolute',
+        ...TEXTAREA_BASE_STYLE,
         top: `${textRect.y}px`,
         left: `${textRect.x}px`,
         width: `${textRect.width}px`,
@@ -158,16 +154,8 @@ export function useRichTextEditing({
         fontWeight: 'bold',
         fontStyle: 'normal',
         textAlign,
-        padding: '0px',
-        margin: '0px',
-        border: 'none',
-        outline: 'none',
-        resize: 'none',
-        background: 'transparent',
         color: textColor,
-        overflow: 'hidden',
         lineHeight: '1.3',
-        zIndex: 100,
       })
     } else {
       // Rich text editing — initialize TipTap editor

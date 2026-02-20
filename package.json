@@ -8,7 +8,13 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:stress": "vitest run --reporter=verbose --config vitest.stress.config.ts",
+    "test:e2e": "playwright test --project=chromium",
+    "test:e2e:stress": "playwright test --project=performance",
+    "test:e2e:load": "playwright test e2e/multi-user-load.spec.ts --reporter=list",
+    "test:all": "npm run test && npm run test:stress && npm run test:e2e && npm run test:e2e:stress",
+    "seed:500": "tsx scripts/seed-500-shapes.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
@@ -32,6 +38,7 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback, ReactNode } from 'react'
+import { useState, useRef, useCallback, ReactNode } from 'react'
 import { BoardRole } from '@/types/sharing'
 import { ColorPicker } from './ColorPicker'
 import { FontSelector } from './FontSelector'
@@ -18,6 +18,7 @@ import {
   FLOWCHART_PRESETS,
 } from './shapePresets'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import { useFlyoutPosition } from '@/hooks/useFlyoutPosition'
 import { EXPANDED_PALETTE } from './ColorPicker'
 import { StylePanel } from './StylePanel'
 import { RichTextToolbar } from './RichTextToolbar'
@@ -428,30 +429,8 @@ function ToolGroupButton({
   children: ReactNode
   dark?: boolean
 }) {
-  const btnRef = useRef<HTMLButtonElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
+  const { containerRef, btnRef, panelRef, panelPos } = useFlyoutPosition(isOpen)
   useClickOutside([containerRef, panelRef], isOpen, onClose)
-
-  useEffect(() => {
-    if (!isOpen || !btnRef.current) return
-    const rect = btnRef.current.getBoundingClientRect()
-    const top = rect.top
-    const left = rect.right + 8
-    setPos({ top, left })
-    const rafId = requestAnimationFrame(() => {
-      const panel = panelRef.current
-      if (!panel) return
-      const panelRect = panel.getBoundingClientRect()
-      let adjustedTop = top
-      if (panelRect.bottom > window.innerHeight - 8) {
-        adjustedTop = Math.max(8, window.innerHeight - panelRect.height - 8)
-      }
-      if (adjustedTop !== top) setPos({ top: adjustedTop, left })
-    })
-    return () => cancelAnimationFrame(rafId)
-  }, [isOpen])
 
   return (
     <div ref={containerRef}>
@@ -473,7 +452,7 @@ function ToolGroupButton({
         <div
           ref={panelRef}
           className={`fixed z-[200] rounded-xl border p-2 shadow-xl ${dark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}
-          style={{ top: pos.top, left: pos.left }}
+          style={{ top: panelPos.top, left: panelPos.left }}
         >
           {children}
         </div>
@@ -541,32 +520,10 @@ function NgonGroupButton({ isOpen, activePreset, sides, onSidesChange, onToggle,
   onClose: () => void
   dark?: boolean
 }) {
-  const btnRef = useRef<HTMLButtonElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
+  const { containerRef, btnRef, panelRef, panelPos } = useFlyoutPosition(isOpen)
   useClickOutside([containerRef, panelRef], isOpen, onClose)
 
   const isNgonActive = activePreset?.id.startsWith('ngon_')
-
-  useEffect(() => {
-    if (!isOpen || !btnRef.current) return
-    const rect = btnRef.current.getBoundingClientRect()
-    const top = rect.top
-    const left = rect.right + 8
-    setPos({ top, left })
-    const rafId = requestAnimationFrame(() => {
-      const panel = panelRef.current
-      if (!panel) return
-      const panelRect = panel.getBoundingClientRect()
-      let adjustedTop = top
-      if (panelRect.bottom > window.innerHeight - 8) {
-        adjustedTop = Math.max(8, window.innerHeight - panelRect.height - 8)
-      }
-      if (adjustedTop !== top) setPos({ top: adjustedTop, left })
-    })
-    return () => cancelAnimationFrame(rafId)
-  }, [isOpen])
 
   const handleCreate = useCallback(() => {
     const preset: ShapePreset = {
@@ -601,7 +558,7 @@ function NgonGroupButton({ isOpen, activePreset, sides, onSidesChange, onToggle,
         <div
           ref={panelRef}
           className={`fixed z-[200] w-48 rounded-xl border p-3 shadow-xl ${dark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}
-          style={{ top: pos.top, left: pos.left }}
+          style={{ top: panelPos.top, left: panelPos.left }}
         >
           <div className={`text-[10px] font-semibold uppercase tracking-wider mb-2 ${dark ? 'text-slate-500' : 'text-slate-400'}`}>
             Regular Polygon

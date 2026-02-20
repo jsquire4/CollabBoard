@@ -6,7 +6,7 @@ import { useBoardState } from '@/hooks/useBoardState'
 import { useRealtimeChannel } from '@/hooks/useRealtimeChannel'
 import { usePresence } from '@/hooks/usePresence'
 import { useCursors } from '@/hooks/useCursors'
-import { useUndoStack, UndoEntry } from '@/hooks/useUndoStack'
+import { useUndoStack } from '@/hooks/useUndoStack'
 import { useDarkMode } from '@/hooks/useDarkMode'
 import { useVertexActions } from '@/hooks/board/useVertexActions'
 import { useLockActions } from '@/hooks/board/useLockActions'
@@ -17,10 +17,10 @@ import { useClipboardActions } from '@/hooks/board/useClipboardActions'
 import { useTableActions } from '@/hooks/board/useTableActions'
 import { parseTableData } from '@/lib/table/tableUtils'
 import { useConnectorActions } from '@/hooks/board/useConnectorActions'
+import { useConnectionManager } from '@/hooks/board/useConnectionManager'
+import { useGridSettings } from '@/hooks/board/useGridSettings'
+import { useUndoExecution } from '@/hooks/board/useUndoExecution'
 import { createClient } from '@/lib/supabase/client'
-import { fireAndRetry } from '@/lib/retryWithRollback'
-import { logger } from '@/lib/logger'
-import { toast } from 'sonner'
 import { BoardObject, BoardObjectType } from '@/types/board'
 import { RICH_TEXT_ENABLED, extractPlainText } from '@/lib/richText'
 import type { TipTapDoc } from '@/types/board'
@@ -39,7 +39,9 @@ import { getShapeAnchors } from './anchorPoints'
 import type { ShapePreset } from './shapePresets'
 import { scaleCustomPoints } from './shapePresets'
 import { BoardProvider, BoardContextValue } from '@/contexts/BoardContext'
-import { ConnectionBanner, ConnectionStatus } from '@/components/ui/ConnectionBanner'
+import { BoardMutationsProvider, BoardMutationsContextValue } from '@/contexts/BoardMutationsContext'
+import { BoardToolProvider, BoardToolContextValue } from '@/contexts/BoardToolContext'
+import { ConnectionBanner } from '@/components/ui/ConnectionBanner'
 import { ChatPanel } from './ChatPanel'
 
 // Konva is client-only — must disable SSR
@@ -121,6 +123,11 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     isObjectLocked, lockObject, unlockObject,
     waitForPersist,
   } = useBoardState(userId, boardId, userRole, channel, onlineUsers)
+  // Expose object count for E2E performance tests (no cleanup — survives hot-reload)
+  useEffect(() => {
+    (window as unknown as Record<string, unknown>).__boardObjectCount = objects.size
+  }, [objects.size])
+
   const [shareOpen, setShareOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [isEditingText, setIsEditingText] = useState(false)
@@ -128,41 +135,19 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const [activePreset, setActivePreset] = useState<ShapePreset | null>(null)
   const [vertexEditId, setVertexEditId] = useState<string | null>(null)
   const [pendingEditId, setPendingEditId] = useState<string | null>(null)
+  const clearPendingEditId = useCallback(() => setPendingEditId(null), [])
   const [snapIndicator, setSnapIndicator] = useState<{ x: number; y: number } | null>(null)
   const [shapePalette, setShapePalette] = useState<{ lineId: string; canvasX: number; canvasY: number; screenX?: number; screenY?: number } | null>(null)
 
   // Grid settings — initialized from server props, persisted on change
-  const [gridSize, setGridSize] = useState(initialGridSize)
-  const [gridSubdivisions, setGridSubdivisions] = useState(initialGridSubdivisions)
-  const [gridVisible, setGridVisible] = useState(initialGridVisible)
-  const [snapToGrid, setSnapToGrid] = useState(initialSnapToGrid)
-  const [gridStyle, setGridStyle] = useState(initialGridStyle)
-  const [canvasColor, setCanvasColor] = useState(initialCanvasColor)
-  const [gridColor, setGridColor] = useState(initialGridColor)
-  const [subdivisionColor, setSubdivisionColor] = useState(initialSubdivisionColor)
+  const { gridSize, gridSubdivisions, gridVisible, snapToGrid, gridStyle, canvasColor, gridColor, subdivisionColor, updateBoardSettings } = useGridSettings({
+    boardId,
+    initialGridSize, initialGridSubdivisions, initialGridVisible, initialSnapToGrid,
+    initialGridStyle, initialCanvasColor, initialGridColor, initialSubdivisionColor,
+  })
   const [uiDarkMode, setUiDarkMode] = useDarkMode()
 
   const supabaseRef = useRef(createClient())
-  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connected')
-
-  const notify = useCallback((msg: string) => toast.error(msg), [])
-
-  const updateBoardSettings = useCallback((updates: { grid_size?: number; grid_subdivisions?: number; grid_visible?: boolean; snap_to_grid?: boolean; grid_style?: string; canvas_color?: string; grid_color?: string; subdivision_color?: string }) => {
-    if (updates.grid_size !== undefined) setGridSize(updates.grid_size)
-    if (updates.grid_subdivisions !== undefined) setGridSubdivisions(updates.grid_subdivisions)
-    if (updates.grid_visible !== undefined) setGridVisible(updates.grid_visible)
-    if (updates.snap_to_grid !== undefined) setSnapToGrid(updates.snap_to_grid)
-    if (updates.grid_style !== undefined) setGridStyle(updates.grid_style)
-    if (updates.canvas_color !== undefined) setCanvasColor(updates.canvas_color)
-    if (updates.grid_color !== undefined) setGridColor(updates.grid_color)
-    if (updates.subdivision_color !== undefined) setSubdivisionColor(updates.subdivision_color)
-    // Persist to DB (fire-and-forget with retry)
-    fireAndRetry({
-      operation: () => supabaseRef.current.from('boards').update(updates).eq('id', boardId),
-      logError: (err) => logger.error({ message: 'Failed to save board settings', operation: 'updateBoardSettings', boardId, error: err }),
-      onError: (msg) => notify(msg),
-    })
-  }, [boardId, notify])
 
   const undoStack = useUndoStack()
   const MAX_RECENT_COLORS = 6
@@ -184,76 +169,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const autoRoutePointsRef = useRef<Map<string, number[]>>(new Map())
 
   // Subscribe LAST — after all hooks have registered their .on() listeners.
-  const hasConnectedRef = useRef(false)
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const reconnectAttemptRef = useRef(0)
-  const MAX_RECONNECT_ATTEMPTS = 5
-
-  useEffect(() => {
-    if (!channel) return
-
-    const attemptReconnect = () => {
-      // Bug 3 fix: increment first, then guard — so all MAX_RECONNECT_ATTEMPTS fire
-      reconnectAttemptRef.current += 1
-      if (reconnectAttemptRef.current > MAX_RECONNECT_ATTEMPTS) {
-        setConnectionStatus('disconnected')
-        return
-      }
-      // Clear any pending timer to avoid duplicate reconnects
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current)
-        reconnectTimerRef.current = null
-      }
-      setConnectionStatus('reconnecting')
-      const delay = Math.min(1000 * Math.pow(2, reconnectAttemptRef.current - 1), 16000)
-      reconnectTimerRef.current = setTimeout(() => {
-        // Bug 1 fix: unsubscribe first to transition 'errored' → 'closed' before re-subscribing
-        channel.unsubscribe()
-        channel.subscribe()
-      }, delay)
-    }
-
-    channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        if (reconnectTimerRef.current) {
-          clearTimeout(reconnectTimerRef.current)
-          reconnectTimerRef.current = null
-        }
-        reconnectAttemptRef.current = 0
-        setConnectionStatus('connected')
-        trackPresence()
-        if (hasConnectedRef.current) {
-          reconcileOnReconnect()
-        } else {
-          hasConnectedRef.current = true
-        }
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        // Bug 4 fix: go straight to reconnecting — skip the transient 'disconnected' state
-        // 'disconnected' is only set inside attemptReconnect when all attempts are exhausted
-        attemptReconnect()
-      }
-    })
-
-    return () => {
-      // Bug 2 fix: unsubscribe the channel to prevent stacked callbacks on effect re-runs
-      channel.unsubscribe()
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current)
-        reconnectTimerRef.current = null
-      }
-      reconnectAttemptRef.current = 0
-    }
-  }, [channel, trackPresence, reconcileOnReconnect])
-
-  // Auth expiry detection
-  useEffect(() => {
-    const { data: { subscription } } = supabaseRef.current.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') {
-        setConnectionStatus('auth_expired')
-      }
-    })
-    return () => subscription.unsubscribe()
-  }, [])
+  const { connectionStatus } = useConnectionManager({ channel, trackPresence, reconcileOnReconnect, supabaseRef })
 
   const canEdit = userRole !== 'viewer'
 
@@ -345,111 +261,9 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   }, [canEdit, connectorDrawLineFromAnchor])
 
   // --- Undo/Redo execution ---
-  const executeUndo = useCallback((entry: UndoEntry): UndoEntry | null => {
-    switch (entry.type) {
-      case 'add': {
-        const snapshots: BoardObject[] = []
-        for (const id of entry.ids) {
-          const obj = objects.get(id)
-          if (obj) {
-            snapshots.push({ ...obj })
-            deleteObject(id)
-          }
-        }
-        return snapshots.length > 0 ? { type: 'delete', objects: snapshots } : null
-      }
-      case 'delete': {
-        for (const obj of entry.objects) {
-          addObjectWithId(obj)
-        }
-        return { type: 'add', ids: entry.objects.map(o => o.id) }
-      }
-      case 'update': {
-        const inversePatches: { id: string; before: Partial<BoardObject> }[] = []
-        for (const patch of entry.patches) {
-          const current = objects.get(patch.id)
-          if (!current) continue
-          const inverseBefore: Partial<BoardObject> = {}
-          for (const key of Object.keys(patch.before)) {
-            (inverseBefore as unknown as Record<string, unknown>)[key] = (current as unknown as Record<string, unknown>)[key]
-          }
-          inversePatches.push({ id: patch.id, before: inverseBefore })
-          updateObject(patch.id, patch.before)
-        }
-        return { type: 'update', patches: inversePatches }
-      }
-      case 'move': {
-        const inversePatches: typeof entry.patches = []
-        for (const patch of entry.patches) {
-          const current = objects.get(patch.id)
-          if (!current) continue
-          inversePatches.push({ id: patch.id, before: { x: current.x, y: current.y, x2: current.x2, y2: current.y2, parent_id: current.parent_id, waypoints: current.waypoints, connect_start_id: current.connect_start_id, connect_end_id: current.connect_end_id, connect_start_anchor: current.connect_start_anchor, connect_end_anchor: current.connect_end_anchor } })
-          const updates: Partial<BoardObject> = { x: patch.before.x, y: patch.before.y, parent_id: patch.before.parent_id }
-          if (patch.before.x2 !== undefined) updates.x2 = patch.before.x2
-          if (patch.before.y2 !== undefined) updates.y2 = patch.before.y2
-          if (patch.before.waypoints !== undefined) updates.waypoints = patch.before.waypoints
-          if (patch.before.connect_start_id !== undefined) updates.connect_start_id = patch.before.connect_start_id
-          if (patch.before.connect_end_id !== undefined) updates.connect_end_id = patch.before.connect_end_id
-          if (patch.before.connect_start_anchor !== undefined) updates.connect_start_anchor = patch.before.connect_start_anchor
-          if (patch.before.connect_end_anchor !== undefined) updates.connect_end_anchor = patch.before.connect_end_anchor
-          updateObject(patch.id, updates)
-        }
-        return { type: 'move', patches: inversePatches }
-      }
-      case 'duplicate': {
-        const snapshots: BoardObject[] = []
-        for (const id of entry.ids) {
-          const obj = objects.get(id)
-          if (obj) {
-            snapshots.push({ ...obj })
-            const descendants = getDescendants(id)
-            for (const d of descendants) {
-              snapshots.push({ ...d })
-            }
-            deleteObject(id)
-          }
-        }
-        return snapshots.length > 0 ? { type: 'delete', objects: snapshots } : null
-      }
-      case 'group': {
-        const groupSnapshot = objects.get(entry.groupId)
-        if (!groupSnapshot) return null
-        for (const childId of entry.childIds) {
-          const prevParent = entry.previousParentIds.get(childId) ?? null
-          updateObject(childId, { parent_id: prevParent })
-        }
-        deleteObject(entry.groupId)
-        return { type: 'ungroup', groupSnapshot, childIds: entry.childIds }
-      }
-      case 'ungroup': {
-        // Capture current parent_ids BEFORE mutating, to avoid stale closure reads
-        const previousParentIds = new Map<string, string | null>()
-        for (const childId of entry.childIds) {
-          const child = objects.get(childId)
-          previousParentIds.set(childId, child?.parent_id ?? null)
-        }
-        addObjectWithId(entry.groupSnapshot)
-        for (const childId of entry.childIds) {
-          updateObject(childId, { parent_id: entry.groupSnapshot.id })
-        }
-        return { type: 'group', groupId: entry.groupSnapshot.id, childIds: entry.childIds, previousParentIds }
-      }
-    }
-  }, [objects, deleteObject, addObjectWithId, updateObject, getDescendants])
-
-  const performUndo = useCallback(() => {
-    const entry = undoStack.popUndo()
-    if (!entry) return
-    const inverse = executeUndo(entry)
-    if (inverse) undoStack.pushRedo(inverse)
-  }, [undoStack, executeUndo])
-
-  const performRedo = useCallback(() => {
-    const entry = undoStack.popRedo()
-    if (!entry) return
-    const inverse = executeUndo(entry)
-    if (inverse) undoStack.pushUndo(inverse)
-  }, [undoStack, executeUndo])
+  const { performUndo, performRedo } = useUndoExecution({
+    objects, deleteObject, addObjectWithId, updateObject, getDescendants, undoStack,
+  })
 
   // --- Handlers with undo capture ---
   const handlePresetSelect = useCallback((preset: ShapePreset) => {
@@ -714,8 +528,119 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     canvasColor, gridColor, subdivisionColor, uiDarkMode,
   ])
 
+  // ── Mutations context (all callbacks for Canvas + child components) ──
+  const mutationsValue: BoardMutationsContextValue = useMemo(() => ({
+    onDrawShape: handleDrawShape,
+    onCancelTool: handleCancelTool,
+    onSelect: selectObject,
+    onSelectObjects: selectObjects,
+    onClearSelection: clearSelection,
+    onEnterGroup: enterGroup,
+    onExitGroup: exitGroup,
+    onDragStart: handleDragStart,
+    onDragEnd: handleDragEnd,
+    onDragMove: handleDragMove,
+    onUpdateText: handleUpdateText,
+    onUpdateTitle: handleUpdateTitle,
+    onUpdateRichText: RICH_TEXT_ENABLED ? handleUpdateRichText : undefined,
+    onEditorReady: RICH_TEXT_ENABLED ? setRichTextEditor : undefined,
+    onTransformEnd: handleTransformEnd,
+    onDelete: handleDelete,
+    onDuplicate: handleDuplicate,
+    onCopy: handleCopy,
+    onPaste: handlePaste,
+    onColorChange: handleColorChange,
+    onBringToFront: handleBringToFront,
+    onBringForward: handleBringForward,
+    onSendBackward: handleSendBackward,
+    onSendToBack: handleSendToBack,
+    onGroup: handleGroup,
+    onUngroup: handleUngroup,
+    canGroup,
+    canUngroup,
+    onStrokeStyleChange: handleStrokeStyleChange,
+    onOpacityChange: handleOpacityChange,
+    onMarkerChange: handleMarkerChange,
+    onUndo: performUndo,
+    onRedo: performRedo,
+    onCheckFrameContainment: checkFrameContainment,
+    onMoveGroupChildren: moveGroupChildren,
+    recentColors,
+    colors: EXPANDED_PALETTE,
+    selectedColor,
+    onEndpointDragMove: handleEndpointDragMove,
+    onEndpointDragEnd: handleEndpointDragEnd,
+    onCursorMove: sendCursorWithActivity,
+    onCursorUpdate,
+    onEditingChange: setIsEditingText,
+    anySelectedLocked,
+    onLock: handleLockSelected,
+    onUnlock: handleUnlockSelected,
+    canLock: selectedCanLock,
+    canUnlock: selectedCanUnlock,
+    vertexEditId,
+    onEditVertices: handleEditVertices,
+    onExitVertexEdit: handleExitVertexEdit,
+    onVertexDragEnd: handleVertexDragEnd,
+    onVertexInsert: handleVertexInsert,
+    canEditVertices,
+    snapIndicator,
+    onActivity: markActivity,
+    pendingEditId,
+    onPendingEditConsumed: clearPendingEditId,
+    onWaypointDragEnd: handleWaypointDragEnd,
+    onWaypointInsert: handleWaypointInsert,
+    onWaypointDelete: handleWaypointDelete,
+    autoRoutePointsRef,
+    onDrawLineFromAnchor: handleDrawLineFromAnchor,
+    onUpdateTableCell: handleCellTextUpdate,
+    onTableDataChange: handleTableDataChange,
+    onAddRow: handleAddRow,
+    onDeleteRow: handleDeleteRow,
+    onAddColumn: handleAddColumn,
+    onDeleteColumn: handleDeleteColumn,
+    onAddRowAt: handleAddRowAt,
+    onDeleteRowAt: handleDeleteRowAt,
+    onAddColumnAt: handleAddColumnAt,
+    onDeleteColumnAt: handleDeleteColumnAt,
+  }), [
+    handleDrawShape, handleCancelTool,
+    selectObject, selectObjects, clearSelection, enterGroup, exitGroup,
+    handleDragStart, handleDragEnd, handleDragMove,
+    handleUpdateText, handleUpdateTitle, handleUpdateRichText, setRichTextEditor,
+    handleTransformEnd,
+    handleDelete, handleDuplicate, handleCopy, handlePaste,
+    handleColorChange, handleBringToFront, handleBringForward, handleSendBackward, handleSendToBack,
+    handleGroup, handleUngroup, canGroup, canUngroup,
+    handleStrokeStyleChange, handleOpacityChange, handleMarkerChange,
+    performUndo, performRedo,
+    checkFrameContainment, moveGroupChildren,
+    recentColors, selectedColor,
+    handleEndpointDragMove, handleEndpointDragEnd,
+    sendCursorWithActivity, onCursorUpdate,
+    anySelectedLocked,
+    handleLockSelected, handleUnlockSelected, selectedCanLock, selectedCanUnlock,
+    vertexEditId, handleEditVertices, handleExitVertexEdit, handleVertexDragEnd, handleVertexInsert,
+    canEditVertices, snapIndicator,
+    markActivity, pendingEditId, clearPendingEditId,
+    handleWaypointDragEnd, handleWaypointInsert, handleWaypointDelete,
+    autoRoutePointsRef, handleDrawLineFromAnchor,
+    handleCellTextUpdate, handleTableDataChange,
+    handleAddRow, handleDeleteRow, handleAddColumn, handleDeleteColumn,
+    handleAddRowAt, handleDeleteRowAt, handleAddColumnAt, handleDeleteColumnAt,
+  ])
+
+  // ── Tool context ──
+  const toolValue: BoardToolContextValue = useMemo(() => ({
+    activePreset,
+    setActiveTool,
+    setActivePreset,
+  }), [activePreset])
+
   return (
     <BoardProvider value={boardContextValue}>
+    <BoardMutationsProvider value={mutationsValue}>
+    <BoardToolProvider value={toolValue}>
     <div className="relative flex h-screen flex-col">
       <BoardTopBar
         boardId={boardId}
@@ -786,82 +711,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         />
         <div className="relative flex-1 overflow-hidden">
           <CanvasErrorBoundary>
-            <Canvas
-              onDrawShape={handleDrawShape}
-              onCancelTool={handleCancelTool}
-              onSelect={selectObject}
-              onSelectObjects={selectObjects}
-              onClearSelection={clearSelection}
-              onEnterGroup={enterGroup}
-              onExitGroup={exitGroup}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragMove={handleDragMove}
-              onUpdateText={handleUpdateText}
-              onUpdateTitle={handleUpdateTitle}
-              onUpdateRichText={RICH_TEXT_ENABLED ? handleUpdateRichText : undefined}
-              onEditorReady={RICH_TEXT_ENABLED ? setRichTextEditor : undefined}
-              onTransformEnd={handleTransformEnd}
-              onDelete={handleDelete}
-              onDuplicate={handleDuplicate}
-              onCopy={handleCopy}
-              onPaste={handlePaste}
-              onColorChange={handleColorChange}
-              onBringToFront={handleBringToFront}
-              onBringForward={handleBringForward}
-              onSendBackward={handleSendBackward}
-              onSendToBack={handleSendToBack}
-              onGroup={handleGroup}
-              onUngroup={handleUngroup}
-              canGroup={canGroup}
-              canUngroup={canUngroup}
-              onStrokeStyleChange={handleStrokeStyleChange}
-              onOpacityChange={handleOpacityChange}
-              onMarkerChange={handleMarkerChange}
-              onEndpointDragMove={handleEndpointDragMove}
-              onEndpointDragEnd={handleEndpointDragEnd}
-              onUndo={performUndo}
-              onRedo={performRedo}
-              onCheckFrameContainment={checkFrameContainment}
-              onMoveGroupChildren={moveGroupChildren}
-              recentColors={recentColors}
-              colors={EXPANDED_PALETTE}
-              selectedColor={selectedColor}
-              onCursorMove={sendCursorWithActivity}
-              onCursorUpdate={onCursorUpdate}
-              onActivity={markActivity}
-              onEditingChange={setIsEditingText}
-              anySelectedLocked={anySelectedLocked}
-              onLock={handleLockSelected}
-              onUnlock={handleUnlockSelected}
-              canLock={selectedCanLock}
-              canUnlock={selectedCanUnlock}
-              vertexEditId={vertexEditId}
-              onEditVertices={handleEditVertices}
-              onExitVertexEdit={handleExitVertexEdit}
-              onVertexDragEnd={handleVertexDragEnd}
-              onVertexInsert={handleVertexInsert}
-              canEditVertices={canEditVertices}
-              snapIndicator={snapIndicator}
-              pendingEditId={pendingEditId}
-              onPendingEditConsumed={() => setPendingEditId(null)}
-              onUpdateBoardSettings={updateBoardSettings}
-              onWaypointDragEnd={handleWaypointDragEnd}
-              onWaypointInsert={handleWaypointInsert}
-              onWaypointDelete={handleWaypointDelete}
-              autoRoutePointsRef={autoRoutePointsRef}
-              onDrawLineFromAnchor={handleDrawLineFromAnchor}
-              onUpdateTableCell={handleCellTextUpdate}
-              onTableDataChange={handleTableDataChange}
-              onAddRow={handleAddRow}
-              onDeleteRow={handleDeleteRow}
-              onAddColumn={handleAddColumn}
-              onDeleteColumn={handleDeleteColumn}
-              onAddRowAt={handleAddRowAt}
-              onDeleteRowAt={handleDeleteRowAt}
-              onAddColumnAt={handleAddColumnAt}
-              onDeleteColumnAt={handleDeleteColumnAt}
-            />
+            <Canvas />
           </CanvasErrorBoundary>
         </div>
       </div>
@@ -892,6 +742,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
       </button>
       <ChatPanel boardId={boardId} isOpen={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
+    </BoardToolProvider>
+    </BoardMutationsProvider>
     </BoardProvider>
   )
 }

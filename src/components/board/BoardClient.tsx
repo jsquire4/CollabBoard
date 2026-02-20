@@ -15,6 +15,7 @@ import { useZOrderActions } from '@/hooks/board/useZOrderActions'
 import { useGroupActions } from '@/hooks/board/useGroupActions'
 import { useClipboardActions } from '@/hooks/board/useClipboardActions'
 import { useTableActions } from '@/hooks/board/useTableActions'
+import { parseTableData } from '@/lib/table/tableUtils'
 import { useConnectorActions } from '@/hooks/board/useConnectorActions'
 import { createClient } from '@/lib/supabase/client'
 import { fireAndRetry } from '@/lib/retryWithRollback'
@@ -307,8 +308,13 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     handleDeleteRow,
     handleAddColumn,
     handleDeleteColumn,
+    handleAddRowAt,
+    handleDeleteRowAt,
+    handleAddColumnAt,
+    handleDeleteColumnAt,
     handleTableDataChange,
     handleCellTextUpdate,
+    handleTableHeaderStyleChange,
   } = useTableActions({ objects, selectedIds, canEdit, updateObject, undoStack })
 
   const {
@@ -672,6 +678,19 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     }
   }, [selectedIds, objects])
 
+  const selectedTableHeaderInfo = useMemo(() => {
+    if (selectedIds.size !== 1) return null
+    const [id] = selectedIds
+    const obj = objects.get(id)
+    if (!obj || obj.type !== 'table') return null
+    const data = parseTableData(obj.table_data)
+    if (!data) return null
+    return {
+      headerBg: data.header_bg ?? '#F3F4F6',
+      headerTextColor: data.header_text_color ?? '#374151',
+    }
+  }, [selectedIds, objects])
+
   // ── Board context (read-only shared state for child components) ──
   const boardContextValue: BoardContextValue = useMemo(() => ({
     objects, selectedIds, activeGroupId, sortedObjects, remoteSelections,
@@ -759,6 +778,9 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           onPresetSelect={handlePresetSelect}
           uiDarkMode={uiDarkMode}
           richTextEditor={RICH_TEXT_ENABLED ? richTextEditor : undefined}
+          selectedTableHeaderBg={selectedTableHeaderInfo?.headerBg}
+          selectedTableHeaderTextColor={selectedTableHeaderInfo?.headerTextColor}
+          onTableHeaderStyleChange={handleTableHeaderStyleChange}
         />
         <div className="relative flex-1 overflow-hidden">
           <CanvasErrorBoundary>
@@ -833,6 +855,10 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
               onDeleteRow={handleDeleteRow}
               onAddColumn={handleAddColumn}
               onDeleteColumn={handleDeleteColumn}
+              onAddRowAt={handleAddRowAt}
+              onDeleteRowAt={handleDeleteRowAt}
+              onAddColumnAt={handleAddColumnAt}
+              onDeleteColumnAt={handleDeleteColumnAt}
             />
           </CanvasErrorBoundary>
         </div>

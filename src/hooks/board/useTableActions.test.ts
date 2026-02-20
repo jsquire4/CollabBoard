@@ -207,6 +207,363 @@ describe('useTableActions', () => {
     })
   })
 
+  describe('handleAddRowAt', () => {
+    it('inserts a row before the given index', () => {
+      const tableData = createDefaultTableData(3, 3)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleAddRowAt('t1', 1))
+
+      const [, updates] = deps.updateObject.mock.calls[0]
+      const newData = parseTableData(updates.table_data)
+      expect(newData?.rows).toHaveLength(4)
+      // Original row 1 should now be at index 2
+      expect(newData?.rows[1].id).not.toBe(tableData.rows[1].id)
+      expect(newData?.rows[2].id).toBe(tableData.rows[1].id)
+    })
+
+    it('prepends when beforeIndex is 0', () => {
+      const tableData = createDefaultTableData(3, 2)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleAddRowAt('t1', 0))
+
+      const [, updates] = deps.updateObject.mock.calls[0]
+      const newData = parseTableData(updates.table_data)
+      expect(newData?.rows).toHaveLength(3)
+      // Original row 0 should now be at index 1
+      expect(newData?.rows[1].id).toBe(tableData.rows[0].id)
+    })
+
+    it('pushes an undo entry', () => {
+      const tableData = createDefaultTableData(3, 2)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleAddRowAt('t1', 1))
+
+      expect(deps.undoStack.push).toHaveBeenCalledWith({
+        type: 'update',
+        patches: [{ id: 't1', before: { table_data: serialized, width: table.width, height: table.height } }],
+      })
+    })
+
+    it('appends when beforeIndex equals row count', () => {
+      const tableData = createDefaultTableData(3, 3)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleAddRowAt('t1', 3))
+
+      const [, updates] = deps.updateObject.mock.calls[0]
+      const newData = parseTableData(updates.table_data)
+      expect(newData?.rows).toHaveLength(4)
+      // Original rows 0-2 are undisturbed
+      expect(newData?.rows[0].id).toBe(tableData.rows[0].id)
+      expect(newData?.rows[2].id).toBe(tableData.rows[2].id)
+    })
+
+    it('updates width and height in updateObject call', () => {
+      const tableData = createDefaultTableData(3, 2)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleAddRowAt('t1', 1))
+
+      const [, updates] = deps.updateObject.mock.calls[0]
+      const expectedWidth = 3 * DEFAULT_COL_WIDTH
+      const expectedHeight = DEFAULT_HEADER_HEIGHT + 3 * DEFAULT_ROW_HEIGHT
+      expect(updates.width).toBe(expectedWidth)
+      expect(updates.height).toBe(expectedHeight)
+    })
+
+    it('is a no-op when canEdit is false', () => {
+      const table = makeTable({ id: 't1' })
+      const deps = makeDeps({ canEdit: false, objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleAddRowAt('t1', 0))
+      expect(deps.updateObject).not.toHaveBeenCalled()
+    })
+
+    it('is a no-op when the id is not found in objects', () => {
+      const deps = makeDeps({ objects: new Map() })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleAddRowAt('nonexistent', 0))
+      expect(deps.updateObject).not.toHaveBeenCalled()
+      expect(deps.undoStack.push).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('handleDeleteRowAt', () => {
+    it('removes the row at the given index', () => {
+      const tableData = createDefaultTableData(3, 3)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleDeleteRowAt('t1', 1))
+
+      const [, updates] = deps.updateObject.mock.calls[0]
+      const newData = parseTableData(updates.table_data)
+      expect(newData?.rows).toHaveLength(2)
+      expect(newData?.rows.some(r => r.id === tableData.rows[1].id)).toBe(false)
+    })
+
+    it('is a no-op when only 1 row exists (min guard)', () => {
+      const tableData = createDefaultTableData(3, 1)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleDeleteRowAt('t1', 0))
+      expect(deps.updateObject).not.toHaveBeenCalled()
+      expect(deps.undoStack.push).not.toHaveBeenCalled()
+    })
+
+    it('removes the last row', () => {
+      const tableData = createDefaultTableData(3, 3)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleDeleteRowAt('t1', 2))
+
+      const [, updates] = deps.updateObject.mock.calls[0]
+      const newData = parseTableData(updates.table_data)
+      expect(newData?.rows).toHaveLength(2)
+      expect(newData?.rows.some(r => r.id === tableData.rows[2].id)).toBe(false)
+      expect(updates.height).toBe(DEFAULT_HEADER_HEIGHT + 2 * DEFAULT_ROW_HEIGHT)
+    })
+
+    it('updates width and height in updateObject call', () => {
+      const tableData = createDefaultTableData(3, 3)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleDeleteRowAt('t1', 0))
+
+      const [, updates] = deps.updateObject.mock.calls[0]
+      expect(updates.width).toBe(3 * DEFAULT_COL_WIDTH)
+      expect(updates.height).toBe(DEFAULT_HEADER_HEIGHT + 2 * DEFAULT_ROW_HEIGHT)
+    })
+
+    it('is a no-op when canEdit is false', () => {
+      const tableData = createDefaultTableData(3, 3)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ canEdit: false, objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleDeleteRowAt('t1', 0))
+      expect(deps.updateObject).not.toHaveBeenCalled()
+    })
+
+    it('is a no-op when the id is not found in objects', () => {
+      const deps = makeDeps({ objects: new Map() })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleDeleteRowAt('nonexistent', 0))
+      expect(deps.updateObject).not.toHaveBeenCalled()
+      expect(deps.undoStack.push).not.toHaveBeenCalled()
+    })
+
+    it('pushes an undo entry', () => {
+      const tableData = createDefaultTableData(3, 2)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleDeleteRowAt('t1', 0))
+
+      expect(deps.undoStack.push).toHaveBeenCalledWith({
+        type: 'update',
+        patches: [{ id: 't1', before: { table_data: serialized, width: table.width, height: table.height } }],
+      })
+    })
+  })
+
+  describe('handleAddColumnAt', () => {
+    it('inserts a column before the given index', () => {
+      const tableData = createDefaultTableData(3, 3)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleAddColumnAt('t1', 1))
+
+      const [, updates] = deps.updateObject.mock.calls[0]
+      const newData = parseTableData(updates.table_data)
+      expect(newData?.columns).toHaveLength(4)
+      // Original col 1 should now be at index 2
+      expect(newData?.columns[2].id).toBe(tableData.columns[1].id)
+    })
+
+    it('prepends when beforeIndex is 0', () => {
+      const tableData = createDefaultTableData(2, 2)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleAddColumnAt('t1', 0))
+
+      const [, updates] = deps.updateObject.mock.calls[0]
+      const newData = parseTableData(updates.table_data)
+      expect(newData?.columns).toHaveLength(3)
+      expect(newData?.columns[1].id).toBe(tableData.columns[0].id)
+    })
+
+    it('appends when beforeIndex equals column count', () => {
+      const tableData = createDefaultTableData(3, 3)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleAddColumnAt('t1', 3))
+
+      const [, updates] = deps.updateObject.mock.calls[0]
+      const newData = parseTableData(updates.table_data)
+      expect(newData?.columns).toHaveLength(4)
+      expect(newData?.columns[0].id).toBe(tableData.columns[0].id)
+      expect(newData?.columns[2].id).toBe(tableData.columns[2].id)
+    })
+
+    it('updates width and height in updateObject call', () => {
+      const tableData = createDefaultTableData(2, 2)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleAddColumnAt('t1', 1))
+
+      const [, updates] = deps.updateObject.mock.calls[0]
+      expect(updates.width).toBe(3 * DEFAULT_COL_WIDTH)
+      expect(updates.height).toBe(DEFAULT_HEADER_HEIGHT + 2 * DEFAULT_ROW_HEIGHT)
+    })
+
+    it('is a no-op when canEdit is false', () => {
+      const table = makeTable({ id: 't1' })
+      const deps = makeDeps({ canEdit: false, objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleAddColumnAt('t1', 0))
+      expect(deps.updateObject).not.toHaveBeenCalled()
+    })
+
+    it('is a no-op when the id is not found in objects', () => {
+      const deps = makeDeps({ objects: new Map() })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleAddColumnAt('nonexistent', 0))
+      expect(deps.updateObject).not.toHaveBeenCalled()
+      expect(deps.undoStack.push).not.toHaveBeenCalled()
+    })
+
+    it('pushes an undo entry', () => {
+      const tableData = createDefaultTableData(2, 2)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleAddColumnAt('t1', 0))
+
+      expect(deps.undoStack.push).toHaveBeenCalledWith({
+        type: 'update',
+        patches: [{ id: 't1', before: { table_data: serialized, width: table.width, height: table.height } }],
+      })
+    })
+  })
+
+  describe('handleDeleteColumnAt', () => {
+    it('removes the column at the given index', () => {
+      const tableData = createDefaultTableData(3, 3)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleDeleteColumnAt('t1', 0))
+
+      const [, updates] = deps.updateObject.mock.calls[0]
+      const newData = parseTableData(updates.table_data)
+      expect(newData?.columns).toHaveLength(2)
+      expect(newData?.columns.some(c => c.id === tableData.columns[0].id)).toBe(false)
+    })
+
+    it('is a no-op when only 1 column exists (min guard)', () => {
+      const tableData = createDefaultTableData(1, 3)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleDeleteColumnAt('t1', 0))
+      expect(deps.updateObject).not.toHaveBeenCalled()
+      expect(deps.undoStack.push).not.toHaveBeenCalled()
+    })
+
+    it('removes the last column', () => {
+      const tableData = createDefaultTableData(3, 3)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleDeleteColumnAt('t1', 2))
+
+      const [, updates] = deps.updateObject.mock.calls[0]
+      const newData = parseTableData(updates.table_data)
+      expect(newData?.columns).toHaveLength(2)
+      expect(newData?.columns.some(c => c.id === tableData.columns[2].id)).toBe(false)
+      expect(updates.width).toBe(2 * DEFAULT_COL_WIDTH)
+    })
+
+    it('updates width and height in updateObject call', () => {
+      const tableData = createDefaultTableData(3, 3)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleDeleteColumnAt('t1', 1))
+
+      const [, updates] = deps.updateObject.mock.calls[0]
+      expect(updates.width).toBe(2 * DEFAULT_COL_WIDTH)
+      expect(updates.height).toBe(DEFAULT_HEADER_HEIGHT + 3 * DEFAULT_ROW_HEIGHT)
+    })
+
+    it('is a no-op when canEdit is false', () => {
+      const tableData = createDefaultTableData(3, 3)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ canEdit: false, objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleDeleteColumnAt('t1', 0))
+      expect(deps.updateObject).not.toHaveBeenCalled()
+    })
+
+    it('is a no-op when the id is not found in objects', () => {
+      const deps = makeDeps({ objects: new Map() })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleDeleteColumnAt('nonexistent', 0))
+      expect(deps.updateObject).not.toHaveBeenCalled()
+      expect(deps.undoStack.push).not.toHaveBeenCalled()
+    })
+
+    it('pushes an undo entry', () => {
+      const tableData = createDefaultTableData(2, 2)
+      const serialized = serializeTableData(tableData)
+      const table = makeTable({ id: 't1', table_data: serialized })
+      const deps = makeDeps({ objects: objectsMap(table) })
+      const { result } = renderHook(() => useTableActions(deps))
+      act(() => result.current.handleDeleteColumnAt('t1', 1))
+
+      expect(deps.undoStack.push).toHaveBeenCalledWith({
+        type: 'update',
+        patches: [{ id: 't1', before: { table_data: serialized, width: table.width, height: table.height } }],
+      })
+    })
+  })
+
   describe('handleTableDataChange', () => {
     it('calls updateObject with the new table_data and computed width/height, and pushes undo entry', () => {
       const originalTableData = createDefaultTableData(3, 3)

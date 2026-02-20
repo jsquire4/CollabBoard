@@ -157,13 +157,17 @@ export function useTextEditing({
     setEditingField('text')
     setEditingCellCoords({ row, col })
 
-    // Get cell text from table_data
+    // Get cell text from table_data (row === -1 means column header)
     let initialText = ''
     if (obj.table_data) {
       try {
         const data = typeof obj.table_data === 'string' ? JSON.parse(obj.table_data) : obj.table_data
-        const colId = data.columns?.[col]?.id
-        initialText = data.rows?.[row]?.cells?.[colId]?.text ?? ''
+        if (row === -1) {
+          initialText = data.columns?.[col]?.name ?? ''
+        } else {
+          const colId = data.columns?.[col]?.id
+          initialText = data.rows?.[row]?.cells?.[colId]?.text ?? ''
+        }
       } catch { /* empty */ }
     }
     setEditText(initialText)
@@ -176,7 +180,7 @@ export function useTextEditing({
       height: `${textRect.height}px`,
       fontSize: `${(obj.font_size || 14) * stageScale}px`,
       fontFamily: obj.font_family || 'sans-serif',
-      fontWeight: 'normal',
+      fontWeight: row === -1 ? 'bold' : 'normal',
       fontStyle: 'normal',
       textAlign: 'left',
       padding: '0px',
@@ -200,6 +204,15 @@ export function useTextEditing({
 
     const data = parseTableData(obj.table_data)
     if (!data) return
+
+    // Header rows don't support cell navigation
+    if (editingCellCoords.row === -1) {
+      if (e.key === 'Tab' || e.key === 'Enter') {
+        e.preventDefault()
+        handleFinishEdit()
+      }
+      return
+    }
 
     let direction: 'right' | 'left' | 'down' | 'up' | null = null
     if (e.key === 'Tab' && !e.shiftKey) { direction = 'right'; e.preventDefault() }

@@ -104,6 +104,10 @@ interface CanvasProps {
   onDeleteRow?: () => void
   onAddColumn?: () => void
   onDeleteColumn?: () => void
+  onAddRowAt?: (id: string, beforeIndex: number) => void
+  onDeleteRowAt?: (id: string, rowIndex: number) => void
+  onAddColumnAt?: (id: string, beforeIndex: number) => void
+  onDeleteColumnAt?: (id: string, colIndex: number) => void
 }
 
 export function Canvas({
@@ -143,6 +147,10 @@ export function Canvas({
   onDeleteRow,
   onAddColumn,
   onDeleteColumn,
+  onAddRowAt,
+  onDeleteRowAt,
+  onAddColumnAt,
+  onDeleteColumnAt,
 }: CanvasProps) {
   // ── Read shared state from context ──────────────────────────────
   const {
@@ -492,6 +500,8 @@ export function Canvas({
     onWaypointDragEnd, onWaypointInsert, onWaypointDelete,
     getAutoRoutePoints, autoRoutePointsRef,
     handleStartCellEdit, handleTableDataChange: onTableDataChange,
+    handleAddRowAt: onAddRowAt, handleDeleteRowAt: onDeleteRowAt,
+    handleAddColumnAt: onAddColumnAt, handleDeleteColumnAt: onDeleteColumnAt,
   }), [
     handleShapeDragEnd, handleShapeDragMove, handleShapeDragStart,
     handleShapeSelect, handleShapeRef, onTransformEnd, handleContextMenu,
@@ -500,6 +510,7 @@ export function Canvas({
     onWaypointDragEnd, onWaypointInsert, onWaypointDelete,
     getAutoRoutePoints, autoRoutePointsRef,
     handleStartCellEdit, onTableDataChange,
+    onAddRowAt, onDeleteRowAt, onAddColumnAt, onDeleteColumnAt,
   ])
 
   return (

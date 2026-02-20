@@ -62,6 +62,9 @@ interface LeftToolbarProps {
   onPresetSelect: (preset: ShapePreset) => void
   uiDarkMode?: boolean
   richTextEditor?: Editor | null
+  selectedTableHeaderBg?: string
+  selectedTableHeaderTextColor?: string
+  onTableHeaderStyleChange?: (updates: { header_bg?: string; header_text_color?: string }) => void
 }
 
 // IDs that belong to each tool group (for active-state highlighting)
@@ -115,6 +118,9 @@ export function LeftToolbar({
   onPresetSelect,
   uiDarkMode = false,
   richTextEditor,
+  selectedTableHeaderBg,
+  selectedTableHeaderTextColor,
+  onTableHeaderStyleChange,
 }: LeftToolbarProps) {
   const canEdit = userRole !== 'viewer'
   const dk = uiDarkMode
@@ -289,6 +295,24 @@ export function LeftToolbar({
                 dark={dk}
                 label="Fill"
               />
+              {selectedTableHeaderBg !== undefined && (
+                <>
+                  <ColorPicker
+                    selectedColor={selectedTableHeaderBg}
+                    onColorChange={(c) => onTableHeaderStyleChange?.({ header_bg: c })}
+                    compact
+                    dark={dk}
+                    label="Header"
+                  />
+                  <ColorPicker
+                    selectedColor={selectedTableHeaderTextColor}
+                    onColorChange={(c) => onTableHeaderStyleChange?.({ header_text_color: c })}
+                    compact
+                    dark={dk}
+                    label="Hdr Text"
+                  />
+                </>
+              )}
               <BorderColorButton
                 currentColor={selectedStrokeColor}
                 onColorChange={onStrokeColorChange}

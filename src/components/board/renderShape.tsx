@@ -28,6 +28,10 @@ export interface ShapeCallbacks {
   autoRoutePointsRef?: React.MutableRefObject<Map<string, number[]>>
   handleStartCellEdit?: (id: string, textNode: Konva.Text, row: number, col: number) => void
   handleTableDataChange?: (id: string, tableData: string) => void
+  handleAddRowAt?: (id: string, beforeIndex: number) => void
+  handleDeleteRowAt?: (id: string, rowIndex: number) => void
+  handleAddColumnAt?: (id: string, beforeIndex: number) => void
+  handleDeleteColumnAt?: (id: string, colIndex: number) => void
 }
 
 export interface ShapeState {
@@ -53,6 +57,7 @@ export function renderShape(
     onWaypointDragEnd, onWaypointInsert, onWaypointDelete,
     getAutoRoutePoints, autoRoutePointsRef,
     handleStartCellEdit, handleTableDataChange,
+    handleAddRowAt, handleDeleteRowAt, handleAddColumnAt, handleDeleteColumnAt,
   } = callbacks
 
   const isSelected = selectedIds.has(obj.id)
@@ -175,6 +180,10 @@ export function renderShape(
           editingCellCoords={editingId === obj.id ? editingCellCoords : null}
           onStartCellEdit={handleStartCellEdit}
           onTableDataChange={handleTableDataChange}
+          onAddRowAt={handleAddRowAt}
+          onDeleteRowAt={handleDeleteRowAt}
+          onAddColumnAt={handleAddColumnAt}
+          onDeleteColumnAt={handleDeleteColumnAt}
         />
       )
     case 'group':

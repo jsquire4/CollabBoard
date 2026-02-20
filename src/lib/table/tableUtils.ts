@@ -336,6 +336,15 @@ export function parseTableData(json: unknown): TableData | null {
 }
 
 /**
+ * Rename the column at `colIndex`.
+ */
+export function setColumnName(data: TableData, colIndex: number, name: string): TableData {
+  if (colIndex < 0 || colIndex >= data.columns.length) return data
+  const columns = data.columns.map((c, i) => i === colIndex ? { ...c, name } : c)
+  return { ...data, columns }
+}
+
+/**
  * Serialize a TableData to a JSON string.
  */
 export function serializeTableData(data: TableData): string {

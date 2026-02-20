@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { getShapeAnchors, findNearestAnchor } from './anchorPoints'
-import { makeRectangle, makeCircle, makeObject, makeLine, resetFactory } from '@/test/boardObjectFactory'
+import { makeRectangle, makeCircle, makeObject, makeLine, makeTable, resetFactory } from '@/test/boardObjectFactory'
 
 describe('anchorPoints', () => {
   beforeEach(() => resetFactory())
@@ -78,6 +78,15 @@ describe('anchorPoints', () => {
       const anchors = getShapeAnchors(sticky)
       expect(anchors.some(a => a.id === 'center')).toBe(true)
       expect(anchors.some(a => a.id === 'midpoint-0')).toBe(true)
+    })
+
+    it('returns edge-midpoint anchors for table shape', () => {
+      const table = makeTable({ id: 't1', x: 0, y: 0, width: 360, height: 128 })
+      const anchors = getShapeAnchors(table)
+      expect(anchors.some(a => a.id === 'center')).toBe(true)
+      expect(anchors.some(a => a.id === 'midpoint-0')).toBe(true)
+      expect(anchors.filter(a => a.id.startsWith('vertex-')).length).toBe(4)
+      expect(anchors.filter(a => a.id.startsWith('midpoint-')).length).toBe(4)
     })
   })
 

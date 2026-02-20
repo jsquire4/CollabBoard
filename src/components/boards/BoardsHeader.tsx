@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useDarkModeValue } from '@/hooks/useDarkMode'
+import { getUserDisplayName } from '@/lib/userUtils'
 
 export function BoardsHeader() {
   const [userName, setUserName] = useState<string>('')
@@ -15,8 +16,7 @@ export function BoardsHeader() {
   useEffect(() => {
     supabaseRef.current.auth.getUser().then(({ data: { user } }) => {
       if (user) {
-        const name = user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email?.split('@')[0] ?? 'User'
-        setUserName(name)
+        setUserName(getUserDisplayName(user))
       }
     })
   }, [])

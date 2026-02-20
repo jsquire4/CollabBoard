@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { fetchBoardRole } from '@/lib/supabase/boardsApi'
 import { BoardClient } from '@/components/board/BoardClient'
+import { getUserDisplayName } from '@/lib/userUtils'
 
 interface BoardPageProps {
   params: Promise<{ id: string }>
@@ -27,10 +28,7 @@ export default async function BoardPage({ params }: BoardPageProps) {
 
   if (!userRole) notFound()
 
-  const displayName = user.user_metadata?.full_name
-    || user.user_metadata?.name
-    || user.email?.split('@')[0]
-    || 'Anonymous'
+  const displayName = getUserDisplayName(user)
 
   return (
     <BoardClient

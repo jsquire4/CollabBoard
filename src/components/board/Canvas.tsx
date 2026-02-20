@@ -116,7 +116,6 @@ export function Canvas() {
 
   const {
     contextMenu, setContextMenu, handleContextMenu, handleStageContextMenu,
-    contextTargetId, handleCtxBringToFront, handleCtxBringForward, handleCtxSendBackward, handleCtxSendToBack,
   } = useContextMenu({
     onSelect, onBringToFront, onBringForward, onSendBackward, onSendToBack,
     didPanRef, onActivity,
@@ -732,34 +731,7 @@ export function Canvas() {
         uiDarkMode={uiDarkMode}
         contextMenu={contextMenu}
         setContextMenu={setContextMenu}
-        onDelete={onDelete}
-        onDuplicate={onDuplicate}
-        onColorChange={onColorChange}
         recentColors={recentColors}
-        colors={colors}
-        selectedColor={selectedColor}
-        onStrokeStyleChange={onStrokeStyleChange}
-        onOpacityChange={onOpacityChange}
-        handleCtxBringToFront={handleCtxBringToFront}
-        handleCtxBringForward={handleCtxBringForward}
-        handleCtxSendBackward={handleCtxSendBackward}
-        handleCtxSendToBack={handleCtxSendToBack}
-        onGroup={onGroup}
-        onUngroup={onUngroup}
-        canGroup={canGroup}
-        canUngroup={canUngroup}
-        isObjectLocked={isObjectLocked ?? (() => false)}
-        onLock={onLock}
-        onUnlock={onUnlock}
-        canLock={canLock}
-        canUnlock={canUnlock}
-        onEditVertices={onEditVertices}
-        canEditVertices={canEditVertices}
-        onMarkerChange={onMarkerChange}
-        onAddRow={onAddRow}
-        onDeleteRow={onDeleteRow}
-        onAddColumn={onAddColumn}
-        onDeleteColumn={onDeleteColumn}
         onCellKeyDown={handleCellKeyDown}
       />
 

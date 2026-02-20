@@ -1,48 +1,15 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { MarkerIcon, MARKER_TYPES, MARKER_LABELS, MarkerType } from './lineMarkers'
+import { useBoardMutations } from '@/contexts/BoardMutationsContext'
+import { useBoardContext } from '@/contexts/BoardContext'
 
 interface ContextMenuProps {
   position: { x: number; y: number }
-  onDelete: () => void
-  onDuplicate: () => void
-  onColorChange: (color: string) => void
+  objectId: string
   onClose: () => void
   recentColors?: string[]
-  colors: string[]
-  currentColor?: string
-  /** When true, show line-specific options like markers */
-  isLine?: boolean
-  isTable?: boolean
-  onAddRow?: () => void
-  onDeleteRow?: () => void
-  onAddColumn?: () => void
-  onDeleteColumn?: () => void
-  onStrokeStyleChange?: (updates: { stroke_color?: string | null; stroke_width?: number; stroke_dash?: string }) => void
-  onOpacityChange?: (opacity: number) => void
-  currentStrokeWidth?: number
-  currentStrokeDash?: string
-  currentStrokeColor?: string | null
-  currentOpacity?: number
-  onBringToFront?: () => void
-  onBringForward?: () => void
-  onSendBackward?: () => void
-  onSendToBack?: () => void
-  onGroup?: () => void
-  onUngroup?: () => void
-  canGroup?: boolean
-  canUngroup?: boolean
-  isLocked?: boolean
-  onLock?: () => void
-  onUnlock?: () => void
-  canLockShape?: boolean
-  canUnlockShape?: boolean
-  onEditVertices?: () => void
-  canEditVertices?: boolean
-  onMarkerChange?: (updates: { marker_start?: string; marker_end?: string }) => void
-  currentMarkerStart?: string
-  currentMarkerEnd?: string
 }
 
 function MenuItem({
@@ -95,44 +62,69 @@ const STROKE_COLOR_SWATCHES = [
 
 export function ContextMenu({
   position,
-  onDelete,
-  onDuplicate,
-  onColorChange,
+  objectId,
   onClose,
   recentColors,
-  colors,
-  currentColor,
-  isLine,
-  isTable,
-  onAddRow,
-  onDeleteRow,
-  onAddColumn,
-  onDeleteColumn,
-  onStrokeStyleChange,
-  onOpacityChange,
-  currentStrokeWidth,
-  currentStrokeDash,
-  currentStrokeColor,
-  currentOpacity,
-  onBringToFront,
-  onBringForward,
-  onSendBackward,
-  onSendToBack,
-  onGroup,
-  onUngroup,
-  canGroup,
-  canUngroup,
-  isLocked,
-  onLock,
-  onUnlock,
-  canLockShape,
-  canUnlockShape,
-  onEditVertices,
-  canEditVertices,
-  onMarkerChange,
-  currentMarkerStart,
-  currentMarkerEnd,
 }: ContextMenuProps) {
+  const {
+    onDelete,
+    onDuplicate,
+    onColorChange,
+    onStrokeStyleChange,
+    onOpacityChange,
+    onBringToFront,
+    onBringForward,
+    onSendBackward,
+    onSendToBack,
+    onGroup,
+    onUngroup,
+    canGroup,
+    canUngroup,
+    onLock,
+    onUnlock,
+    canLock,
+    canUnlock,
+    onEditVertices,
+    canEditVertices,
+    onMarkerChange,
+    onAddRow,
+    onDeleteRow,
+    onAddColumn,
+    onDeleteColumn,
+    colors,
+    selectedColor,
+  } = useBoardMutations()
+
+  const { objects, isObjectLocked, activeGroupId } = useBoardContext()
+
+  const ctxObj = objects.get(objectId)
+  const isLine = ctxObj?.type === 'line' || ctxObj?.type === 'arrow'
+  const isTable = ctxObj?.type === 'table'
+  const isLocked = isObjectLocked(objectId)
+  const currentColor = selectedColor ?? ctxObj?.color
+  const currentStrokeWidth = ctxObj?.stroke_width
+  const currentStrokeDash = ctxObj?.stroke_dash
+  const currentStrokeColor = ctxObj?.stroke_color
+  const currentOpacity = ctxObj?.opacity ?? 1
+  const currentMarkerStart = ctxObj?.marker_start ?? (ctxObj?.type === 'arrow' ? 'arrow' : 'none')
+  const currentMarkerEnd = ctxObj?.marker_end ?? (ctxObj?.type === 'arrow' ? 'arrow' : 'none')
+
+  // Resolve context target ID — if shape is in a group and not inside active group,
+  // z-order operations apply to the top-level group ancestor
+  const contextTargetId = useMemo(() => {
+    const obj = objects.get(objectId)
+    if (obj?.parent_id && !activeGroupId) {
+      let current = obj
+      while (current.parent_id) {
+        const parent = objects.get(current.parent_id)
+        if (!parent) break
+        current = parent
+      }
+      return current.id
+    }
+    return objectId
+  }, [objectId, objects, activeGroupId])
+
   const menuRef = useRef<HTMLDivElement>(null)
   const [showAllColors, setShowAllColors] = useState(false)
   const [pos, setPos] = useState({ x: position.x, y: position.y })
@@ -164,6 +156,8 @@ export function ContextMenu({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [position.x, position.y])
 
+  const displayColors = showAllColors ? colors : (recentColors ?? colors.slice(0, 6))
+
   return (
     <div
       ref={menuRef}
@@ -176,19 +170,19 @@ export function ContextMenu({
       }}
     >
       {/* Lock/Unlock */}
-      {canLockShape && !isLocked && onLock && (
+      {canLock && !isLocked && (
         <MenuItem
           onClick={() => { onLock(); }}
           label="Lock"
         />
       )}
-      {canUnlockShape && isLocked && onUnlock && (
+      {canUnlock && isLocked && (
         <MenuItem
           onClick={() => { onUnlock(); }}
           label="Unlock"
         />
       )}
-      {isLocked && !canUnlockShape && (
+      {isLocked && !canUnlock && (
         <div className="px-3 py-2 text-sm text-slate-400">Shape locked</div>
       )}
 
@@ -208,7 +202,7 @@ export function ContextMenu({
         </>
       )}
 
-      {!isLocked && canEditVertices && onEditVertices && (
+      {!isLocked && canEditVertices && (
         <>
           <div className="my-1 h-px bg-slate-200" />
           <MenuItem
@@ -218,65 +212,57 @@ export function ContextMenu({
         </>
       )}
 
-      {!isLocked && (onBringToFront || onSendToBack) && (
+      {!isLocked && (
         <>
           <div className="my-1 h-px bg-slate-200" />
           <div className="px-3 py-1 text-xs font-medium text-slate-500">Layer</div>
           <div className="flex items-center gap-1 px-2 py-1">
-            {onBringToFront && (
-              <button
-                type="button"
-                onClick={() => { onBringToFront(); onClose() }}
-                className="rounded p-1.5 text-slate-600 transition hover:bg-slate-100"
-                title="Bring to Front (Ctrl+Shift+])"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 11V5h6M19 13v6h-6" />
-                  <rect x="3" y="3" width="8" height="8" rx="1" strokeWidth={2} fill="none" />
-                  <rect x="13" y="13" width="8" height="8" rx="1" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
-                </svg>
-              </button>
-            )}
-            {onBringForward && (
-              <button
-                type="button"
-                onClick={() => { onBringForward(); onClose() }}
-                className="rounded p-1.5 text-slate-600 transition hover:bg-slate-100"
-                title="Bring Forward (Ctrl+])"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 11l5-5 5 5" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12" />
-                </svg>
-              </button>
-            )}
-            {onSendBackward && (
-              <button
-                type="button"
-                onClick={() => { onSendBackward(); onClose() }}
-                className="rounded p-1.5 text-slate-600 transition hover:bg-slate-100"
-                title="Send Backward (Ctrl+[)"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 13l5 5 5-5" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 18V6" />
-                </svg>
-              </button>
-            )}
-            {onSendToBack && (
-              <button
-                type="button"
-                onClick={() => { onSendToBack(); onClose() }}
-                className="rounded p-1.5 text-slate-600 transition hover:bg-slate-100"
-                title="Send to Back (Ctrl+Shift+[)"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <rect x="13" y="3" width="8" height="8" rx="1" strokeWidth={2} fill="none" />
-                  <rect x="3" y="13" width="8" height="8" rx="1" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 13v6h-6M5 11V5h6" />
-                </svg>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => { onBringToFront(contextTargetId); onClose() }}
+              className="rounded p-1.5 text-slate-600 transition hover:bg-slate-100"
+              title="Bring to Front (Ctrl+Shift+])"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 11V5h6M19 13v6h-6" />
+                <rect x="3" y="3" width="8" height="8" rx="1" strokeWidth={2} fill="none" />
+                <rect x="13" y="13" width="8" height="8" rx="1" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => { onBringForward(contextTargetId); onClose() }}
+              className="rounded p-1.5 text-slate-600 transition hover:bg-slate-100"
+              title="Bring Forward (Ctrl+])"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 11l5-5 5 5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => { onSendBackward(contextTargetId); onClose() }}
+              className="rounded p-1.5 text-slate-600 transition hover:bg-slate-100"
+              title="Send Backward (Ctrl+[)"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 13l5 5 5-5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18V6" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => { onSendToBack(contextTargetId); onClose() }}
+              className="rounded p-1.5 text-slate-600 transition hover:bg-slate-100"
+              title="Send to Back (Ctrl+Shift+[)"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <rect x="13" y="3" width="8" height="8" rx="1" strokeWidth={2} fill="none" />
+                <rect x="3" y="13" width="8" height="8" rx="1" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 13v6h-6M5 11V5h6" />
+              </svg>
+            </button>
           </div>
         </>
       )}
@@ -284,10 +270,10 @@ export function ContextMenu({
       {!isLocked && (canGroup || canUngroup) && (
         <>
           <div className="my-1 h-px bg-slate-200" />
-          {canGroup && onGroup && (
+          {canGroup && (
             <MenuItem onClick={() => { onGroup(); onClose() }} label="Group" shortcut="Ctrl+G" />
           )}
-          {canUngroup && onUngroup && (
+          {canUngroup && (
             <MenuItem onClick={() => { onUngroup(); onClose() }} label="Ungroup" shortcut="Ctrl+Shift+G" />
           )}
         </>
@@ -297,15 +283,15 @@ export function ContextMenu({
       {!isLocked && isTable && (
         <>
           <div className="my-1 h-px bg-slate-200" />
-          <MenuItem onClick={() => onAddRow?.()} label="Add Row" />
-          <MenuItem onClick={() => onDeleteRow?.()} label="Delete Row" />
-          <MenuItem onClick={() => onAddColumn?.()} label="Add Column" />
-          <MenuItem onClick={() => onDeleteColumn?.()} label="Delete Column" />
+          <MenuItem onClick={() => onAddRow()} label="Add Row" />
+          <MenuItem onClick={() => onDeleteRow()} label="Delete Row" />
+          <MenuItem onClick={() => onAddColumn()} label="Add Column" />
+          <MenuItem onClick={() => onDeleteColumn()} label="Delete Column" />
         </>
       )}
 
       {/* Stroke style presets */}
-      {!isLocked && onStrokeStyleChange && (
+      {!isLocked && (
         <>
           <div className="my-1 h-px bg-slate-200" />
           <div className="px-3 py-2">
@@ -334,7 +320,7 @@ export function ContextMenu({
       )}
 
       {/* Markers (lines only) */}
-      {!isLocked && isLine && onMarkerChange && (
+      {!isLocked && isLine && (
         <>
           <div className="my-1 h-px bg-slate-200" />
           <div className="px-3 py-2">
@@ -379,7 +365,7 @@ export function ContextMenu({
       )}
 
       {/* Outline (stroke color) for all shapes */}
-      {!isLocked && onStrokeStyleChange && (
+      {!isLocked && (
         <>
           <div className="my-1 h-px bg-slate-200" />
           <div className="px-3 py-2">
@@ -413,7 +399,7 @@ export function ContextMenu({
       )}
 
       {/* Opacity presets */}
-      {!isLocked && onOpacityChange && (
+      {!isLocked && (
         <>
           <div className="my-1 h-px bg-slate-200" />
           <div className="px-3 py-2">
@@ -444,7 +430,7 @@ export function ContextMenu({
       <div className="px-3 py-2">
         <div className="mb-1.5 text-xs font-medium text-slate-500">Color</div>
         <div className="flex flex-wrap gap-1">
-          {(showAllColors ? colors : (recentColors ?? colors.slice(0, 6))).map((color) => (
+          {displayColors.map((color) => (
             <button
               key={color}
               type="button"

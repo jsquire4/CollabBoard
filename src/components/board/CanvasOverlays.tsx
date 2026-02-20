@@ -50,34 +50,7 @@ interface CanvasOverlaysProps {
   // Context menu
   contextMenu: ContextMenuState | null
   setContextMenu: (m: ContextMenuState | null) => void
-  onDelete: () => void
-  onDuplicate: () => void
-  onColorChange: (color: string) => void
   recentColors?: string[]
-  colors: string[]
-  selectedColor?: string
-  onStrokeStyleChange?: (updates: { stroke_color?: string | null; stroke_width?: number; stroke_dash?: string }) => void
-  onOpacityChange?: (opacity: number) => void
-  handleCtxBringToFront: () => void
-  handleCtxBringForward: () => void
-  handleCtxSendBackward: () => void
-  handleCtxSendToBack: () => void
-  onGroup: () => void
-  onUngroup: () => void
-  canGroup: boolean
-  canUngroup: boolean
-  isObjectLocked: (id: string) => boolean
-  onLock?: () => void
-  onUnlock?: () => void
-  canLock?: boolean
-  canUnlock?: boolean
-  onEditVertices?: () => void
-  canEditVertices?: boolean
-  onMarkerChange?: (updates: { marker_start?: string; marker_end?: string }) => void
-  onAddRow?: () => void
-  onDeleteRow?: () => void
-  onAddColumn?: () => void
-  onDeleteColumn?: () => void
   onCellKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
 }
 
@@ -86,14 +59,7 @@ export function CanvasOverlays({
   handleFinishEdit, onUpdateText, onUpdateTitle, objects,
   connectorHint, stageScale, stagePos, connectorDrawingRefs,
   zoomIn, zoomOut, resetZoom, uiDarkMode,
-  contextMenu, setContextMenu, onDelete, onDuplicate, onColorChange,
-  recentColors, colors, selectedColor,
-  onStrokeStyleChange, onOpacityChange,
-  handleCtxBringToFront, handleCtxBringForward, handleCtxSendBackward, handleCtxSendToBack,
-  onGroup, onUngroup, canGroup, canUngroup,
-  isObjectLocked, onLock, onUnlock, canLock, canUnlock,
-  onEditVertices, canEditVertices, onMarkerChange,
-  onAddRow, onDeleteRow, onAddColumn, onDeleteColumn,
+  contextMenu, setContextMenu, recentColors,
   onCellKeyDown,
 }: CanvasOverlaysProps) {
   return (
@@ -197,53 +163,14 @@ export function CanvasOverlays({
       </div>
 
       {/* Right-click context menu */}
-      {contextMenu && (() => {
-        const ctxObj = objects.get(contextMenu.objectId)
-        const isLine = ctxObj?.type === 'line' || ctxObj?.type === 'arrow'
-        const isTableObj = ctxObj?.type === 'table'
-        return (
+      {contextMenu && (
         <ContextMenu
           position={{ x: contextMenu.x, y: contextMenu.y }}
-          onDelete={onDelete}
-          onDuplicate={onDuplicate}
-          onColorChange={onColorChange}
+          objectId={contextMenu.objectId}
           onClose={() => setContextMenu(null)}
           recentColors={recentColors}
-          colors={colors}
-          currentColor={selectedColor}
-          isLine={isLine}
-          onStrokeStyleChange={onStrokeStyleChange}
-          onOpacityChange={onOpacityChange}
-          currentStrokeWidth={ctxObj?.stroke_width}
-          currentStrokeDash={ctxObj?.stroke_dash}
-          currentStrokeColor={ctxObj?.stroke_color}
-          currentOpacity={ctxObj?.opacity ?? 1}
-          onBringToFront={handleCtxBringToFront}
-          onBringForward={handleCtxBringForward}
-          onSendBackward={handleCtxSendBackward}
-          onSendToBack={handleCtxSendToBack}
-          onGroup={onGroup}
-          onUngroup={onUngroup}
-          canGroup={canGroup}
-          canUngroup={canUngroup}
-          isLocked={isObjectLocked(contextMenu.objectId)}
-          onLock={() => { onLock?.(); setContextMenu(null) }}
-          onUnlock={() => { onUnlock?.(); setContextMenu(null) }}
-          canLockShape={canLock}
-          canUnlockShape={canUnlock}
-          onEditVertices={onEditVertices}
-          canEditVertices={canEditVertices}
-          onMarkerChange={onMarkerChange}
-          currentMarkerStart={ctxObj?.marker_start ?? (ctxObj?.type === 'arrow' ? 'arrow' : 'none')}
-          currentMarkerEnd={ctxObj?.marker_end ?? (ctxObj?.type === 'arrow' ? 'arrow' : 'none')}
-          isTable={isTableObj}
-          onAddRow={onAddRow}
-          onDeleteRow={onDeleteRow}
-          onAddColumn={onAddColumn}
-          onDeleteColumn={onDeleteColumn}
         />
-        )
-      })()}
+      )}
     </>
   )
 }

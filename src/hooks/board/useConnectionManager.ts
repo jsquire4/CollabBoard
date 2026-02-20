@@ -22,6 +22,7 @@ export function useConnectionManager({
 } {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connected')
   const hasConnectedRef = useRef(false)
+  const mountedRef = useRef(true)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reconnectAttemptRef = useRef(0)
   const MAX_RECONNECT_ATTEMPTS = 5
@@ -45,6 +46,7 @@ export function useConnectionManager({
       setConnectionStatus('reconnecting')
       const delay = Math.min(1000 * Math.pow(2, reconnectAttemptRef.current - 1), 16000)
       reconnectTimerRef.current = setTimeout(() => {
+        reconnectTimerRef.current = null
         // Bug 1 fix: unsubscribe first to transition 'errored' → 'closed' before re-subscribing
         channel.unsubscribe()
         channel.subscribe()
@@ -52,6 +54,7 @@ export function useConnectionManager({
     }
 
     channel.subscribe((status) => {
+      if (!mountedRef.current) return
       if (status === 'SUBSCRIBED') {
         if (reconnectTimerRef.current) {
           clearTimeout(reconnectTimerRef.current)
@@ -73,6 +76,7 @@ export function useConnectionManager({
     })
 
     return () => {
+      mountedRef.current = false
       // Bug 2 fix: unsubscribe the channel to prevent stacked callbacks on effect re-runs
       channel.unsubscribe()
       if (reconnectTimerRef.current) {

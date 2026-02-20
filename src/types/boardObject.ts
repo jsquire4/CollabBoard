@@ -1,5 +1,5 @@
 import type { HLC } from '@/lib/crdt/hlc'
-import type { BoardObjectType, FontStyle } from './board'
+import type { BoardObjectType, FontStyle, MarkerType } from './board'
 
 // --- Sub-interfaces ---
 
@@ -59,8 +59,8 @@ export interface BoardObjectConnector {
   connect_end_id?: string | null
   connect_end_anchor?: string | null
   waypoints?: string | null
-  marker_start?: string | null
-  marker_end?: string | null
+  marker_start?: MarkerType | null
+  marker_end?: MarkerType | null
 }
 
 export interface BoardObjectPolygon {

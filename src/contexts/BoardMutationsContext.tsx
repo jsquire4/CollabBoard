@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from 'react'
 import type React from 'react'
-import type { BoardObject, BoardObjectType } from '@/types/board'
+import type { BoardObject, BoardObjectType, MarkerType } from '@/types/board'
 import type { Editor } from '@tiptap/react'
 import type { RemoteCursorData } from '@/hooks/useCursors'
 
@@ -42,7 +42,7 @@ export interface BoardMutationsContextValue {
   onColorChange: (color: string) => void
   onStrokeStyleChange: (updates: { stroke_color?: string | null; stroke_width?: number; stroke_dash?: string }) => void
   onOpacityChange: (opacity: number) => void
-  onMarkerChange: (updates: { marker_start?: string; marker_end?: string }) => void
+  onMarkerChange: (updates: { marker_start?: MarkerType; marker_end?: MarkerType }) => void
 
   // Z-order
   onBringToFront: (id: string) => void
@@ -101,9 +101,6 @@ export interface BoardMutationsContextValue {
   // Pending edit
   pendingEditId: string | null
   onPendingEditConsumed: () => void
-
-  // Board settings
-  onUpdateBoardSettings: (updates: { grid_size?: number; grid_subdivisions?: number; grid_visible?: boolean; snap_to_grid?: boolean; grid_style?: string; canvas_color?: string; grid_color?: string; subdivision_color?: string }) => void
 
   // Waypoints
   onWaypointDragEnd: (id: string, waypointIndex: number, x: number, y: number) => void

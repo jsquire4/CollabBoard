@@ -29,7 +29,6 @@ import { LockIconOverlay } from './LockIconOverlay'
 import { CanvasOverlays } from './CanvasOverlays'
 import { RichTextStaticLayer } from './RichTextStaticLayer'
 import { RICH_TEXT_ENABLED } from '@/lib/richText'
-import type { RemoteCursorData } from '@/hooks/useCursors'
 
 // Shape types that support triple-click text editing (all registry shapes)
 const TRIPLE_CLICK_TEXT_TYPES = new Set(shapeRegistry.keys())
@@ -134,7 +133,7 @@ export function Canvas() {
     for (const id of selectedIds) {
       const obj = objects.get(id)
       // Skip locked shapes — they should not be part of the Transformer
-      if (isObjectLocked?.(id)) continue
+      if (isObjectLocked(id)) continue
       if (obj?.type === 'group') {
         for (const d of getDescendants(id)) {
           if (d.type !== 'group' && !isVectorType(d.type)) ids.add(d.id)
@@ -220,7 +219,7 @@ export function Canvas() {
   // Keyboard shortcuts (delegated to extracted hook)
   useKeyboardShortcuts({
     editingId, canEdit, selectedIds, activeGroupId, activeTool,
-    vertexEditId: vertexEditId ?? null, anySelectedLocked: anySelectedLocked ?? false,
+    vertexEditId, anySelectedLocked,
     onDelete, onDuplicate, onCopy, onPaste, onGroup, onUngroup,
     onClearSelection, onExitGroup, onCancelTool, onUndo, onRedo,
     onExitVertexEdit,
@@ -298,7 +297,7 @@ export function Canvas() {
 
   // Handle shape click with modifier keys + triple-click detection
   const handleShapeSelect = useCallback((id: string) => {
-    onActivity?.()
+    onActivity()
     // Triple-click detection: a click shortly after a double-click on the same shape
     const prev = lastDblClickRef.current
     if (prev && prev.id === id && Date.now() - prev.time < 500) {
@@ -366,7 +365,7 @@ export function Canvas() {
 
   // Shape rendering state + callbacks (stable references for renderShape)
   const shapeState: ShapeState = useMemo(() => ({
-    selectedIds, isObjectLocked: isObjectLocked ?? (() => false), canEdit, editingId, editingField, editingCellCoords,
+    selectedIds, isObjectLocked, canEdit, editingId, editingField, editingCellCoords,
   }), [selectedIds, isObjectLocked, canEdit, editingId, editingField, editingCellCoords])
 
   const shapeCallbacks: ShapeCallbacks = useMemo(() => ({
@@ -478,7 +477,7 @@ export function Canvas() {
           {visibleObjects.map(obj => renderShape(obj, shapeState, shapeCallbacks))}
 
           {/* Lock icon overlays for locked shapes */}
-          <LockIconOverlay visibleObjects={visibleObjects} isObjectLocked={isObjectLocked ?? (() => false)} />
+          <LockIconOverlay visibleObjects={visibleObjects} isObjectLocked={isObjectLocked} />
 
           {/* Marquee selection rectangle */}
           {marquee && (

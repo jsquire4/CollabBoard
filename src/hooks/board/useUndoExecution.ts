@@ -102,6 +102,7 @@ export function useUndoExecution({
             const descendants = getDescendants(id)
             for (const d of descendants) {
               snapshots.push({ ...d })
+              deleteObject(d.id)
             }
             deleteObject(id)
           }
@@ -135,6 +136,10 @@ export function useUndoExecution({
           childIds: entry.childIds,
           previousParentIds,
         }
+      }
+      default: {
+        const _exhaustive: never = entry
+        return null
       }
     }
   }, [objects, deleteObject, addObjectWithId, updateObject, getDescendants])

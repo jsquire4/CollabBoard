@@ -597,7 +597,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     onDeleteRowAt: handleDeleteRowAt,
     onAddColumnAt: handleAddColumnAt,
     onDeleteColumnAt: handleDeleteColumnAt,
-    onUpdateBoardSettings: updateBoardSettings,
   }), [
     handleDrawShape, handleCancelTool,
     selectObject, selectObjects, clearSelection, enterGroup, exitGroup,
@@ -623,7 +622,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     handleCellTextUpdate, handleTableDataChange,
     handleAddRow, handleDeleteRow, handleAddColumn, handleDeleteColumn,
     handleAddRowAt, handleDeleteRowAt, handleAddColumnAt, handleDeleteColumnAt,
-    updateBoardSettings,
   ])
 
   // ── Tool context ──

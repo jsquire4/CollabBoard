@@ -250,6 +250,8 @@ describe('useUndoExecution', () => {
       act(() => { inverse = result.current.executeUndo(entry) })
 
       expect(deps.deleteObject).toHaveBeenCalledWith('r1')
+      // deleteObject must also be called for descendants, not just top-level ids
+      expect(deps.deleteObject).toHaveBeenCalledWith('c1')
       const inv = asEntry<Extract<UndoEntry, { type: 'delete' }>>(inverse)
       expect(inv.type).toBe('delete')
       // Should include r1 itself AND its descendant c1

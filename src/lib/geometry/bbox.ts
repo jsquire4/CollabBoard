@@ -24,7 +24,7 @@ export function getGroupBoundingBox(
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   for (const c of children) {
-    if (isVectorType(c.type)) {
+    if (isVectorType(c)) {
       const cx2 = c.x2 ?? c.x + c.width
       const cy2 = c.y2 ?? c.y + c.height
       minX = Math.min(minX, c.x, cx2)
@@ -59,7 +59,7 @@ export function isObjectInViewport(
 ): boolean {
   if (obj.type === 'group' || obj.type === 'file') return false
 
-  if (isVectorType(obj.type)) {
+  if (isVectorType(obj)) {
     const ex2 = obj.x2 ?? obj.x + obj.width
     const ey2 = obj.y2 ?? obj.y + obj.height
     const objLeft = Math.min(obj.x, ex2)

@@ -51,6 +51,8 @@ export function useRichTextEditing({
 
   // Track focus timeout so rapid shape switching can cancel stale focus calls
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Track geometric-text init timeout so it can be cancelled on unmount
+  const geometricEditTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Ref for onUpdateText so the useEditor onUpdate closure always calls the latest version
   const onUpdateTextRef = useRef(onUpdateText)
@@ -78,9 +80,6 @@ export function useRichTextEditing({
     },
   }, [enabled])
 
-  const editorRef = useRef<Editor | null>(null)
-  useEffect(() => { editorRef.current = editor }, [editor])
-
   // Refs for commit helper — avoids circular dependency between handleStartEdit and handleFinishEdit
   const editingFieldRef = useRef(editingField)
   useEffect(() => { editingFieldRef.current = editingField }, [editingField])
@@ -107,7 +106,8 @@ export function useRichTextEditing({
       if (editor && !editor.isDestroyed) {
         const doc = editor.getJSON() as TipTapDoc
         const json = JSON.stringify(doc)
-        const before = beforeEditRef.current ?? { text: '', rich_text: null }
+        const before = beforeEditRef.current
+        if (!before) return // edit started without a captured before-state — skip to avoid wiping content
         onUpdateRichTextRef.current(id, json, before)
       }
     }
@@ -241,7 +241,9 @@ export function useRichTextEditing({
     } else {
       // Shape has no text yet — initialize with empty text then start editing
       onUpdateText(id, ' ')
-      setTimeout(() => {
+      if (geometricEditTimerRef.current) clearTimeout(geometricEditTimerRef.current)
+      geometricEditTimerRef.current = setTimeout(() => {
+        geometricEditTimerRef.current = null
         const node = shapeRefs.current.get(id)
         const tn = (node as Konva.Group)?.findOne?.('Text') as Konva.Text | undefined
         if (tn) handleStartEdit(id, tn)
@@ -292,6 +294,13 @@ export function useRichTextEditing({
     return () => cancelAnimationFrame(rafId)
   }, [pendingEditId, onPendingEditConsumed, startGeometricTextEdit])
 
+  // Cleanup any pending timers on unmount
+  useEffect(() => {
+    return () => {
+      if (geometricEditTimerRef.current) clearTimeout(geometricEditTimerRef.current)
+    }
+  }, [])
+
   return {
     editingId,
     editingField,
@@ -300,7 +309,6 @@ export function useRichTextEditing({
     textareaStyle,
     textareaRef,
     editor,
-    editorRef,
     overlayStyle,
     handleStartEdit,
     handleFinishEdit,

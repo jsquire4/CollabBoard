@@ -47,7 +47,7 @@ export function addColumn(data: TableData, afterIndex?: number): TableData {
 
   const newCol: TableColumn = {
     id: crypto.randomUUID(),
-    name: `Column ${insertAt + 1}`,
+    name: `Column ${data.columns.length + 1}`,
     width: DEFAULT_COL_WIDTH,
   }
 
@@ -118,6 +118,7 @@ export function addRow(data: TableData, afterIndex?: number): TableData {
  * Guard: returns unchanged data when only 1 row exists.
  */
 export function deleteRow(data: TableData, rowIndex: number): TableData {
+  if (rowIndex < 0 || rowIndex >= data.rows.length) return data
   if (data.rows.length <= 1) return data
 
   const rows = data.rows.filter((_, i) => i !== rowIndex)

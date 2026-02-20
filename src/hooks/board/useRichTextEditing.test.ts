@@ -227,11 +227,10 @@ describe('useRichTextEditing', () => {
     expect(result.current.lastDblClickRef.current).toBeNull()
   })
 
-  it('returns editor and editorRef', () => {
+  it('returns editor', () => {
     const deps = createDefaultDeps()
     const { result } = renderHook(() => useRichTextEditing(deps))
     expect(result.current.editor).toBeDefined()
-    expect(result.current.editorRef).toBeDefined()
   })
 
   it('sets overlay style for text field editing', () => {

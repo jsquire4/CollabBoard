@@ -51,8 +51,8 @@ export function useTableActions({
     const before: Partial<BoardObject> = { table_data: obj.table_data, width: obj.width, height: obj.height }
     const newData = addRow(data)
     const newTableData = serializeTableData(newData)
-    updateObject(obj.id, { table_data: newTableData, width: getTableWidth(newData), height: getTableHeight(newData) })
     undoStack.push({ type: 'update', patches: [{ id: obj.id, before }] })
+    updateObject(obj.id, { table_data: newTableData, width: getTableWidth(newData), height: getTableHeight(newData) })
   }, [canEdit, getSelectedTable, updateObject, undoStack])
 
   const handleDeleteRow = useCallback(() => {
@@ -66,8 +66,8 @@ export function useTableActions({
     const newData = deleteRow(data, data.rows.length - 1)
     if (newData === data) return // min 1 guard triggered
     const newTableData = serializeTableData(newData)
-    updateObject(obj.id, { table_data: newTableData, width: getTableWidth(newData), height: getTableHeight(newData) })
     undoStack.push({ type: 'update', patches: [{ id: obj.id, before }] })
+    updateObject(obj.id, { table_data: newTableData, width: getTableWidth(newData), height: getTableHeight(newData) })
   }, [canEdit, getSelectedTable, updateObject, undoStack])
 
   const handleAddColumn = useCallback(() => {
@@ -80,8 +80,8 @@ export function useTableActions({
     const before: Partial<BoardObject> = { table_data: obj.table_data, width: obj.width, height: obj.height }
     const newData = addColumn(data)
     const newTableData = serializeTableData(newData)
-    updateObject(obj.id, { table_data: newTableData, width: getTableWidth(newData), height: getTableHeight(newData) })
     undoStack.push({ type: 'update', patches: [{ id: obj.id, before }] })
+    updateObject(obj.id, { table_data: newTableData, width: getTableWidth(newData), height: getTableHeight(newData) })
   }, [canEdit, getSelectedTable, updateObject, undoStack])
 
   const handleDeleteColumn = useCallback(() => {
@@ -95,8 +95,8 @@ export function useTableActions({
     const newData = deleteColumn(data, data.columns.length - 1)
     if (newData === data) return // min 1 guard triggered
     const newTableData = serializeTableData(newData)
-    updateObject(obj.id, { table_data: newTableData, width: getTableWidth(newData), height: getTableHeight(newData) })
     undoStack.push({ type: 'update', patches: [{ id: obj.id, before }] })
+    updateObject(obj.id, { table_data: newTableData, width: getTableWidth(newData), height: getTableHeight(newData) })
   }, [canEdit, getSelectedTable, updateObject, undoStack])
 
   /** Direct table data update (used by TableShape for resize operations) */

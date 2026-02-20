@@ -30,7 +30,23 @@ const BOARD_OBJECT_SELECT = CRDT_ENABLED
   ? BOARD_OBJECT_COLUMNS + ',field_clocks'
   : BOARD_OBJECT_COLUMNS
 
-// ── Pure helper ─────────────────────────────────────────────────────
+// ── Pure helpers ─────────────────────────────────────────────────────
+
+/**
+ * Convert JSONB string fields (table_data, rich_text) to parsed objects so
+ * Postgres stores them as JSONB objects rather than scalar string values.
+ * String fields that are null/undefined are passed through unchanged.
+ */
+function toJsonbPayload(row: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...row }
+  if (typeof out.table_data === 'string') {
+    try { out.table_data = JSON.parse(out.table_data) } catch { /* leave as-is */ }
+  }
+  if (typeof out.rich_text === 'string') {
+    try { out.rich_text = JSON.parse(out.rich_text) } catch { /* leave as-is */ }
+  }
+  return out
+}
 
 /** Walk parent chain to check if object is locked (directly or via ancestor). */
 export function checkLocked(objectsRef: React.RefObject<Map<string, BoardObject>>, id: string): boolean {
@@ -253,9 +269,9 @@ export function usePersistence({
 
     // Persist to Supabase with retry, then broadcast on success
     const { id: _id, created_at: _ca, updated_at: _ua, field_clocks: _fc, deleted_at: _da, ...insertData } = obj
-    const insertRow = CRDT_ENABLED
+    const insertRow = toJsonbPayload(CRDT_ENABLED
       ? { ...insertData, id: obj.id, field_clocks: fieldClocksRef.current.get(id) ?? {} }
-      : { ...insertData, id: obj.id }
+      : { ...insertData, id: obj.id })
     const insertPromise = retryWithRollback({
       operation: () => supabase.from('board_objects').insert(insertRow),
       rollback: () => {
@@ -288,9 +304,9 @@ export function usePersistence({
     })
 
     const { id: _id, created_at: _ca, updated_at: _ua, field_clocks: _fc, deleted_at: _da, ...insertData } = obj
-    const insertRow = CRDT_ENABLED
+    const insertRow = toJsonbPayload(CRDT_ENABLED
       ? { ...insertData, id: obj.id, field_clocks: fieldClocksRef.current.get(obj.id) ?? {} }
-      : { ...insertData, id: obj.id }
+      : { ...insertData, id: obj.id })
     fireAndRetry({
       operation: () => supabase.from('board_objects').upsert(insertRow, { onConflict: 'id' }),
       rollback: () => {
@@ -330,7 +346,7 @@ export function usePersistence({
     const clocks = stampChange(id, changedFields)
 
     // Persist to Supabase with retry, then broadcast on success
-    const dbUpdate: Record<string, unknown> = { ...updates, updated_at: new Date().toISOString() }
+    const dbUpdate: Record<string, unknown> = toJsonbPayload({ ...updates, updated_at: new Date().toISOString() })
     if (CRDT_ENABLED) {
       dbUpdate.field_clocks = fieldClocksRef.current.get(id) ?? {}
       dbUpdate.deleted_at = null // Clear tombstone — add-wins: any update resurrects
@@ -495,19 +511,14 @@ export function usePersistence({
         return next
       })
 
-      queueBroadcast(newObjects.map(obj => ({
-        action: 'create' as const,
-        object: obj,
-        clocks: stampCreate(obj.id, obj),
-      })))
-
       // Persist: insert parent first (await), then children
+      // Broadcast only after parent insert succeeds so remote peers don't receive orphaned objects
       const parentObj = newObjects[0]
       const childObjs = newObjects.slice(1)
       const { id: _pid, created_at: _pca, updated_at: _pua, field_clocks: _pfc, deleted_at: _pda, ...parentInsert } = parentObj
-      const parentRow = CRDT_ENABLED
+      const parentRow = toJsonbPayload(CRDT_ENABLED
         ? { ...parentInsert, id: parentObj.id, field_clocks: fieldClocksRef.current.get(parentObj.id) ?? {} }
-        : { ...parentInsert, id: parentObj.id }
+        : { ...parentInsert, id: parentObj.id })
       const rollbackDup = () => {
         setObjects(prev => {
           const next = new Map(prev)
@@ -522,11 +533,16 @@ export function usePersistence({
         logError: (err) => log.error({ message: 'Failed to save duplicated parent', operation: 'duplicateObject', objectId: parentObj.id, error: err }),
       }).then(ok => {
         if (!ok) return
+        queueBroadcast(newObjects.map(obj => ({
+          action: 'create' as const,
+          object: obj,
+          clocks: stampCreate(obj.id, obj),
+        })))
         for (const obj of childObjs) {
           const { id: _cid, created_at: _cca, updated_at: _cua, field_clocks: _cfc, deleted_at: _cda, ...childInsert } = obj
-          const childRow = CRDT_ENABLED
+          const childRow = toJsonbPayload(CRDT_ENABLED
             ? { ...childInsert, id: obj.id, field_clocks: fieldClocksRef.current.get(obj.id) ?? {} }
-            : { ...childInsert, id: obj.id }
+            : { ...childInsert, id: obj.id })
           fireAndRetry({
             operation: () => supabase.from('board_objects').insert(childRow),
             rollback: () => {
@@ -563,8 +579,12 @@ export function usePersistence({
       }
       return supabase.from('board_objects').update(patch).eq('id', u.id)
     })).then(results => {
-      for (const { error } of results) {
-        if (error) log.warn({ message: 'Failed to update z_index', operation: 'persistZIndexBatch', error })
+      const failed = results.some(r => r.error)
+      if (failed) {
+        notify('Failed to update layer order')
+        for (const { error } of results) {
+          if (error) log.warn({ message: 'Failed to update z_index', operation: 'persistZIndexBatch', error })
+        }
       }
     })
   }, [log])

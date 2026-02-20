@@ -21,7 +21,7 @@ export type { BoardChange } from '@/hooks/board/useBroadcast'
 export function useBoardState(userId: string, boardId: string, userRole: BoardRole = 'viewer', channel?: RealtimeChannel | null, onlineUsers?: OnlineUser[]) {
   const [objects, setObjects] = useState<Map<string, BoardObject>>(new Map())
   const objectsRef = useRef<Map<string, BoardObject>>(objects)
-  useEffect(() => { objectsRef.current = objects }, [objects])
+  objectsRef.current = objects
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null)

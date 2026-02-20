@@ -286,14 +286,14 @@ export function Canvas({
   })
 
   const {
-    editingId, editingField, editingCellCoords, editText, setEditText,
+    editingId, editingField, editText, setEditText,
     textareaStyle, textareaRef,
     handleStartEdit, handleFinishEdit,
     handleShapeDoubleClick, startGeometricTextEdit, lastDblClickRef,
   } = RICH_TEXT_ENABLED ? richTextEditing : plainTextEditing
 
-  // Table cell handlers always use plain text editing (table cells are never rich text)
-  const { handleStartCellEdit, handleCellKeyDown } = plainTextEditing
+  // Table cell handlers and coords always use plain text editing (table cells are never rich text)
+  const { handleStartCellEdit, handleCellKeyDown, editingCellCoords } = plainTextEditing
 
   // Expose editor ref to parent
   useEffect(() => {

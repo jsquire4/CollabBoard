@@ -46,13 +46,15 @@ export function TipTapEditorOverlay({
     }
 
     // Delay listener to avoid capturing the double-click that started editing
+    let listenerAdded = false
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleMouseDown)
+      listenerAdded = true
     }, 100)
 
     return () => {
       clearTimeout(timer)
-      document.removeEventListener('mousedown', handleMouseDown)
+      if (listenerAdded) document.removeEventListener('mousedown', handleMouseDown)
     }
   }, [editingId, editingField, onFinish])
 

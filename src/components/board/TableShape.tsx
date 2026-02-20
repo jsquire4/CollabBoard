@@ -115,6 +115,7 @@ export const TableShape = memo(function TableShape({
   }, [])
 
   const handleColResizeDragEnd = useCallback((colIndex: number, e: Konva.KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true
     const currentData = dataRef.current
     if (!currentData || !onTableDataChange) return
     const currentColXOffsets = colXOffsetsRef.current
@@ -135,6 +136,7 @@ export const TableShape = memo(function TableShape({
   }, [])
 
   const handleRowResizeDragEnd = useCallback((rowIndex: number, e: Konva.KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true
     const currentData = dataRef.current
     if (!currentData || !onTableDataChange) return
     const currentRowYOffsets = rowYOffsetsRef.current
@@ -315,6 +317,13 @@ export const TableShape = memo(function TableShape({
       )}
 
       {/* Horizontal grid lines (row boundaries) */}
+      {/* Top edge line */}
+      <Line
+        points={[0, 0, tableWidth, 0]}
+        stroke={GRID_COLOR}
+        strokeWidth={1}
+        listening={false}
+      />
       {/* Header bottom line */}
       <Line
         points={[0, DEFAULT_HEADER_HEIGHT, tableWidth, DEFAULT_HEADER_HEIGHT]}
@@ -342,6 +351,13 @@ export const TableShape = memo(function TableShape({
       />
 
       {/* Vertical grid lines (column boundaries) */}
+      {/* Left edge line */}
+      <Line
+        points={[0, 0, 0, tableHeight]}
+        stroke={GRID_COLOR}
+        strokeWidth={1}
+        listening={false}
+      />
       {colXOffsets.map((x, i) => (
         i > 0 ? (
           <Line

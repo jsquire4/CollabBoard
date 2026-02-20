@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react'
 import { BoardObject } from '@/types/board'
-import { generateStaticHTML } from '@/lib/richText'
+import { generateStaticHTML, RICH_TEXT_ENABLED } from '@/lib/richText'
 
 interface RichTextStaticLayerProps {
   visibleObjects: BoardObject[]
@@ -24,7 +24,7 @@ export function RichTextStaticLayer({
     [visibleObjects]
   )
 
-  if (richTextObjects.length === 0) return null
+  if (!RICH_TEXT_ENABLED || richTextObjects.length === 0) return null
 
   return (
     <div

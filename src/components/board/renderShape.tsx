@@ -179,7 +179,13 @@ export function renderShape(
       )
     case 'group':
       return null
-    default:
+    default: {
+      const _exhaustive: never = obj.type as never
+      void _exhaustive
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(`[renderShape] Unhandled shape type: ${obj.type}`)
+      }
       return null
+    }
   }
 }

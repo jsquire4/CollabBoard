@@ -364,7 +364,7 @@ describe('usePersistence', () => {
     expect(setSelectedIds).toHaveBeenCalled()
   })
 
-  it('duplicateObject handles group with descendants', () => {
+  it('duplicateObject handles group with descendants', async () => {
     const chain = chainMock({ error: null })
     mockFrom.mockReturnValue(chain)
     const group = makeGroup({ id: 'g1', x: 0, y: 0 })
@@ -384,6 +384,8 @@ describe('usePersistence', () => {
 
     let dup: BoardObject | null = null
     act(() => { dup = result.current.duplicateObject('g1') })
+    // Flush fireAndRetry's async .then() callback so queueBroadcast fires
+    await act(async () => {})
 
     expect(dup).not.toBeNull()
     expect(dup!.type).toBe('group')

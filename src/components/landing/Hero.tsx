@@ -14,6 +14,7 @@ export function Hero({ isAuthenticated }: HeroProps) {
 
       {/* Grid pattern — warm parchment-border tones, extends far beyond viewport */}
       <div
+        aria-hidden="true"
         className="-z-10 absolute -left-[2500px] -top-[2500px] h-[calc(100%+5000px)] w-[calc(100%+5000px)] bg-[linear-gradient(to_right,rgba(232,227,218,0.4)_1px,transparent_1px),linear-gradient(to_bottom,rgba(232,227,218,0.4)_1px,transparent_1px)] bg-[size:3rem_3rem]"
       />
 

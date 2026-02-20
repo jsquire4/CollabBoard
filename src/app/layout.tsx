@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Geist, DM_Serif_Display } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 
@@ -8,9 +8,15 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
+const dmSerifDisplay = DM_Serif_Display({
+  weight: "400",
+  variable: "--font-dm-serif-display",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
-  title: "CollabBoard",
-  description: "A real-time collaborative whiteboard",
+  title: "Theorem",
+  description: "An intelligent strategy canvas.",
 };
 
 export default function RootLayout({
@@ -21,7 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} antialiased`}
+        className={`${geistSans.variable} ${dmSerifDisplay.variable} antialiased`}
       >
         {children}
         <Toaster position="bottom-right" richColors closeButton />

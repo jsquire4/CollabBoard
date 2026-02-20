@@ -7,6 +7,7 @@ import { GenericShape } from '../GenericShape'
 import { VectorShape } from '../VectorShape'
 import { TableShape } from '../TableShape'
 import { AgentShape } from '../AgentShape'
+import { ContextObjectShape } from '../ContextObjectShape'
 import { shapeRegistry } from '../shapeRegistry'
 import { ShapeCallbacks, ShapeState } from './types'
 
@@ -176,6 +177,23 @@ export function renderShape(
           editable={shapeEditable}
           dragBoundFunc={shapeDragBoundFunc}
           onAgentClick={onAgentClick ?? noop}
+        />
+      )
+    case 'context_object':
+      return (
+        <ContextObjectShape
+          key={obj.id}
+          object={obj}
+          onDragEnd={handleShapeDragEnd}
+          onDragMove={handleShapeDragMove}
+          onDragStart={handleShapeDragStart}
+          isSelected={isSelected}
+          onSelect={handleShapeSelect}
+          shapeRef={handleShapeRef}
+          onTransformEnd={onTransformEnd}
+          onContextMenu={handleContextMenu}
+          editable={shapeEditable}
+          dragBoundFunc={shapeDragBoundFunc}
         />
       )
     case 'group':

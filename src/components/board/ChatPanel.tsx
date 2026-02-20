@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useEffect, useState, useCallback } from 'react'
-import { useAgentChat } from '@/hooks/useAgentChat'
+import { useGlobalAgentChat } from '@/hooks/useGlobalAgentChat'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import { BoardFilesList } from './BoardFilesList'
@@ -21,7 +21,7 @@ const PANEL_MIN_WIDTH = 320
 const PANEL_MIN_HEIGHT = 300
 
 export function ChatPanel({ boardId, isOpen, onClose, objects, onDeleteFile }: ChatPanelProps) {
-  const { messages, isLoading, error, sendMessage, cancel } = useAgentChat({
+  const { messages, isLoading, error, sendMessage, cancel } = useGlobalAgentChat({
     boardId,
     enabled: isOpen,
   })

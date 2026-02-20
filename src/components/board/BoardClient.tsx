@@ -44,6 +44,7 @@ import { BoardToolProvider, BoardToolContextValue } from '@/contexts/BoardToolCo
 import { ConnectionBanner } from '@/components/ui/ConnectionBanner'
 import { ChatPanel } from './ChatPanel'
 import { AgentChatPanel } from './AgentChatPanel'
+import { GlobalAgentPanel } from './GlobalAgentPanel'
 import { FilmstripPanel } from './FilmstripPanel'
 import { FileLibraryPanel } from './FileLibraryPanel'
 import { CommentThread } from './CommentThread'
@@ -136,6 +137,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const [shareOpen, setShareOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [agentChatPanel, setAgentChatPanel] = useState<{ objectId: string; position: { x: number; y: number } } | null>(null)
+  const [globalAgentOpen, setGlobalAgentOpen] = useState(false)
   const [filmstripOpen, setFilmstripOpen] = useState(false)
   const [fileLibraryOpen, setFileLibraryOpen] = useState(false)
   const [commentThread, setCommentThread] = useState<{ objectId: string; position: { x: number; y: number } } | null>(null)
@@ -177,6 +179,18 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   }, [])
   // Auto-route points ref: populated by Canvas during render, used by handleWaypointInsert
   const autoRoutePointsRef = useRef<Map<string, number[]>>(new Map())
+
+  // Cmd+G — toggle global board assistant
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'g') {
+        e.preventDefault()
+        setGlobalAgentOpen(prev => !prev)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   // Subscribe LAST — after all hooks have registered their .on() listeners.
   const { connectionStatus } = useConnectionManager({ channel, trackPresence, reconcileOnReconnect, supabaseRef })
@@ -540,9 +554,20 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
 
   // ── Mutations context (all callbacks for Canvas + child components) ──
   const handleAgentClick = useCallback((id: string) => {
-    // TODO Phase 2: convert canvas world coords to screen coords using stagePos + stageScale
+    // TODO Phase 2+: convert canvas world coords to screen coords using stageRef context
     setAgentChatPanel({ objectId: id, position: { x: 20, y: 80 } })
   }, [])
+
+  const handleCanvasDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    const data = e.dataTransfer.getData('application/collabboard-file')
+    if (!data || !canEdit) return
+    try {
+      const { fileId, fileName, mimeType } = JSON.parse(data)
+      // Add context_object at a rough canvas position
+      addObject('context_object', 200, 200, { file_id: fileId, file_name: fileName, mime_type: mimeType })
+    } catch { /* ignore malformed drag data */ }
+  }, [addObject, canEdit])
 
   const mutationsValue: BoardMutationsContextValue = useMemo(() => ({
     onDrawShape: handleDrawShape,
@@ -726,7 +751,11 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           selectedTableHeaderTextColor={selectedTableHeaderInfo?.headerTextColor}
           onTableHeaderStyleChange={handleTableHeaderStyleChange}
         />
-        <div className="relative flex-1 overflow-hidden">
+        <div
+          className="relative flex-1 overflow-hidden"
+          onDragOver={e => e.preventDefault()}
+          onDrop={handleCanvasDrop}
+        >
           <CanvasErrorBoundary>
             <Canvas />
           </CanvasErrorBoundary>
@@ -757,6 +786,28 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
         </svg>
       </button>
+      {/* Global Agent toggle button */}
+      <button
+        onClick={() => setGlobalAgentOpen(prev => !prev)}
+        className="fixed bottom-28 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-purple-600 text-white shadow-lg hover:bg-purple-700"
+        aria-label="Toggle global board assistant (Cmd+G)"
+        title="Board Assistant (⌘G)"
+      >
+        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+        </svg>
+      </button>
+      {/* File Library toggle button */}
+      <button
+        onClick={() => setFileLibraryOpen(prev => !prev)}
+        className="fixed bottom-40 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-slate-600 text-white shadow-lg hover:bg-slate-700"
+        aria-label="Toggle file library"
+        title="File Library"
+      >
+        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      </button>
       <ChatPanel boardId={boardId} isOpen={chatOpen} onClose={() => setChatOpen(false)} />
       <AgentChatPanel
         agentObjectId={agentChatPanel?.objectId ?? ''}
@@ -764,6 +815,14 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         position={agentChatPanel?.position ?? { x: 0, y: 0 }}
         isOpen={agentChatPanel !== null}
         onClose={() => setAgentChatPanel(null)}
+        agentState={agentChatPanel ? (objects.get(agentChatPanel.objectId)?.agent_state ?? 'idle') : 'idle'}
+        agentName={agentChatPanel ? (objects.get(agentChatPanel.objectId)?.text || 'Board Agent') : 'Board Agent'}
+      />
+      <GlobalAgentPanel
+        boardId={boardId}
+        currentUserId={userId}
+        isOpen={globalAgentOpen}
+        onClose={() => setGlobalAgentOpen(false)}
       />
       <FilmstripPanel
         deckId=""

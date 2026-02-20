@@ -28,44 +28,19 @@ import type { Editor } from '@tiptap/react'
 interface LeftToolbarProps {
   userRole: BoardRole
   activeTool: BoardObjectType | null
-  hasSelection: boolean
   isEditingText: boolean
-  selectedColor?: string
   selectedFontFamily?: string
   selectedFontSize?: number
   selectedFontStyle?: FontStyle
   selectedTextAlign?: string
   selectedTextVerticalAlign?: string
   selectedTextColor?: string
-  onColorChange: (color: string) => void
   onFontChange: (updates: { font_family?: string; font_size?: number; font_style?: FontStyle }) => void
   onTextStyleChange: (updates: { text_align?: string; text_vertical_align?: string; text_color?: string }) => void
-  onDelete: () => void
-  onDuplicate: () => void
-  onGroup: () => void
-  onUngroup: () => void
-  canGroup: boolean
-  canUngroup: boolean
-  selectedStrokeColor?: string | null
-  selectedStrokeWidth?: number
-  selectedStrokeDash?: string
-  selectedOpacity?: number
-  selectedShadowBlur?: number
-  selectedCornerRadius?: number
-  showCornerRadius?: boolean
-  onStrokeColorChange: (color: string | null) => void
-  onStrokeStyleChange?: (updates: { stroke_color?: string | null; stroke_width?: number; stroke_dash?: string }) => void
-  onOpacityChange?: (opacity: number) => void
-  onShadowChange?: (updates: { shadow_blur?: number; shadow_color?: string; shadow_offset_x?: number; shadow_offset_y?: number }) => void
-  onCornerRadiusChange?: (corner_radius: number) => void
-  anySelectedLocked?: boolean
   activePreset: ShapePreset | null
   onPresetSelect: (preset: ShapePreset) => void
   uiDarkMode?: boolean
   richTextEditor?: Editor | null
-  selectedTableHeaderBg?: string
-  selectedTableHeaderTextColor?: string
-  onTableHeaderStyleChange?: (updates: { header_bg?: string; header_text_color?: string }) => void
 }
 
 // IDs that belong to each tool group (for active-state highlighting)
@@ -86,44 +61,19 @@ const SYMBOLS_IDS = [
 export function LeftToolbar({
   userRole,
   activeTool,
-  hasSelection,
   isEditingText,
-  selectedColor,
   selectedFontFamily,
   selectedFontSize,
   selectedFontStyle,
   selectedTextAlign,
   selectedTextVerticalAlign,
   selectedTextColor,
-  onColorChange,
   onFontChange,
   onTextStyleChange,
-  onDelete,
-  onDuplicate,
-  onGroup,
-  onUngroup,
-  canGroup,
-  canUngroup,
-  selectedStrokeColor,
-  selectedStrokeWidth,
-  selectedStrokeDash,
-  selectedOpacity,
-  selectedShadowBlur,
-  selectedCornerRadius,
-  showCornerRadius,
-  onStrokeColorChange,
-  onStrokeStyleChange,
-  onOpacityChange,
-  onShadowChange,
-  onCornerRadiusChange,
-  anySelectedLocked,
   activePreset,
   onPresetSelect,
   uiDarkMode = false,
   richTextEditor,
-  selectedTableHeaderBg,
-  selectedTableHeaderTextColor,
-  onTableHeaderStyleChange,
 }: LeftToolbarProps) {
   const canEdit = userRole !== 'viewer'
   const [openGroupId, setOpenGroupId] = useState<string | null>(null)

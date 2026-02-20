@@ -687,44 +687,19 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         <LeftToolbar
           userRole={userRole}
           activeTool={activeTool}
-          hasSelection={selectedIds.size > 0}
           isEditingText={isEditingText}
-          selectedColor={selectedColor}
           selectedFontFamily={selectedFontInfo.fontFamily}
           selectedFontSize={selectedFontInfo.fontSize}
           selectedFontStyle={selectedFontInfo.fontStyle}
           selectedTextAlign={selectedFontInfo.textAlign}
           selectedTextVerticalAlign={selectedFontInfo.textVerticalAlign}
           selectedTextColor={selectedFontInfo.textColor}
-          onColorChange={handleColorChange}
           onFontChange={handleFontChange}
           onTextStyleChange={handleTextStyleChange}
-          onDelete={handleDelete}
-          onDuplicate={handleDuplicate}
-          onGroup={handleGroup}
-          onUngroup={handleUngroup}
-          canGroup={canGroup}
-          canUngroup={canUngroup}
-          selectedStrokeColor={selectedStyleInfo.strokeColor}
-          selectedStrokeWidth={selectedStyleInfo.strokeWidth}
-          selectedStrokeDash={selectedStyleInfo.strokeDash}
-          selectedOpacity={selectedStyleInfo.opacity}
-          selectedShadowBlur={selectedStyleInfo.shadowBlur}
-          selectedCornerRadius={selectedStyleInfo.cornerRadius}
-          showCornerRadius={selectedStyleInfo.isRectangle}
-          onStrokeColorChange={handleBorderColorChange}
-          onStrokeStyleChange={handleStrokeStyleChange}
-          onOpacityChange={handleOpacityChange}
-          onShadowChange={handleShadowChange}
-          onCornerRadiusChange={handleCornerRadiusChange}
-          anySelectedLocked={anySelectedLocked}
           activePreset={activePreset}
           onPresetSelect={handlePresetSelect}
           uiDarkMode={uiDarkMode}
           richTextEditor={RICH_TEXT_ENABLED ? richTextEditor : undefined}
-          selectedTableHeaderBg={selectedTableHeaderInfo?.headerBg}
-          selectedTableHeaderTextColor={selectedTableHeaderInfo?.headerTextColor}
-          onTableHeaderStyleChange={handleTableHeaderStyleChange}
         />
         <div className="relative flex-1 overflow-hidden">
           <CanvasErrorBoundary>

@@ -1,6 +1,7 @@
 import React from 'react'
 import { BoardObject } from '@/types/board'
 import { ContextMenu } from './ContextMenu'
+import { FloatingPropertyPanel } from './FloatingPropertyPanel'
 import { ZoomControls } from './ZoomControls'
 import { getTextCharLimit, STICKY_TITLE_CHAR_LIMIT } from '@/hooks/board/useTextEditing'
 import { RICH_TEXT_ENABLED } from '@/lib/richText'
@@ -150,6 +151,9 @@ export function CanvasOverlays({
         </button>
         )
       })()}
+
+      {/* Floating property panel */}
+      <FloatingPropertyPanel stagePos={stagePos} stageScale={stageScale} />
 
       {/* Zoom controls */}
       <div className="pointer-events-auto absolute bottom-4 right-4 z-50">

@@ -33,6 +33,11 @@ export default defineConfig({
         // are tested (19 tests), but the bulk of the file is imperative Konva
         // Stage event wiring (mouse/wheel/touch handlers) that requires a real
         // Konva Stage to exercise — same category as the two hooks above.
+        // Konva Stage/Group/Shape rendering — no DOM output in jsdom
+        'src/components/board/Canvas.tsx',
+        'src/components/board/VectorShape.tsx',
+        'src/components/board/FrameShape.tsx',
+        'src/components/board/TableShape.tsx',
         // Phase 1 agent/slide stub components — no testable pure logic yet
         'src/components/board/AgentShape.tsx',
         'src/components/board/AgentChatPanel.tsx',

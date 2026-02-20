@@ -1,31 +1,39 @@
 /**
- * POST /api/agent/[boardId]/greet — stream a welcome greeting.
- * Always routes to the gateway container for instant response.
+ * POST /api/agent/[boardId]/greet — direct OpenAI streaming greeting.
+ * Uses gpt-4o-mini for fast, lightweight responses. Viewers can receive greetings.
  */
 
 import { NextRequest } from 'next/server'
+import OpenAI from 'openai'
 import { createClient } from '@/lib/supabase/server'
-import { getGatewayUrl } from '@/lib/fly-machines'
 
-const AGENT_INTERNAL_SECRET = process.env.AGENT_INTERNAL_SECRET ?? ''
+export const maxDuration = 30
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function sseEvent(data: Record<string, unknown>): string {
+  return `data: ${JSON.stringify(data)}\n\n`
+}
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ boardId: string }> },
 ) {
   const { boardId } = await params
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(boardId)) {
-    return new Response(JSON.stringify({ error: 'Invalid board ID' }), { status: 400 })
+
+  if (!UUID_RE.test(boardId)) {
+    return Response.json({ error: 'Invalid board ID' }, { status: 400 })
   }
 
-  // Authenticate user
+  // Auth — viewers can see greetings
   const supabase = await createClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Verify board membership (viewers can see greetings too)
   const { data: member } = await supabase
     .from('board_members')
     .select('role')
@@ -34,43 +42,55 @@ export async function POST(
     .single()
 
   if (!member) {
-    return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 })
+    return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const body = await request.json()
-  const gatewayUrl = getGatewayUrl()
-
+  let body: { isNewBoard?: boolean } = {}
   try {
-    const upstream = await fetch(`${gatewayUrl}/greet`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Agent-Secret': AGENT_INTERNAL_SECRET,
-      },
-      body: JSON.stringify({
-        boardId,
-        isNewBoard: body.isNewBoard ?? false,
-      }),
-    })
+    body = await request.json()
+  } catch { /* ignore */ }
 
-    if (!upstream.ok) {
-      const text = await upstream.text()
-      return new Response(JSON.stringify({ error: text }), { status: upstream.status })
-    }
+  const isNew = body.isNewBoard ?? false
+  const prompt = isNew
+    ? 'You are a helpful board agent. Greet the user warmly and let them know you can help them create and organize content on their new blank board. Be brief (2-3 sentences).'
+    : 'You are a helpful board agent. Greet the user warmly and let them know you can help them work with their board. Be brief (1-2 sentences).'
 
-    return new Response(upstream.body, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no',
-      },
-    })
-  } catch (error) {
-    console.error('[greet] Failed to proxy greeting:', error)
-    return new Response(
-      JSON.stringify({ error: 'Agent unavailable' }),
-      { status: 503, headers: { 'Retry-After': '5' } },
-    )
-  }
+  const encoder = new TextEncoder()
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const enqueue = (data: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(sseEvent(data)))
+      }
+
+      try {
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: prompt }],
+          stream: true,
+        })
+
+        for await (const chunk of completion) {
+          const text = chunk.choices[0]?.delta?.content
+          if (text) enqueue({ type: 'text-delta', text })
+        }
+
+        enqueue({ type: 'done' })
+      } catch (err) {
+        console.error('[api/agent/greet] Error:', err)
+        enqueue({ type: 'error', error: 'Failed to generate greeting' })
+      } finally {
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    },
+  })
 }

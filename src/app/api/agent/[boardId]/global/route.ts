@@ -1,6 +1,9 @@
 /**
- * POST /api/agent/[boardId] — direct OpenAI Chat Completions streaming.
- * Replaced Fly.io proxy in Phase 2.
+ * POST /api/agent/[boardId]/global — global board agent using Chat Completions.
+ *
+ * Unlike per-agent routes, this is scoped to the whole board (agent_object_id IS NULL).
+ * Message prefix: "[Alice (editor)]: message" for multi-user attribution.
+ * The global_agent_thread_id column is reserved for a future Assistants API upgrade.
  */
 
 import { NextRequest } from 'next/server'
@@ -9,7 +12,6 @@ type FunctionToolCall = OpenAI.Chat.ChatCompletionMessageFunctionToolCall
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadBoardState } from '@/lib/agent/boardState'
-import { resolveConnectionGraph } from '@/lib/agent/contextResolver'
 import { createTools, createToolContext } from '@/lib/agent/tools'
 import { getUserDisplayName } from '@/lib/userUtils'
 
@@ -44,7 +46,6 @@ export async function POST(
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // ── Board membership + can_use_agents ────────────────────
   const { data: member } = await supabase
     .from('board_members')
     .select('role, can_use_agents')
@@ -56,95 +57,60 @@ export async function POST(
     return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  let body: { message?: string; agentObjectId?: string }
+  let body: { message?: string }
   try {
     body = await request.json()
   } catch {
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { message, agentObjectId } = body
+  const { message } = body
   if (!message || typeof message !== 'string') {
     return Response.json({ error: 'message is required' }, { status: 400 })
-  }
-  if (!agentObjectId || !UUID_RE.test(agentObjectId)) {
-    return Response.json({ error: 'agentObjectId is required' }, { status: 400 })
   }
 
   const admin = createAdminClient()
   const userDisplayName = getUserDisplayName(user)
+  const roleName = member.role as string
 
-  // ── Parallel data loading ─────────────────────────────────
+  // ── Load board state + history (parallel) ────────────────
   const [boardState, historyResult] = await Promise.all([
     loadBoardState(boardId),
     admin
       .from('board_messages')
-      .select('role, content')
+      .select('role, content, user_display_name')
       .eq('board_id', boardId)
-      .eq('agent_object_id', agentObjectId)
+      .is('agent_object_id', null)
       .order('created_at', { ascending: true })
       .limit(20),
   ])
 
-  if (historyResult.error) {
-    console.error('[api/agent] Failed to load history:', historyResult.error)
-  }
-
-  const history = (historyResult.data ?? []) as { role: string; content: string }[]
-  const agentObj = boardState.objects.get(agentObjectId)
-  const agentModel = agentObj?.model ?? 'gpt-4o'
-  const agentName = agentObj?.text || 'Board Agent'
-
-  // ── Context injection ─────────────────────────────────────
-  const connectedObjects = resolveConnectionGraph(boardState, agentObjectId)
-  const contextBlock = connectedObjects.length > 0
-    ? `\n\nConnected context objects:\n${JSON.stringify(connectedObjects, null, 2)}`
-    : ''
-
-  const systemPrompt = `You are ${agentName}, an AI assistant embedded on a collaborative whiteboard. You can read and modify the board using the tools provided.
-${contextBlock}
-
-Guidelines:
-- Be concise and helpful. Use tools proactively when the user asks you to create or modify things.
-- When creating multiple related objects, batch them logically.
-- Always confirm what you created or changed in your final response.
-- If a tool returns an error, explain the issue and suggest alternatives.`
-
-  // ── Set agent_state to thinking ───────────────────────────
-  await admin
-    .from('board_objects')
-    .update({ agent_state: 'thinking' })
-    .eq('id', agentObjectId)
-    .is('deleted_at', null)
-
-  // ── Client disconnect handler ─────────────────────────────
-  request.signal.addEventListener('abort', () => {
-    void admin
-      .from('board_objects')
-      .update({ agent_state: 'idle' })
-      .eq('id', agentObjectId)
-      .is('deleted_at', null)
-  })
+  const history = (historyResult.data ?? []) as { role: string; content: string; user_display_name: string | null }[]
 
   // ── Persist user message ──────────────────────────────────
+  const prefixedMessage = `[${userDisplayName} (${roleName})]: ${message}`
+
   await admin.from('board_messages').insert({
     board_id: boardId,
-    agent_object_id: agentObjectId,
+    agent_object_id: null,
     role: 'user',
-    content: message,
+    content: prefixedMessage,
     user_id: user.id,
     user_display_name: userDisplayName,
   })
 
-  // ── SSE stream ────────────────────────────────────────────
-  const toolCtx = createToolContext(boardId, user.id, boardState)
-  const { definitions: toolDefinitions, executors } = createTools(toolCtx)
+  const systemPrompt = `You are the global board assistant for a collaborative whiteboard. Multiple team members share this conversation. User messages are prefixed with [Name (role)]: to identify who sent them.
+
+You can read and modify the board using the available tools. Be helpful to all team members and coordinate work effectively.`
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
     ...history.map(h => ({ role: h.role as 'user' | 'assistant', content: h.content })),
-    { role: 'user', content: message },
+    { role: 'user', content: prefixedMessage },
   ]
+
+  const toolCtx = createToolContext(boardId, user.id, boardState)
+  const { definitions: toolDefinitions, executors } = createTools(toolCtx)
 
   const encoder = new TextEncoder()
   let fullAssistantContent = ''
@@ -163,7 +129,7 @@ Guidelines:
           stepCount++
 
           const completion = await openai.chat.completions.create({
-            model: agentModel,
+            model: 'gpt-4o',
             messages,
             tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
             tool_choice: toolDefinitions.length > 0 ? 'auto' : undefined,
@@ -179,8 +145,8 @@ Guidelines:
             if (!choice) continue
 
             finishReason = choice.finish_reason ?? finishReason
-
             const delta = choice.delta
+
             if (delta.content) {
               chunkContent += delta.content
               fullAssistantContent += delta.content
@@ -198,12 +164,8 @@ Guidelines:
             }
           }
 
-          // No tool calls → done
-          if (pendingToolCalls.size === 0 || finishReason === 'stop') {
-            break
-          }
+          if (pendingToolCalls.size === 0 || finishReason === 'stop') break
 
-          // Push assistant message with tool_calls
           const toolCallsArr: FunctionToolCall[] = Array.from(pendingToolCalls.values()).map(tc => ({
             id: tc.id,
             type: 'function' as const,
@@ -216,29 +178,18 @@ Guidelines:
             tool_calls: toolCallsArr,
           })
 
-          // Execute each tool call
           const toolResultMessages: OpenAI.Chat.ChatCompletionToolMessageParam[] = []
           for (const tc of toolCallsArr as FunctionToolCall[]) {
             const toolName = tc.function.name
             let args: unknown
-            try {
-              args = JSON.parse(tc.function.arguments)
-            } catch {
-              args = {}
-            }
+            try { args = JSON.parse(tc.function.arguments) } catch { args = {} }
 
             enqueue({ type: 'tool-call', toolName, args })
 
             const executor = executors.get(toolName)
-            let result: unknown
-            if (executor) {
-              result = await executor(args)
-            } else {
-              result = { error: `Unknown tool: ${toolName}` }
-            }
+            const result = executor ? await executor(args) : { error: `Unknown tool: ${toolName}` }
 
             enqueue({ type: 'tool-result', toolName, result })
-
             toolResultMessages.push({
               role: 'tool',
               tool_call_id: tc.id,
@@ -249,39 +200,21 @@ Guidelines:
           messages.push(...toolResultMessages)
         }
 
-        // ── Persist assistant response ─────────────────────
+        // Persist assistant response
         if (fullAssistantContent) {
           await admin.from('board_messages').insert({
             board_id: boardId,
-            agent_object_id: agentObjectId,
+            agent_object_id: null,
             role: 'assistant',
             content: fullAssistantContent,
           })
         }
 
-        // ── Set agent_state to done ────────────────────────
-        await admin
-          .from('board_objects')
-          .update({ agent_state: 'done' })
-          .eq('id', agentObjectId)
-          .is('deleted_at', null)
-
         enqueue({ type: 'done' })
       } catch (err) {
-        console.error('[api/agent] Stream error:', err)
-        const message = (err as Error).message ?? 'Unknown error'
-        const errorMsg = message.includes('429')
-          ? 'Rate limit reached, please try again.'
-          : message
-
-        try {
-          enqueue({ type: 'error', error: errorMsg })
-          await admin
-            .from('board_objects')
-            .update({ agent_state: 'error' })
-            .eq('id', agentObjectId)
-            .is('deleted_at', null)
-        } catch { /* best effort */ }
+        console.error('[api/agent/global] Stream error:', err)
+        const msg = (err as Error).message ?? 'Unknown error'
+        enqueue({ type: 'error', error: msg.includes('429') ? 'Rate limit reached, please try again.' : msg })
       } finally {
         controller.close()
       }

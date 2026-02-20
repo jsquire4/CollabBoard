@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 export interface ChatMessage {
   id: string
@@ -22,6 +23,7 @@ export function useAgentChat({ boardId, enabled = true }: UseAgentChatOptions) {
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const greetedRef = useRef(false)
+  const loadedRef = useRef(false)
   const messageIdRef = useRef(0)
 
   const nextId = () => `msg-${++messageIdRef.current}`
@@ -156,15 +158,51 @@ export function useAgentChat({ boardId, enabled = true }: UseAgentChatOptions) {
     }
   }, [boardId, isLoading, consumeSSE])
 
-  // ── Greeting on mount ─────────────────────────────────────
+  // ── Load history + greet on mount ────────────────────────────
 
   useEffect(() => {
-    if (!enabled || greetedRef.current) return
-    greetedRef.current = true
+    if (!enabled || loadedRef.current) return
+    loadedRef.current = true
 
     const abortController = new AbortController()
 
-    const greet = async () => {
+    const init = async () => {
+      // Pre-warm dedicated container (fire-and-forget)
+      fetch(`/api/agent/${boardId}/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+        signal: abortController.signal,
+      }).catch(() => {})
+
+      // Load persisted messages
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('board_messages')
+        .select('id, role, content, tool_calls, created_at')
+        .eq('board_id', boardId)
+        .order('created_at', { ascending: true })
+        .limit(200)
+
+      if (abortController.signal.aborted) return
+
+      if (data && data.length > 0) {
+        const loaded: ChatMessage[] = data.map(row => ({
+          id: row.id,
+          role: row.role as 'user' | 'assistant' | 'system',
+          content: row.content,
+          toolCalls: row.tool_calls as ChatMessage['toolCalls'],
+        }))
+        messageIdRef.current = loaded.length
+        setMessages(loaded)
+        greetedRef.current = true
+        return
+      }
+
+      // No history — show greeting
+      if (greetedRef.current) return
+      greetedRef.current = true
+
       const assistantId = nextId()
       const assistantMsg: ChatMessage = {
         id: assistantId,
@@ -175,14 +213,6 @@ export function useAgentChat({ boardId, enabled = true }: UseAgentChatOptions) {
       setMessages([assistantMsg])
 
       try {
-        // Fire start in parallel to pre-warm dedicated container
-        fetch(`/api/agent/${boardId}/start`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-          signal: abortController.signal,
-        }).catch(() => {}) // Fire-and-forget
-
         const res = await fetch(`/api/agent/${boardId}/greet`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -209,7 +239,7 @@ export function useAgentChat({ boardId, enabled = true }: UseAgentChatOptions) {
       }
     }
 
-    greet()
+    init()
 
     return () => { abortController.abort() }
   }, [boardId, enabled, consumeSSE])

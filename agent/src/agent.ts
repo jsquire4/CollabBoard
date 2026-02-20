@@ -50,7 +50,7 @@ export function createAgentStream({ message, history, boardId, userId }: AgentSt
   const startTime = Date.now()
 
   return streamText({
-    model: openai('gpt-4o'),
+    model: openai('gpt-4o-mini'),
     system: SYSTEM_PROMPT,
     messages,
     tools,
@@ -75,7 +75,7 @@ export function createAgentStream({ message, history, boardId, userId }: AgentSt
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function createGreetingStream(isNewBoard: boolean) {
   return streamText({
-    model: openai('gpt-4o'),
+    model: openai('gpt-4o-mini'),
     system: 'You are a friendly AI assistant for CollabBoard, a collaborative whiteboard. Be brief and helpful.',
     prompt: isNewBoard
       ? 'Welcome the user to their new board. Be brief and enthusiastic (1-2 sentences). Ask how you can help them get started.'

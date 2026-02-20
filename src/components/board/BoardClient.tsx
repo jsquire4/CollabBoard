@@ -880,13 +880,13 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           onDismiss={() => setShapePalette(null)}
         />
       )}
-      {/* AI Chat toggle button */}
+      {/* AI Chat toggle button — positioned above zoom controls */}
       <button
         onClick={() => setChatOpen(prev => !prev)}
-        className="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700"
+        className="fixed bottom-16 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700"
         aria-label="Toggle AI chat"
       >
-        <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
         </svg>
       </button>

@@ -11,6 +11,7 @@ Object.defineProperty(navigator, 'clipboard', {
 
 // jsdom doesn't implement window.matchMedia — provide a minimal stub
 Object.defineProperty(window, 'matchMedia', {
+  configurable: true,
   writable: true,
   value: (query: string) => ({
     matches: false,

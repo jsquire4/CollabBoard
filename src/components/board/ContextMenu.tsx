@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { MarkerIcon, MARKER_TYPES, MARKER_LABELS, MarkerType } from './lineMarkers'
+import { MarkerIcon, MARKER_TYPES, MARKER_LABELS } from './lineMarkers'
 import { useBoardMutations } from '@/contexts/BoardMutationsContext'
 import { useBoardContext } from '@/contexts/BoardContext'
 
@@ -172,13 +172,13 @@ export function ContextMenu({
       {/* Lock/Unlock */}
       {canLock && !isLocked && (
         <MenuItem
-          onClick={() => { onLock(); }}
+          onClick={() => { onLock(); onClose() }}
           label="Lock"
         />
       )}
       {canUnlock && isLocked && (
         <MenuItem
-          onClick={() => { onUnlock(); }}
+          onClick={() => { onUnlock(); onClose() }}
           label="Unlock"
         />
       )}

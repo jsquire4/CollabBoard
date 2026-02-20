@@ -5,7 +5,7 @@ import { Stage, Layer, Transformer, Rect as KonvaRect, Group as KonvaGroup, Line
 import Konva from 'konva'
 import { useCanvas } from '@/hooks/useCanvas'
 import { useModifierKeys } from '@/hooks/useModifierKeys'
-import { BoardObject, BoardObjectType } from '@/types/board'
+import { BoardObject } from '@/types/board'
 import { useBoardContext } from '@/contexts/BoardContext'
 import { useBoardMutations } from '@/contexts/BoardMutationsContext'
 import { useStageInteractions } from '@/hooks/board/useStageInteractions'
@@ -68,7 +68,7 @@ export function Canvas() {
     onlineUsers, remoteSelections, isObjectLocked,
     gridSize, gridSubdivisions, gridVisible,
     snapToGrid: snapToGridEnabled,
-    gridStyle, canvasColor, gridColor, subdivisionColor, uiDarkMode,
+    gridStyle, canvasColor, gridColor, subdivisionColor,
   } = useBoardContext()
   const { stagePos, setStagePos, stageScale, handleWheel, zoomIn, zoomOut, resetZoom } = useCanvas()
   const stageRef = useRef<Konva.Stage>(null)

@@ -3,7 +3,7 @@
 import { useState, useCallback, ReactNode } from 'react'
 import { BoardRole } from '@/types/sharing'
 import { FontSelector } from './FontSelector'
-import type { BoardObjectType, FontStyle } from '@/types/board'
+import type { FontStyle } from '@/types/board'
 import type { ShapePreset } from './shapePresets'
 import {
   STANDALONE_PRESETS,
@@ -27,7 +27,6 @@ import type { Editor } from '@tiptap/react'
 
 interface LeftToolbarProps {
   userRole: BoardRole
-  activeTool: BoardObjectType | null
   isEditingText: boolean
   selectedFontFamily?: string
   selectedFontSize?: number
@@ -60,7 +59,6 @@ const SYMBOLS_IDS = [
 
 export function LeftToolbar({
   userRole,
-  activeTool,
   isEditingText,
   selectedFontFamily,
   selectedFontSize,

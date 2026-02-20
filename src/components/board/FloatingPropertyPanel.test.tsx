@@ -348,4 +348,88 @@ describe('FloatingPropertyPanel', () => {
     expect(screen.getByRole('button', { name: /^group/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /ungroup/i })).toBeInTheDocument()
   })
+
+  it('calls onStrokeStyleChange with { stroke_color } when the stroke input changes', () => {
+    const onStrokeStyleChange = vi.fn()
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    const Wrapper = createBoardContextWrapper({
+      boardValue: {
+        selectedIds: new Set(['obj-1']),
+        objects,
+      },
+      mutationsValue: {
+        onStrokeStyleChange,
+        anySelectedLocked: false,
+      },
+    })
+
+    const { container } = render(
+      <Wrapper>
+        <FloatingPropertyPanel {...DEFAULT_PROPS} />
+      </Wrapper>
+    )
+
+    // The second <input type="color"> is the stroke input
+    const colorInputs = container.querySelectorAll('input[type="color"]')
+    const strokeInput = colorInputs[1] as HTMLInputElement
+    const nativeSet = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+    nativeSet.call(strokeInput, '#1b3a6b')
+    fireEvent.change(strokeInput)
+    expect(onStrokeStyleChange).toHaveBeenCalledWith({ stroke_color: '#1b3a6b' })
+  })
+
+  it('calls onGroup when the Group button is clicked', async () => {
+    const onGroup = vi.fn()
+    const objects = new Map([
+      ['obj-1', makeRectangle({ id: 'obj-1' })],
+      ['obj-2', makeCircle({ id: 'obj-2' })],
+    ])
+    const Wrapper = createBoardContextWrapper({
+      boardValue: {
+        selectedIds: new Set(['obj-1', 'obj-2']),
+        objects,
+      },
+      mutationsValue: {
+        canGroup: true,
+        canUngroup: false,
+        onGroup,
+        anySelectedLocked: false,
+      },
+    })
+
+    render(
+      <Wrapper>
+        <FloatingPropertyPanel {...DEFAULT_PROPS} />
+      </Wrapper>
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /^group/i }))
+    expect(onGroup).toHaveBeenCalledTimes(1)
+  })
+
+  it('calls onUngroup when the Ungroup button is clicked', async () => {
+    const onUngroup = vi.fn()
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    const Wrapper = createBoardContextWrapper({
+      boardValue: {
+        selectedIds: new Set(['obj-1']),
+        objects,
+      },
+      mutationsValue: {
+        canGroup: false,
+        canUngroup: true,
+        onUngroup,
+        anySelectedLocked: false,
+      },
+    })
+
+    render(
+      <Wrapper>
+        <FloatingPropertyPanel {...DEFAULT_PROPS} />
+      </Wrapper>
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /ungroup/i }))
+    expect(onUngroup).toHaveBeenCalledTimes(1)
+  })
 })

@@ -118,7 +118,7 @@ export function ColorPicker({ selectedColor, onColorChange, disabled, compact, l
         >
           <span
             className="h-5 w-5 rounded border-2 border-parchment-border dark:border-white/10"
-            style={{ backgroundColor: selectedColor || '#94a3b8' }}
+            style={{ backgroundColor: selectedColor || '#E8E3DA' }}
           />
         </button>
         {showPopover && popoverPos && (

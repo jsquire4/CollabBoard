@@ -446,9 +446,9 @@ function GridThemeFlyout({
         }`}
       >
         <span className="flex gap-px">
-          <span className="h-4 w-4 rounded-l border border-slate-300/60" style={{ backgroundColor: canvasColor }} />
-          <span className="h-4 w-4 border-y border-slate-300/60" style={{ backgroundColor: gridColor }} />
-          <span className="h-4 w-4 rounded-r border border-slate-300/60" style={{ backgroundColor: subdivisionColor }} />
+          <span className="h-4 w-4 rounded-l border border-parchment-border/60" style={{ backgroundColor: canvasColor }} />
+          <span className="h-4 w-4 border-y border-parchment-border/60" style={{ backgroundColor: gridColor }} />
+          <span className="h-4 w-4 rounded-r border border-parchment-border/60" style={{ backgroundColor: subdivisionColor }} />
         </span>
         <span>{activePreset?.name ?? 'Custom'} Theme</span>
         <svg className="ml-auto h-3 w-3 text-charcoal/70 dark:text-parchment/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -486,9 +486,9 @@ function GridThemeFlyout({
                     title={preset.name}
                   >
                     <span className="flex gap-px">
-                      <span className="h-3 w-3 rounded-l-sm border border-slate-300/50" style={{ backgroundColor: preset.canvas }} />
-                      <span className="h-3 w-3 border-y border-slate-300/50" style={{ backgroundColor: preset.grid }} />
-                      <span className="h-3 w-3 rounded-r-sm border border-slate-300/50" style={{ backgroundColor: preset.sub }} />
+                      <span className="h-3 w-3 rounded-l-sm border border-parchment-border/50" style={{ backgroundColor: preset.canvas }} />
+                      <span className="h-3 w-3 border-y border-parchment-border/50" style={{ backgroundColor: preset.grid }} />
+                      <span className="h-3 w-3 rounded-r-sm border border-parchment-border/50" style={{ backgroundColor: preset.sub }} />
                     </span>
                     {preset.name}
                   </button>

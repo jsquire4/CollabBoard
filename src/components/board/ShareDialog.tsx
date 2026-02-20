@@ -301,7 +301,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                 {members.map(member => (
                   <div
                     key={member.id}
-                    className="flex items-center justify-between border-b border-parchment-border py-2.5"
+                    className="flex items-center justify-between border-b border-parchment-border dark:border-white/10 py-2.5"
                   >
                     <div>
                       {member.display_name && (
@@ -328,7 +328,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                           <button
                             type="button"
                             onClick={() => handleRemoveMember(member.id)}
-                            className="rounded p-1 text-red-600 transition hover:bg-red-50"
+                            className="rounded p-1 text-red-600 transition hover:bg-red-50 dark:hover:bg-red-900/20"
                             title="Remove member"
                           >
                             ×
@@ -345,7 +345,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                     {invites.map(invite => (
                       <div
                         key={invite.id}
-                        className="flex items-center justify-between border-b border-parchment-border py-2"
+                        className="flex items-center justify-between border-b border-parchment-border dark:border-white/10 py-2"
                       >
                         <div className="text-sm text-charcoal/70 dark:text-parchment/60">
                           {invite.email}
@@ -354,7 +354,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                         <button
                           type="button"
                           onClick={() => handleDeleteInvite(invite.id)}
-                          className="rounded p-1 text-red-600 transition hover:bg-red-50"
+                          className="rounded p-1 text-red-600 transition hover:bg-red-50 dark:hover:bg-red-900/20"
                           title="Cancel invite"
                         >
                           ×
@@ -426,7 +426,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                       <button
                         type="button"
                         onClick={handleDeactivateLink}
-                        className="rounded-lg border border-red-600 px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                        className="rounded-lg border border-red-600 px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:hover:bg-red-900/20"
                       >
                         Deactivate
                       </button>

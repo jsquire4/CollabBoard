@@ -44,17 +44,13 @@ import { BoardToolProvider, BoardToolContextValue } from '@/contexts/BoardToolCo
 import { ConnectionBanner } from '@/components/ui/ConnectionBanner'
 import { ChatPanel } from './ChatPanel'
 import { AgentChatPanel } from './AgentChatPanel'
-import { FilmstripPanel } from './FilmstripPanel'
-import { FileLibraryPanel } from './FileLibraryPanel'
-import { CommentThread } from './CommentThread'
-import { ApiObjectPanel } from './ApiObjectPanel'
 
 // Konva is client-only — must disable SSR
 const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canvas })), {
   ssr: false,
   loading: () => (
-    <div className="flex h-screen w-screen items-center justify-center bg-slate-100">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-navy" />
+    <div className="flex h-screen w-screen items-center justify-center bg-parchment">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-parchment-border border-t-navy" />
     </div>
   ),
 })
@@ -136,10 +132,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const [shareOpen, setShareOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [agentChatPanel, setAgentChatPanel] = useState<{ objectId: string; position: { x: number; y: number } } | null>(null)
-  const [filmstripOpen, setFilmstripOpen] = useState(false)
-  const [fileLibraryOpen, setFileLibraryOpen] = useState(false)
-  const [commentThread, setCommentThread] = useState<{ objectId: string; position: { x: number; y: number } } | null>(null)
-  const [apiObjectPanel, setApiObjectPanel] = useState<string | null>(null)
   const [isEditingText, setIsEditingText] = useState(false)
   const [activeTool, setActiveTool] = useState<BoardObjectType | null>(null)
   const [activePreset, setActivePreset] = useState<ShapePreset | null>(null)
@@ -203,9 +195,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     handleColorChange,
     handleStrokeStyleChange,
     handleOpacityChange,
-    handleShadowChange,
     handleMarkerChange,
-    handleCornerRadiusChange,
     handleTextStyleChange,
     handleFontChange,
   } = useStyleActions({ objects, selectedIds, canEdit, updateObject, deleteObject, getDescendants, undoStack, pushRecentColor })
@@ -686,7 +676,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
       <div className="relative flex flex-1">
         <LeftToolbar
           userRole={userRole}
-          activeTool={activeTool}
           isEditingText={isEditingText}
           selectedFontFamily={selectedFontInfo.fontFamily}
           selectedFontSize={selectedFontInfo.fontSize}
@@ -739,31 +728,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         position={agentChatPanel?.position ?? { x: 0, y: 0 }}
         isOpen={agentChatPanel !== null}
         onClose={() => setAgentChatPanel(null)}
-      />
-      <FilmstripPanel
-        deckId=""
-        boardId={boardId}
-        slideFrames={[]}
-        onReorder={() => {}}
-        isOpen={filmstripOpen}
-        onClose={() => setFilmstripOpen(false)}
-      />
-      <FileLibraryPanel
-        boardId={boardId}
-        isOpen={fileLibraryOpen}
-        onClose={() => setFileLibraryOpen(false)}
-      />
-      <CommentThread
-        objectId={commentThread?.objectId ?? ''}
-        boardId={boardId}
-        position={commentThread?.position ?? { x: 0, y: 0 }}
-        isOpen={commentThread !== null}
-        onClose={() => setCommentThread(null)}
-      />
-      <ApiObjectPanel
-        objectId={apiObjectPanel ?? ''}
-        isOpen={apiObjectPanel !== null}
-        onClose={() => setApiObjectPanel(null)}
       />
     </div>
     </BoardToolProvider>

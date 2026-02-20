@@ -145,7 +145,10 @@ export function FloatingPropertyPanel({ stagePos, stageScale }: FloatingProperty
     }
 
     const bbox = selectionBBox(selectedIds, objects)
-    if (!bbox) return
+    if (!bbox) {
+      setPanelPos(null)
+      return
+    }
 
     // Convert canvas top-center to screen coordinates
     const screenLeft = bbox.minX * stageScale + stagePos.x

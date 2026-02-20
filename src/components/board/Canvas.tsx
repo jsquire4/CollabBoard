@@ -7,6 +7,7 @@ import { useCanvas } from '@/hooks/useCanvas'
 import { useModifierKeys } from '@/hooks/useModifierKeys'
 import { BoardObject, BoardObjectType } from '@/types/board'
 import { useBoardContext } from '@/contexts/BoardContext'
+import { useBoardMutations } from '@/contexts/BoardMutationsContext'
 import { useStageInteractions } from '@/hooks/board/useStageInteractions'
 import { useRemoteCursors } from '@/hooks/board/useRemoteCursors'
 import { useRightClickPan } from '@/hooks/board/useRightClickPan'
@@ -32,126 +33,32 @@ import type { RemoteCursorData } from '@/hooks/useCursors'
 // Shape types that support triple-click text editing (all registry shapes)
 const TRIPLE_CLICK_TEXT_TYPES = new Set(shapeRegistry.keys())
 
-interface CanvasProps {
-  // Command callbacks (not in context — explicit for testability)
-  onDrawShape?: (type: BoardObjectType, x: number, y: number, width: number, height: number) => void
-  onCancelTool?: () => void
-  onSelect: (id: string | null, opts?: { shift?: boolean; ctrl?: boolean }) => void
-  onSelectObjects: (ids: string[]) => void
-  onClearSelection: () => void
-  onEnterGroup: (groupId: string, selectChildId?: string) => void
-  onExitGroup: () => void
-  onDragEnd: (id: string, x: number, y: number) => void
-  onDragMove?: (id: string, x: number, y: number) => void
-  onUpdateText: (id: string, text: string) => void
-  onUpdateTitle: (id: string, title: string) => void
-  onUpdateRichText?: (id: string, json: string, before: { text: string; rich_text: string | null }) => void
-  onEditorReady?: (editor: Editor) => void
-  onTransformEnd: (id: string, updates: Partial<BoardObject>) => void
-  onDelete: () => void
-  onDuplicate: () => void
-  onCopy?: () => void
-  onPaste?: () => void
-  onColorChange: (color: string) => void
-  onBringToFront: (id: string) => void
-  onBringForward: (id: string) => void
-  onSendBackward: (id: string) => void
-  onSendToBack: (id: string) => void
-  onGroup: () => void
-  onUngroup: () => void
-  canGroup: boolean
-  canUngroup: boolean
-  onStrokeStyleChange?: (updates: { stroke_color?: string | null; stroke_width?: number; stroke_dash?: string }) => void
-  onOpacityChange?: (opacity: number) => void
-  onMarkerChange?: (updates: { marker_start?: string; marker_end?: string }) => void
-  onDragStart?: (id: string) => void
-  onUndo?: () => void
-  onRedo?: () => void
-  onCheckFrameContainment: (id: string) => void
-  onMoveGroupChildren: (parentId: string, dx: number, dy: number, skipDb?: boolean) => void
-  recentColors?: string[]
-  colors: string[]
-  selectedColor?: string
-  onEndpointDragMove?: (id: string, updates: Partial<BoardObject>) => void
-  onEndpointDragEnd?: (id: string, updates: Partial<BoardObject>) => void
-  onCursorMove?: (x: number, y: number) => void
-  onCursorUpdate?: (fn: (cursors: Map<string, RemoteCursorData>) => void) => void
-  onEditingChange?: (isEditing: boolean) => void
-  anySelectedLocked?: boolean
-  onLock?: () => void
-  onUnlock?: () => void
-  canLock?: boolean
-  canUnlock?: boolean
-  vertexEditId?: string | null
-  onEditVertices?: () => void
-  onExitVertexEdit?: () => void
-  onVertexDragEnd?: (id: string, index: number, x: number, y: number) => void
-  onVertexInsert?: (id: string, afterIndex: number) => void
-  canEditVertices?: boolean
-  snapIndicator?: { x: number; y: number } | null
-  onActivity?: () => void
-  pendingEditId?: string | null
-  onPendingEditConsumed?: () => void
-  onUpdateBoardSettings?: (updates: { grid_size?: number; grid_subdivisions?: number; grid_visible?: boolean; snap_to_grid?: boolean; grid_style?: string; canvas_color?: string; grid_color?: string; subdivision_color?: string }) => void
-  onWaypointDragEnd?: (id: string, waypointIndex: number, x: number, y: number) => void
-  onWaypointInsert?: (id: string, afterSegmentIndex: number) => void
-  onWaypointDelete?: (id: string, waypointIndex: number) => void
-  autoRoutePointsRef?: React.MutableRefObject<Map<string, number[]>>
-  onDrawLineFromAnchor?: (type: BoardObjectType, startShapeId: string, startAnchor: string, startX: number, startY: number, endX: number, endY: number, screenEndX?: number, screenEndY?: number) => void
-  onUpdateTableCell?: (id: string, row: number, col: number, text: string) => void
-  onTableDataChange?: (id: string, tableData: string) => void
-  onAddRow?: () => void
-  onDeleteRow?: () => void
-  onAddColumn?: () => void
-  onDeleteColumn?: () => void
-  onAddRowAt?: (id: string, beforeIndex: number) => void
-  onDeleteRowAt?: (id: string, rowIndex: number) => void
-  onAddColumnAt?: (id: string, beforeIndex: number) => void
-  onDeleteColumnAt?: (id: string, colIndex: number) => void
-}
-
-export function Canvas({
-  onDrawShape, onCancelTool,
-  onSelect, onSelectObjects, onClearSelection, onEnterGroup, onExitGroup,
-  onDragEnd, onDragMove, onUpdateText, onUpdateTitle, onUpdateRichText, onEditorReady, onTransformEnd,
-  onDelete, onDuplicate, onCopy, onPaste, onColorChange,
-  onBringToFront, onBringForward, onSendBackward, onSendToBack,
-  onGroup, onUngroup, canGroup, canUngroup,
-  onStrokeStyleChange,
-  onOpacityChange,
-  onMarkerChange,
-  onDragStart: onDragStartProp,
-  onUndo, onRedo,
-  onCheckFrameContainment, onMoveGroupChildren,
-  recentColors, colors, selectedColor,
-  onEndpointDragMove, onEndpointDragEnd,
-  onCursorMove, onCursorUpdate,
-  onEditingChange,
-  anySelectedLocked,
-  onLock, onUnlock, canLock, canUnlock,
-  vertexEditId, onEditVertices, onExitVertexEdit, onVertexDragEnd, onVertexInsert,
-  canEditVertices,
-  snapIndicator,
-  onActivity,
-  pendingEditId,
-  onPendingEditConsumed,
-  onUpdateBoardSettings,
-  onWaypointDragEnd,
-  onWaypointInsert,
-  onWaypointDelete,
-  autoRoutePointsRef,
-  onDrawLineFromAnchor,
-  onUpdateTableCell,
-  onTableDataChange,
-  onAddRow,
-  onDeleteRow,
-  onAddColumn,
-  onDeleteColumn,
-  onAddRowAt,
-  onDeleteRowAt,
-  onAddColumnAt,
-  onDeleteColumnAt,
-}: CanvasProps) {
+export function Canvas() {
+  // ── Read mutations from context (formerly 75+ props from BoardClient) ──
+  const {
+    onDrawShape, onCancelTool,
+    onSelect, onSelectObjects, onClearSelection, onEnterGroup, onExitGroup,
+    onDragEnd, onDragMove, onUpdateText, onUpdateTitle, onUpdateRichText, onEditorReady, onTransformEnd,
+    onDelete, onDuplicate, onCopy, onPaste, onColorChange,
+    onBringToFront, onBringForward, onSendBackward, onSendToBack,
+    onGroup, onUngroup, canGroup, canUngroup,
+    onStrokeStyleChange, onOpacityChange, onMarkerChange,
+    onDragStart: onDragStartProp, onUndo, onRedo,
+    onCheckFrameContainment, onMoveGroupChildren,
+    recentColors, colors, selectedColor,
+    onEndpointDragMove, onEndpointDragEnd,
+    onCursorMove, onCursorUpdate,
+    onEditingChange,
+    anySelectedLocked, onLock, onUnlock, canLock, canUnlock,
+    vertexEditId, onEditVertices, onExitVertexEdit, onVertexDragEnd, onVertexInsert,
+    canEditVertices, snapIndicator,
+    onActivity, pendingEditId, onPendingEditConsumed,
+    onWaypointDragEnd, onWaypointInsert, onWaypointDelete,
+    autoRoutePointsRef, onDrawLineFromAnchor,
+    onUpdateTableCell, onTableDataChange,
+    onAddRow, onDeleteRow, onAddColumn, onDeleteColumn,
+    onAddRowAt, onDeleteRowAt, onAddColumnAt, onDeleteColumnAt,
+  } = useBoardMutations()
   // ── Read shared state from context ──────────────────────────────
   const {
     objects, sortedObjects, selectedIds, activeGroupId, activeTool,

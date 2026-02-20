@@ -39,6 +39,8 @@ import { getShapeAnchors } from './anchorPoints'
 import type { ShapePreset } from './shapePresets'
 import { scaleCustomPoints } from './shapePresets'
 import { BoardProvider, BoardContextValue } from '@/contexts/BoardContext'
+import { BoardMutationsProvider, BoardMutationsContextValue } from '@/contexts/BoardMutationsContext'
+import { BoardToolProvider, BoardToolContextValue } from '@/contexts/BoardToolContext'
 import { ConnectionBanner, ConnectionStatus } from '@/components/ui/ConnectionBanner'
 import { ChatPanel } from './ChatPanel'
 
@@ -714,8 +716,122 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     canvasColor, gridColor, subdivisionColor, uiDarkMode,
   ])
 
+  // ── Mutations context (all callbacks for Canvas + child components) ──
+  const mutationsValue: BoardMutationsContextValue = useMemo(() => ({
+    onDrawShape: handleDrawShape,
+    onCancelTool: handleCancelTool,
+    onSelect: selectObject,
+    onSelectObjects: selectObjects,
+    onClearSelection: clearSelection,
+    onEnterGroup: enterGroup,
+    onExitGroup: exitGroup,
+    onDragStart: handleDragStart,
+    onDragEnd: handleDragEnd,
+    onDragMove: handleDragMove,
+    onUpdateText: handleUpdateText,
+    onUpdateTitle: handleUpdateTitle,
+    onUpdateRichText: RICH_TEXT_ENABLED ? handleUpdateRichText : undefined,
+    onEditorReady: RICH_TEXT_ENABLED ? setRichTextEditor : undefined,
+    onTransformEnd: handleTransformEnd,
+    onDelete: handleDelete,
+    onDuplicate: handleDuplicate,
+    onCopy: handleCopy,
+    onPaste: handlePaste,
+    onColorChange: handleColorChange,
+    onBringToFront: handleBringToFront,
+    onBringForward: handleBringForward,
+    onSendBackward: handleSendBackward,
+    onSendToBack: handleSendToBack,
+    onGroup: handleGroup,
+    onUngroup: handleUngroup,
+    canGroup,
+    canUngroup,
+    onStrokeStyleChange: handleStrokeStyleChange,
+    onOpacityChange: handleOpacityChange,
+    onMarkerChange: handleMarkerChange,
+    onUndo: performUndo,
+    onRedo: performRedo,
+    onCheckFrameContainment: checkFrameContainment,
+    onMoveGroupChildren: moveGroupChildren,
+    recentColors,
+    colors: EXPANDED_PALETTE,
+    selectedColor,
+    onEndpointDragMove: handleEndpointDragMove,
+    onEndpointDragEnd: handleEndpointDragEnd,
+    onCursorMove: sendCursorWithActivity,
+    onCursorUpdate,
+    onEditingChange: setIsEditingText,
+    anySelectedLocked,
+    onLock: handleLockSelected,
+    onUnlock: handleUnlockSelected,
+    canLock: selectedCanLock,
+    canUnlock: selectedCanUnlock,
+    vertexEditId,
+    onEditVertices: handleEditVertices,
+    onExitVertexEdit: handleExitVertexEdit,
+    onVertexDragEnd: handleVertexDragEnd,
+    onVertexInsert: handleVertexInsert,
+    canEditVertices,
+    snapIndicator,
+    onActivity: markActivity,
+    pendingEditId,
+    onPendingEditConsumed: () => setPendingEditId(null),
+    onWaypointDragEnd: handleWaypointDragEnd,
+    onWaypointInsert: handleWaypointInsert,
+    onWaypointDelete: handleWaypointDelete,
+    autoRoutePointsRef,
+    onDrawLineFromAnchor: handleDrawLineFromAnchor,
+    onUpdateTableCell: handleCellTextUpdate,
+    onTableDataChange: handleTableDataChange,
+    onAddRow: handleAddRow,
+    onDeleteRow: handleDeleteRow,
+    onAddColumn: handleAddColumn,
+    onDeleteColumn: handleDeleteColumn,
+    onAddRowAt: handleAddRowAt,
+    onDeleteRowAt: handleDeleteRowAt,
+    onAddColumnAt: handleAddColumnAt,
+    onDeleteColumnAt: handleDeleteColumnAt,
+    onUpdateBoardSettings: updateBoardSettings,
+  }), [
+    handleDrawShape, handleCancelTool,
+    selectObject, selectObjects, clearSelection, enterGroup, exitGroup,
+    handleDragStart, handleDragEnd, handleDragMove,
+    handleUpdateText, handleUpdateTitle, handleUpdateRichText, setRichTextEditor,
+    handleTransformEnd,
+    handleDelete, handleDuplicate, handleCopy, handlePaste,
+    handleColorChange, handleBringToFront, handleBringForward, handleSendBackward, handleSendToBack,
+    handleGroup, handleUngroup, canGroup, canUngroup,
+    handleStrokeStyleChange, handleOpacityChange, handleMarkerChange,
+    performUndo, performRedo,
+    checkFrameContainment, moveGroupChildren,
+    recentColors, selectedColor,
+    handleEndpointDragMove, handleEndpointDragEnd,
+    sendCursorWithActivity, onCursorUpdate,
+    anySelectedLocked,
+    handleLockSelected, handleUnlockSelected, selectedCanLock, selectedCanUnlock,
+    vertexEditId, handleEditVertices, handleExitVertexEdit, handleVertexDragEnd, handleVertexInsert,
+    canEditVertices, snapIndicator,
+    markActivity, pendingEditId,
+    handleWaypointDragEnd, handleWaypointInsert, handleWaypointDelete,
+    autoRoutePointsRef, handleDrawLineFromAnchor,
+    handleCellTextUpdate, handleTableDataChange,
+    handleAddRow, handleDeleteRow, handleAddColumn, handleDeleteColumn,
+    handleAddRowAt, handleDeleteRowAt, handleAddColumnAt, handleDeleteColumnAt,
+    updateBoardSettings,
+  ])
+
+  // ── Tool context ──
+  const toolValue: BoardToolContextValue = useMemo(() => ({
+    activeTool,
+    activePreset,
+    setActiveTool,
+    setActivePreset,
+  }), [activeTool, activePreset])
+
   return (
     <BoardProvider value={boardContextValue}>
+    <BoardMutationsProvider value={mutationsValue}>
+    <BoardToolProvider value={toolValue}>
     <div className="relative flex h-screen flex-col">
       <BoardTopBar
         boardId={boardId}
@@ -786,82 +902,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         />
         <div className="relative flex-1 overflow-hidden">
           <CanvasErrorBoundary>
-            <Canvas
-              onDrawShape={handleDrawShape}
-              onCancelTool={handleCancelTool}
-              onSelect={selectObject}
-              onSelectObjects={selectObjects}
-              onClearSelection={clearSelection}
-              onEnterGroup={enterGroup}
-              onExitGroup={exitGroup}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragMove={handleDragMove}
-              onUpdateText={handleUpdateText}
-              onUpdateTitle={handleUpdateTitle}
-              onUpdateRichText={RICH_TEXT_ENABLED ? handleUpdateRichText : undefined}
-              onEditorReady={RICH_TEXT_ENABLED ? setRichTextEditor : undefined}
-              onTransformEnd={handleTransformEnd}
-              onDelete={handleDelete}
-              onDuplicate={handleDuplicate}
-              onCopy={handleCopy}
-              onPaste={handlePaste}
-              onColorChange={handleColorChange}
-              onBringToFront={handleBringToFront}
-              onBringForward={handleBringForward}
-              onSendBackward={handleSendBackward}
-              onSendToBack={handleSendToBack}
-              onGroup={handleGroup}
-              onUngroup={handleUngroup}
-              canGroup={canGroup}
-              canUngroup={canUngroup}
-              onStrokeStyleChange={handleStrokeStyleChange}
-              onOpacityChange={handleOpacityChange}
-              onMarkerChange={handleMarkerChange}
-              onEndpointDragMove={handleEndpointDragMove}
-              onEndpointDragEnd={handleEndpointDragEnd}
-              onUndo={performUndo}
-              onRedo={performRedo}
-              onCheckFrameContainment={checkFrameContainment}
-              onMoveGroupChildren={moveGroupChildren}
-              recentColors={recentColors}
-              colors={EXPANDED_PALETTE}
-              selectedColor={selectedColor}
-              onCursorMove={sendCursorWithActivity}
-              onCursorUpdate={onCursorUpdate}
-              onActivity={markActivity}
-              onEditingChange={setIsEditingText}
-              anySelectedLocked={anySelectedLocked}
-              onLock={handleLockSelected}
-              onUnlock={handleUnlockSelected}
-              canLock={selectedCanLock}
-              canUnlock={selectedCanUnlock}
-              vertexEditId={vertexEditId}
-              onEditVertices={handleEditVertices}
-              onExitVertexEdit={handleExitVertexEdit}
-              onVertexDragEnd={handleVertexDragEnd}
-              onVertexInsert={handleVertexInsert}
-              canEditVertices={canEditVertices}
-              snapIndicator={snapIndicator}
-              pendingEditId={pendingEditId}
-              onPendingEditConsumed={() => setPendingEditId(null)}
-              onUpdateBoardSettings={updateBoardSettings}
-              onWaypointDragEnd={handleWaypointDragEnd}
-              onWaypointInsert={handleWaypointInsert}
-              onWaypointDelete={handleWaypointDelete}
-              autoRoutePointsRef={autoRoutePointsRef}
-              onDrawLineFromAnchor={handleDrawLineFromAnchor}
-              onUpdateTableCell={handleCellTextUpdate}
-              onTableDataChange={handleTableDataChange}
-              onAddRow={handleAddRow}
-              onDeleteRow={handleDeleteRow}
-              onAddColumn={handleAddColumn}
-              onDeleteColumn={handleDeleteColumn}
-              onAddRowAt={handleAddRowAt}
-              onDeleteRowAt={handleDeleteRowAt}
-              onAddColumnAt={handleAddColumnAt}
-              onDeleteColumnAt={handleDeleteColumnAt}
-            />
+            <Canvas />
           </CanvasErrorBoundary>
         </div>
       </div>
@@ -892,6 +933,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
       </button>
       <ChatPanel boardId={boardId} isOpen={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
+    </BoardToolProvider>
+    </BoardMutationsProvider>
     </BoardProvider>
   )
 }

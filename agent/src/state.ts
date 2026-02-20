@@ -18,6 +18,40 @@ export interface BoardState {
   channel: RealtimeChannel | null
 }
 
+// ── Broadcast to client channel via HTTP API ────────────────
+
+export interface BoardChange {
+  action: 'create' | 'update' | 'delete'
+  object: Partial<BoardObject> & { id: string }
+  timestamp?: number
+}
+
+const AGENT_SENDER_ID = '__agent__'
+const SUPABASE_URL = process.env.SUPABASE_URL || ''
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+
+export function broadcastChanges(boardId: string, changes: BoardChange[]) {
+  // Fire-and-forget HTTP broadcast via Supabase Realtime API
+  fetch(`${SUPABASE_URL}/realtime/v1/api/broadcast`, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_SERVICE_ROLE_KEY,
+      'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messages: [{
+        topic: `board:${boardId}`,
+        event: 'board:sync',
+        payload: { changes, sender_id: AGENT_SENDER_ID },
+        private: true,
+      }],
+    }),
+  }).catch(err => {
+    console.error(`[state] Broadcast failed for board ${boardId}:`, err)
+  })
+}
+
 const boards = new Map<string, BoardState>()
 const loadingPromises = new Map<string, Promise<BoardState>>()
 
@@ -83,7 +117,7 @@ async function loadBoardStateImpl(boardId: string): Promise<BoardState> {
   const objects = new Map<string, BoardObject>()
   const fieldClocks = new Map<string, FieldClocks>()
 
-  for (const obj of (objectsResult.data ?? []) as BoardObject[]) {
+  for (const obj of (objectsResult.data as unknown as BoardObject[] ?? [])) {
     objects.set(obj.id, obj)
     if (obj.field_clocks && typeof obj.field_clocks === 'object') {
       fieldClocks.set(obj.id, obj.field_clocks as FieldClocks)

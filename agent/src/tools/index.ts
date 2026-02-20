@@ -12,8 +12,9 @@ import { stampFields, mergeClocks, type FieldClocks } from '../lib/crdt.js'
 import { getShapeDefaults } from '../lib/defaults.js'
 import { createDefaultTableData, serializeTableData } from '../lib/table.js'
 import { plainTextToTipTap } from '../lib/richtext.js'
-import { loadBoardState, getMaxZIndex, getBoardStateSync } from '../state.js'
+import { loadBoardState, getMaxZIndex, getBoardStateSync, broadcastChanges } from '../state.js'
 import type { BoardObject, BoardObjectType } from '../types.js'
+import type { BoardChange } from '../state.js'
 
 // ── Shared helpers ──────────────────────────────────────────
 
@@ -32,13 +33,13 @@ function buildInsertRow(
   obj: Record<string, unknown>,
   clocks: FieldClocks,
 ): Record<string, unknown> {
-  const row = { ...obj, field_clocks: clocks }
+  const row: Record<string, unknown> = { ...obj, field_clocks: clocks }
   // Parse JSONB string fields so Postgres stores them as objects
   if (typeof row.table_data === 'string') {
-    try { row.table_data = JSON.parse(row.table_data as string) } catch { /* leave as-is */ }
+    try { row.table_data = JSON.parse(row.table_data) } catch { /* leave as-is */ }
   }
   if (typeof row.rich_text === 'string') {
-    try { row.rich_text = JSON.parse(row.rich_text as string) } catch { /* leave as-is */ }
+    try { row.rich_text = JSON.parse(row.rich_text) } catch { /* leave as-is */ }
   }
   return row
 }
@@ -101,7 +102,7 @@ export function createTools(ctx: ToolContext) {
 
   const createStickyNote = tool({
     description: 'Create a sticky note on the board with optional text and color.',
-    parameters: z.object({
+    inputSchema: z.object({
       text: z.string().default(''),
       color: z.string().optional().describe('Hex color, e.g. #FFEB3B'),
       x: z.number().optional().describe('X position (default: random 100-800)'),
@@ -144,6 +145,7 @@ export function createTools(ctx: ToolContext) {
         state.fieldClocks.set(id, clocks)
       }
 
+      broadcastChanges(ctx.boardId, [{ action: 'create', object: obj as Partial<BoardObject> & { id: string } }])
       return { id, type: 'sticky_note', text, x: obj.x, y: obj.y }
     },
   })
@@ -152,7 +154,7 @@ export function createTools(ctx: ToolContext) {
 
   const createShape = tool({
     description: 'Create a shape on the board (rectangle, circle, triangle, chevron, parallelogram, ngon).',
-    parameters: z.object({
+    inputSchema: z.object({
       type: z.enum(['rectangle', 'circle', 'triangle', 'chevron', 'parallelogram', 'ngon']),
       x: z.number().optional(),
       y: z.number().optional(),
@@ -197,6 +199,7 @@ export function createTools(ctx: ToolContext) {
         state.fieldClocks.set(id, clocks)
       }
 
+      broadcastChanges(ctx.boardId, [{ action: 'create', object: obj as Partial<BoardObject> & { id: string } }])
       return { id, type, x: obj.x, y: obj.y, width: obj.width, height: obj.height }
     },
   })
@@ -205,7 +208,7 @@ export function createTools(ctx: ToolContext) {
 
   const createFrame = tool({
     description: 'Create a frame (container) on the board to group objects.',
-    parameters: z.object({
+    inputSchema: z.object({
       title: z.string().optional().default('Frame'),
       x: z.number().optional(),
       y: z.number().optional(),
@@ -248,6 +251,7 @@ export function createTools(ctx: ToolContext) {
         state.fieldClocks.set(id, clocks)
       }
 
+      broadcastChanges(ctx.boardId, [{ action: 'create', object: obj as Partial<BoardObject> & { id: string } }])
       return { id, type: 'frame', title, x: obj.x, y: obj.y }
     },
   })
@@ -256,7 +260,7 @@ export function createTools(ctx: ToolContext) {
 
   const createTable = tool({
     description: 'Create a table on the board with specified columns and rows.',
-    parameters: z.object({
+    inputSchema: z.object({
       columns: z.number().min(1).max(10).default(3),
       rows: z.number().min(1).max(20).default(3),
       x: z.number().optional(),
@@ -299,6 +303,7 @@ export function createTools(ctx: ToolContext) {
         state.fieldClocks.set(id, clocks)
       }
 
+      broadcastChanges(ctx.boardId, [{ action: 'create', object: obj as Partial<BoardObject> & { id: string } }])
       return { id, type: 'table', columns, rows, x: obj.x, y: obj.y }
     },
   })
@@ -307,7 +312,7 @@ export function createTools(ctx: ToolContext) {
 
   const createConnector = tool({
     description: 'Create a line or arrow connecting two objects on the board.',
-    parameters: z.object({
+    inputSchema: z.object({
       type: z.enum(['line', 'arrow']).default('arrow'),
       startObjectId: z.string().describe('ID of the object where the connector starts'),
       endObjectId: z.string().describe('ID of the object where the connector ends'),
@@ -375,6 +380,7 @@ export function createTools(ctx: ToolContext) {
       state.objects.set(id, obj as unknown as BoardObject)
       state.fieldClocks.set(id, clocks)
 
+      broadcastChanges(ctx.boardId, [{ action: 'create', object: obj as Partial<BoardObject> & { id: string } }])
       return { id, type, startObjectId, endObjectId }
     },
   })
@@ -383,7 +389,7 @@ export function createTools(ctx: ToolContext) {
 
   const moveObject = tool({
     description: 'Move an object to a new position on the board.',
-    parameters: z.object({
+    inputSchema: z.object({
       id: z.string().describe('ID of the object to move'),
       x: z.number().describe('New X position'),
       y: z.number().describe('New Y position'),
@@ -396,6 +402,7 @@ export function createTools(ctx: ToolContext) {
       const result = await updateFields(id, ctx.boardId, updates, clocks)
       if (!result.success) return { error: result.error }
 
+      broadcastChanges(ctx.boardId, [{ action: 'update', object: { id, ...updates } as Partial<BoardObject> & { id: string } }])
       return { id, x, y }
     },
   })
@@ -404,7 +411,7 @@ export function createTools(ctx: ToolContext) {
 
   const resizeObject = tool({
     description: 'Resize an object on the board.',
-    parameters: z.object({
+    inputSchema: z.object({
       id: z.string().describe('ID of the object to resize'),
       width: z.number().describe('New width'),
       height: z.number().describe('New height'),
@@ -417,6 +424,7 @@ export function createTools(ctx: ToolContext) {
       const result = await updateFields(id, ctx.boardId, updates, clocks)
       if (!result.success) return { error: result.error }
 
+      broadcastChanges(ctx.boardId, [{ action: 'update', object: { id, ...updates } as Partial<BoardObject> & { id: string } }])
       return { id, width, height }
     },
   })
@@ -425,7 +433,7 @@ export function createTools(ctx: ToolContext) {
 
   const updateText = tool({
     description: 'Update the text content of an object. For sticky notes and frames, can also update the title.',
-    parameters: z.object({
+    inputSchema: z.object({
       id: z.string().describe('ID of the object to update'),
       text: z.string().optional().describe('New text content'),
       title: z.string().optional().describe('New title (for sticky notes and frames)'),
@@ -455,6 +463,7 @@ export function createTools(ctx: ToolContext) {
       const result = await updateFields(id, ctx.boardId, updates, clocks)
       if (!result.success) return { error: result.error }
 
+      broadcastChanges(ctx.boardId, [{ action: 'update', object: { id, ...updates } as Partial<BoardObject> & { id: string } }])
       return { id, text, title }
     },
   })
@@ -463,7 +472,7 @@ export function createTools(ctx: ToolContext) {
 
   const changeColor = tool({
     description: 'Change the color of an object on the board.',
-    parameters: z.object({
+    inputSchema: z.object({
       id: z.string().describe('ID of the object to recolor'),
       color: z.string().describe('New hex color, e.g. #FF5733'),
     }),
@@ -473,6 +482,7 @@ export function createTools(ctx: ToolContext) {
       const result = await updateFields(id, ctx.boardId, { color }, clocks)
       if (!result.success) return { error: result.error }
 
+      broadcastChanges(ctx.boardId, [{ action: 'update', object: { id, color } as Partial<BoardObject> & { id: string } }])
       return { id, color }
     },
   })
@@ -481,7 +491,7 @@ export function createTools(ctx: ToolContext) {
 
   const getBoardStateTool = tool({
     description: 'Get the current state of all objects on the board. Use this to understand what is on the board before making changes.',
-    parameters: z.object({}),
+    inputSchema: z.object({}),
     execute: async () => {
       const state = await loadBoardState(ctx.boardId)
       const objects = Array.from(state.objects.values()).map(obj => ({
@@ -513,7 +523,7 @@ export function createTools(ctx: ToolContext) {
 
   const describeImage = tool({
     description: 'Describe an image that has been uploaded to the board. Pass the object ID of a file-type board object with an image MIME type.',
-    parameters: z.object({
+    inputSchema: z.object({
       objectId: z.string().describe('ID of the file object to describe'),
     }),
     execute: async ({ objectId }) => {
@@ -551,7 +561,7 @@ export function createTools(ctx: ToolContext) {
 
   const readFileContent = tool({
     description: 'Read the text content of an uploaded file (text, markdown, CSV, or PDF). Returns the file content as text.',
-    parameters: z.object({
+    inputSchema: z.object({
       objectId: z.string().describe('ID of the file object to read'),
     }),
     execute: async ({ objectId }) => {
@@ -593,7 +603,7 @@ export function createTools(ctx: ToolContext) {
 
   const deleteObject = tool({
     description: 'Delete an object from the board by marking it as deleted.',
-    parameters: z.object({
+    inputSchema: z.object({
       id: z.string().describe('ID of the object to delete'),
     }),
     execute: async ({ id }) => {
@@ -616,6 +626,7 @@ export function createTools(ctx: ToolContext) {
       state.objects.delete(id)
       state.fieldClocks.delete(id)
 
+      broadcastChanges(ctx.boardId, [{ action: 'delete', object: { id } }])
       return { id, deleted: true }
     },
   })

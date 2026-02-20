@@ -45,16 +45,16 @@ router.post('/chat', async (req, res) => {
     for await (const part of result.fullStream) {
       if (clientDisconnected) break
       if (part.type === 'text-delta') {
-        fullText += part.textDelta
-        res.write(`data: ${JSON.stringify({ type: 'text-delta', text: part.textDelta })}\n\n`)
+        fullText += part.text
+        res.write(`data: ${JSON.stringify({ type: 'text-delta', text: part.text })}\n\n`)
       } else if (part.type === 'tool-call') {
         toolCalls.push({
           toolName: part.toolName,
-          args: part.args,
+          args: part.input,
         })
-        res.write(`data: ${JSON.stringify({ type: 'tool-call', toolName: part.toolName, args: part.args })}\n\n`)
+        res.write(`data: ${JSON.stringify({ type: 'tool-call', toolName: part.toolName, args: part.input })}\n\n`)
       } else if (part.type === 'tool-result') {
-        res.write(`data: ${JSON.stringify({ type: 'tool-result', toolName: part.toolName, result: part.result })}\n\n`)
+        res.write(`data: ${JSON.stringify({ type: 'tool-result', toolName: part.toolName, result: part.output })}\n\n`)
       } else if (part.type === 'error') {
         res.write(`data: ${JSON.stringify({ type: 'error', error: String(part.error) })}\n\n`)
       }

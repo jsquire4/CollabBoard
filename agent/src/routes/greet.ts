@@ -34,8 +34,8 @@ router.post('/greet', async (req, res) => {
     for await (const part of result.fullStream) {
       if (clientDisconnected) break
       if (part.type === 'text-delta') {
-        fullText += part.textDelta
-        res.write(`data: ${JSON.stringify({ type: 'text-delta', text: part.textDelta })}\n\n`)
+        fullText += part.text
+        res.write(`data: ${JSON.stringify({ type: 'text-delta', text: part.text })}\n\n`)
       }
     }
 

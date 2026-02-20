@@ -10,7 +10,7 @@ services:
       - NODE_ENV=development
       - PORT=8080
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - SUPABASE_URL=http://host.docker.internal:54321
+      - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:54321}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - AGENT_INTERNAL_SECRET=${AGENT_INTERNAL_SECRET:-dev-secret}
       - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}

@@ -2,7 +2,7 @@
  * AI agent configuration — streamText + tool wiring.
  */
 
-import { streamText } from 'ai'
+import { streamText, stepCountIs } from 'ai'
 import { openai } from '@ai-sdk/openai'
 import { createTools } from './tools/index.js'
 import { createHLC, type HLC } from './lib/hlc.js'
@@ -32,6 +32,7 @@ export interface AgentStreamOptions {
   userId: string
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function createAgentStream({ message, history, boardId, userId }: AgentStreamOptions) {
   const hlc: HLC = createHLC(`agent-${userId}`)
   const tools = createTools({ boardId, userId, hlc })
@@ -53,7 +54,7 @@ export function createAgentStream({ message, history, boardId, userId }: AgentSt
     system: SYSTEM_PROMPT,
     messages,
     tools,
-    maxSteps: 10,
+    stopWhen: stepCountIs(10),
     onStepFinish({ toolCalls, usage }) {
       const latencyMs = Date.now() - startTime
       const toolNames = toolCalls?.map(tc => tc.toolName)
@@ -62,8 +63,8 @@ export function createAgentStream({ message, history, boardId, userId }: AgentSt
         userId,
         toolName: toolNames?.join(', '),
         tokenUsage: usage ? {
-          promptTokens: usage.promptTokens,
-          completionTokens: usage.completionTokens,
+          promptTokens: usage.inputTokens ?? 0,
+          completionTokens: usage.outputTokens ?? 0,
         } : undefined,
         latencyMs,
       })
@@ -71,6 +72,7 @@ export function createAgentStream({ message, history, boardId, userId }: AgentSt
   })
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function createGreetingStream(isNewBoard: boolean) {
   return streamText({
     model: openai('gpt-4o'),
@@ -78,6 +80,6 @@ export function createGreetingStream(isNewBoard: boolean) {
     prompt: isNewBoard
       ? 'Welcome the user to their new board. Be brief and enthusiastic (1-2 sentences). Ask how you can help them get started.'
       : 'Welcome the user back to their board. Be brief (1-2 sentences). Ask what they would like to work on.',
-    maxSteps: 1,
+    stopWhen: stepCountIs(1),
   })
 }

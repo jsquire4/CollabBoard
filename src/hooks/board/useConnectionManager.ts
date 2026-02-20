@@ -30,6 +30,7 @@ export function useConnectionManager({
   // Subscribe LAST — after all hooks have registered their .on() listeners.
   useEffect(() => {
     if (!channel) return
+    mountedRef.current = true
 
     const attemptReconnect = () => {
       // Bug 3 fix: increment first, then guard — so all MAX_RECONNECT_ATTEMPTS fire

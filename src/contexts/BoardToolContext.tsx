@@ -5,7 +5,6 @@ import { BoardObjectType } from '@/types/board'
 import type { ShapePreset } from '@/components/board/shapePresets'
 
 export interface BoardToolContextValue {
-  activeTool: BoardObjectType | null
   activePreset: ShapePreset | null
   setActiveTool: (tool: BoardObjectType | null) => void
   setActivePreset: (preset: ShapePreset | null) => void

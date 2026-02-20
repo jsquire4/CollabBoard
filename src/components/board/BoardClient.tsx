@@ -130,6 +130,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const [activePreset, setActivePreset] = useState<ShapePreset | null>(null)
   const [vertexEditId, setVertexEditId] = useState<string | null>(null)
   const [pendingEditId, setPendingEditId] = useState<string | null>(null)
+  const clearPendingEditId = useCallback(() => setPendingEditId(null), [])
   const [snapIndicator, setSnapIndicator] = useState<{ x: number; y: number } | null>(null)
   const [shapePalette, setShapePalette] = useState<{ lineId: string; canvasX: number; canvasY: number; screenX?: number; screenY?: number } | null>(null)
 
@@ -581,7 +582,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     snapIndicator,
     onActivity: markActivity,
     pendingEditId,
-    onPendingEditConsumed: () => setPendingEditId(null),
+    onPendingEditConsumed: clearPendingEditId,
     onWaypointDragEnd: handleWaypointDragEnd,
     onWaypointInsert: handleWaypointInsert,
     onWaypointDelete: handleWaypointDelete,
@@ -616,7 +617,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     handleLockSelected, handleUnlockSelected, selectedCanLock, selectedCanUnlock,
     vertexEditId, handleEditVertices, handleExitVertexEdit, handleVertexDragEnd, handleVertexInsert,
     canEditVertices, snapIndicator,
-    markActivity, pendingEditId,
+    markActivity, pendingEditId, clearPendingEditId,
     handleWaypointDragEnd, handleWaypointInsert, handleWaypointDelete,
     autoRoutePointsRef, handleDrawLineFromAnchor,
     handleCellTextUpdate, handleTableDataChange,
@@ -626,11 +627,10 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
 
   // ── Tool context ──
   const toolValue: BoardToolContextValue = useMemo(() => ({
-    activeTool,
     activePreset,
     setActiveTool,
     setActivePreset,
-  }), [activeTool, activePreset])
+  }), [activePreset])
 
   return (
     <BoardProvider value={boardContextValue}>

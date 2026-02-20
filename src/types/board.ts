@@ -65,4 +65,8 @@ export type {
   BoardObjectTable,
   BoardObjectFile,
   BoardObjectCollab,
+  VectorObject,
+  TableObject,
+  FileObject,
+  GenericShapeObject,
 } from './boardObject'

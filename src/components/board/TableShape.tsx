@@ -1,12 +1,14 @@
 import { memo, useMemo, useRef, useCallback, useState } from 'react'
 import { Group, Rect, Text, Line } from 'react-konva'
 import Konva from 'konva'
+import { TableObject } from '@/types/board'
 import { useBoardContext } from '@/contexts/BoardContext'
 import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
 import { parseTableData, getColumnXOffsets, getRowYOffsets, getTableWidth, getTableHeight, resizeColumn, resizeRow, serializeTableData } from '@/lib/table/tableUtils'
 import { DEFAULT_HEADER_HEIGHT, MIN_COL_WIDTH, MIN_ROW_HEIGHT, TableData } from '@/lib/table/tableTypes'
 
-interface TableShapeProps extends ShapeProps {
+interface TableShapeProps extends Omit<ShapeProps, 'object'> {
+  object: TableObject
   onStartCellEdit?: (id: string, textNode: Konva.Text, row: number, col: number) => void
   isEditing?: boolean
   editingCellCoords?: { row: number; col: number } | null

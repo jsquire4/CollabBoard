@@ -98,3 +98,31 @@ export type BoardObject =
   BoardObjectTable &
   BoardObjectFile &
   BoardObjectCollab
+
+// --- Narrowed discriminated types ---
+
+/** Line or arrow shape with required endpoint coordinates */
+export type VectorObject = BoardObject & {
+  type: 'line' | 'arrow'
+  x2: number
+  y2: number
+}
+
+/** Table shape with required table_data */
+export type TableObject = BoardObject & {
+  type: 'table'
+  table_data: string
+}
+
+/** File shape with required file fields */
+export type FileObject = BoardObject & {
+  type: 'file'
+  storage_path: string
+  file_name: string
+  mime_type: string
+}
+
+/** Generic shape (registry-based + sticky_note + frame + group) */
+export type GenericShapeObject = BoardObject & {
+  type: 'sticky_note' | 'rectangle' | 'circle' | 'frame' | 'group' | 'triangle' | 'chevron' | 'parallelogram' | 'ngon'
+}

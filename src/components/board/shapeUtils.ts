@@ -1,5 +1,5 @@
 import Konva from 'konva'
-import { BoardObject, BoardObjectType } from '@/types/board'
+import { BoardObject, BoardObjectType, VectorObject } from '@/types/board'
 import { applyTableTransformScale } from '@/lib/table/tableTransform'
 export { getInitialVertexPoints } from '@/lib/geometry/customPoints'
 
@@ -13,8 +13,11 @@ export function snapToGrid(value: number, gridSize: number = GRID_SIZE, subdivis
 }
 
 /** Returns true for shape types that use endpoint-based (vector) rendering instead of width/height. */
-export function isVectorType(type: BoardObjectType | string): boolean {
-  return type === 'line' || type === 'arrow'
+export function isVectorType(obj: BoardObject): obj is VectorObject
+export function isVectorType(type: BoardObjectType | string): boolean
+export function isVectorType(typeOrObj: BoardObjectType | string | BoardObject): boolean {
+  const t = typeof typeOrObj === 'string' ? typeOrObj : typeOrObj.type
+  return t === 'line' || t === 'arrow'
 }
 
 /** Common props shared by all shape components. */

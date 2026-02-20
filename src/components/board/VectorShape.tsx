@@ -1,13 +1,14 @@
 import { memo } from 'react'
 import { Group, Line, Circle } from 'react-konva'
 import Konva from 'konva'
-import { BoardObject } from '@/types/board'
+import { BoardObject, VectorObject } from '@/types/board'
 import { ShapeProps, getShadowProps } from './shapeUtils'
 import { parseWaypoints, snapAngle45 } from './autoRoute'
 import { renderMarker, computeEndpointAngle, MarkerType } from './lineMarkers'
 import { buildWaypointSegments } from '@/lib/geometry/waypoints'
 
-interface VectorShapeProps extends ShapeProps {
+interface VectorShapeProps extends Omit<ShapeProps, 'object'> {
+  object: VectorObject
   variant: 'line' | 'arrow'
   /** Pre-computed auto-route waypoints (absolute coords, only when no manual waypoints) */
   autoRoutePoints?: number[] | null
@@ -51,8 +52,8 @@ export const VectorShape = memo(function VectorShape({
   const markerEnd: MarkerType = (object.marker_end as MarkerType) ?? (variant === 'arrow' ? 'arrow' : 'none')
 
   // Compute endpoint
-  const x2 = object.x2 ?? object.x + object.width
-  const y2 = object.y2 ?? object.y + object.height
+  const x2 = object.x2
+  const y2 = object.y2
   const dx = x2 - object.x
   const dy = y2 - object.y
 

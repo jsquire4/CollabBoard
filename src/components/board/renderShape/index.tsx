@@ -1,5 +1,5 @@
 import React from 'react'
-import { BoardObject } from '@/types/board'
+import { BoardObject, VectorObject, TableObject } from '@/types/board'
 import { StickyNote } from '../StickyNote'
 import { FrameShape } from '../FrameShape'
 import { GenericShape } from '../GenericShape'
@@ -108,7 +108,7 @@ export function renderShape(
         <VectorShape
           key={obj.id}
           variant={obj.type as 'line' | 'arrow'}
-          object={obj}
+          object={obj as VectorObject}
           onDragEnd={handleShapeDragEnd}
           onDragMove={handleShapeDragMove}
           onDragStart={handleShapeDragStart}
@@ -132,7 +132,7 @@ export function renderShape(
       return (
         <TableShape
           key={obj.id}
-          object={obj}
+          object={obj as TableObject}
           onDragEnd={handleShapeDragEnd}
           onDragMove={handleShapeDragMove}
           onDragStart={handleShapeDragStart}

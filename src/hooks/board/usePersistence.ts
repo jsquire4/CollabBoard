@@ -23,6 +23,7 @@ const BOARD_OBJECT_COLUMNS = [
   'sides', 'custom_points',
   'connect_start_id', 'connect_start_anchor', 'connect_end_id', 'connect_end_anchor', 'waypoints',
   'marker_start', 'marker_end', 'table_data',
+  'storage_path', 'file_name', 'mime_type', 'file_size',
   'z_index', 'parent_id', 'created_by', 'created_at', 'updated_at', 'deleted_at',
 ].join(',')
 

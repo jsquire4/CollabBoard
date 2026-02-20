@@ -439,7 +439,7 @@ export function Canvas({
     const bottom = (-stagePos.y + dimensions.height) / stageScale + margin
 
     return sortedObjects.filter(obj => {
-      if (obj.type === 'group') return false // groups render nothing
+      if (obj.type === 'group' || obj.type === 'file') return false // groups and files render nothing on canvas
       if (isVectorType(obj.type)) {
         const ex2 = obj.x2 ?? obj.x + obj.width
         const ey2 = obj.y2 ?? obj.y + obj.height

@@ -27,6 +27,7 @@ export type BoardObjectType =
   | 'parallelogram'
   | 'ngon'
   | 'table'
+  | 'file'
 
 export type FontStyle = 'normal' | 'bold' | 'italic' | 'bold italic'
 
@@ -98,6 +99,10 @@ export interface BoardObject {
   marker_start?: string | null
   marker_end?: string | null
   table_data?: string | null
+  storage_path?: string | null
+  file_name?: string | null
+  mime_type?: string | null
+  file_size?: number | null
   field_clocks?: Record<string, import('@/lib/crdt/hlc').HLC>
   deleted_at?: string | null
 }

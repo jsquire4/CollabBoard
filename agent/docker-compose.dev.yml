@@ -1,0 +1,22 @@
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - '8080:8080'
+      - '9229:9229'
+    environment:
+      - NODE_ENV=development
+      - PORT=8080
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SUPABASE_URL=http://host.docker.internal:54321
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - AGENT_INTERNAL_SECRET=${AGENT_INTERNAL_SECRET:-dev-secret}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-collabboard-agent}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    volumes:
+      - ./src:/app/src
+    restart: unless-stopped

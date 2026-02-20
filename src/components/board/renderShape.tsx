@@ -187,6 +187,7 @@ export function renderShape(
         />
       )
     case 'group':
+    case 'file':
       return null
     default: {
       const _exhaustive: never = obj.type as never

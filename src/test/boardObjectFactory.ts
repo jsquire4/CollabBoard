@@ -238,7 +238,11 @@ export function makeTextObject(overrides?: Partial<BoardObject>): BoardObject {
 
 export function makeSlideFrame(overrides?: Partial<BoardObject>): BoardObject {
   return makeObject({
-    type: "frame",
+    type: 'frame',
+    width: 400,
+    height: 300,
+    color: 'rgba(200,200,200,0.1)',
+    title: 'Slide 1',
     is_slide: true,
     deck_id: null,
     slide_index: 0,

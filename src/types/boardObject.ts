@@ -145,7 +145,7 @@ export type FileObject = BoardObject & {
 /** Generic shape (registry-based + sticky_note + frame + group) */
 export type GenericShapeObject = BoardObject & {
   type: 'sticky_note' | 'rectangle' | 'circle' | 'frame' | 'group' | 'triangle' | 'chevron' | 'parallelogram' | 'ngon'
-    | 'status_badge' | 'section_header' | 'metric_card' | 'checklist' | 'api_object' | 'context_object' | 'agent_output'
+    | 'text' | 'status_badge' | 'section_header' | 'metric_card' | 'checklist' | 'api_object' | 'context_object' | 'agent_output'
 }
 
 /** Agent shape with required agent_state */

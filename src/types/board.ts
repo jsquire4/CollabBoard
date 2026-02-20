@@ -86,4 +86,5 @@ export type {
   TableObject,
   FileObject,
   GenericShapeObject,
+  AgentObject,
 } from './boardObject'

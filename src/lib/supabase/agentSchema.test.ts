@@ -44,4 +44,9 @@ describe('Phase 1 migration', () => {
     const sql = fs.readFileSync(migrationFile, 'utf-8')
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS comments')
   })
+
+  it('migration references file_board_shares table', () => {
+    const sql = fs.readFileSync(migrationFile, 'utf-8')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS file_board_shares')
+  })
 })

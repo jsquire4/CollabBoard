@@ -133,3 +133,115 @@ export function makeRichTextObject(overrides?: Partial<BoardObject>): BoardObjec
 export function objectsMap(...objs: BoardObject[]): Map<string, BoardObject> {
   return new Map(objs.map(o => [o.id, o]))
 }
+
+export function makeAgent(overrides?: Partial<BoardObject>): BoardObject {
+  return makeObject({
+    type: "agent",
+    agent_state: "idle",
+    width: 200,
+    height: 140,
+    color: "#EEF2FF",
+    ...overrides,
+  })
+}
+
+export function makeAgentOutput(overrides?: Partial<BoardObject>): BoardObject {
+  return makeObject({
+    type: "agent_output",
+    source_agent_id: null,
+    width: 240,
+    height: 160,
+    color: "#F0FDF4",
+    ...overrides,
+  })
+}
+
+export function makeDataConnector(overrides?: Partial<BoardObject>): BoardObject {
+  return makeObject({
+    type: "data_connector",
+    x2: 120,
+    y2: 0,
+    width: 120,
+    height: 2,
+    color: "#7C3AED",
+    ...overrides,
+  })
+}
+
+export function makeContextObject(overrides?: Partial<BoardObject>): BoardObject {
+  return makeObject({
+    type: "context_object",
+    file_id: null,
+    width: 180,
+    height: 100,
+    ...overrides,
+  })
+}
+
+export function makeStatusBadge(overrides?: Partial<BoardObject>): BoardObject {
+  return makeObject({
+    type: "status_badge",
+    width: 100,
+    height: 32,
+    color: "#22C55E",
+    ...overrides,
+  })
+}
+
+export function makeSectionHeader(overrides?: Partial<BoardObject>): BoardObject {
+  return makeObject({
+    type: "section_header",
+    width: 400,
+    height: 40,
+    ...overrides,
+  })
+}
+
+export function makeMetricCard(overrides?: Partial<BoardObject>): BoardObject {
+  return makeObject({
+    type: "metric_card",
+    formula: null,
+    width: 160,
+    height: 100,
+    ...overrides,
+  })
+}
+
+export function makeChecklist(overrides?: Partial<BoardObject>): BoardObject {
+  return makeObject({
+    type: "checklist",
+    width: 200,
+    height: 160,
+    ...overrides,
+  })
+}
+
+export function makeApiObject(overrides?: Partial<BoardObject>): BoardObject {
+  return makeObject({
+    type: "api_object",
+    width: 180,
+    height: 100,
+    color: "#FEF3C7",
+    ...overrides,
+  })
+}
+
+export function makeTextObject(overrides?: Partial<BoardObject>): BoardObject {
+  return makeObject({
+    type: "text",
+    width: 200,
+    height: 60,
+    color: "transparent",
+    ...overrides,
+  })
+}
+
+export function makeSlideFrame(overrides?: Partial<BoardObject>): BoardObject {
+  return makeObject({
+    type: "frame",
+    is_slide: true,
+    deck_id: null,
+    slide_index: 0,
+    ...overrides,
+  })
+}

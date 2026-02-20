@@ -1,216 +1,347 @@
-# Implementation Plan: Table Shape
+# Implementation Plan: Full Complexity Sweep Refactoring
 
 ## Chosen Approach
 
-Single `board_objects` row with `table_data` JSONB column. Konva Group-per-cell rendering with invisible resize handles. Cell editing via `useTextEditing` extension with `editingCellCoords`. Pure TDD: write all tests first (red), then implement (green). Based on the verified TODO.md plan with Konva performance optimizations from research.
+Types-first, architecture-second execution across 5 phases and 12 consolidation targets. The type system acts as the specification — discriminated unions and sub-interfaces create compiler-enforced guardrails that prevent complexity from re-accumulating. Context architecture eliminates prop-threading as the default pattern. Everything else follows.
+
+**Branch:** `refactor/complexity-sweep` (already created)
+
+**Version Control:** Commit after every logical unit. `npx tsc --noEmit` before every commit. Each phase ends with a full `npx tsc --noEmit && npx vitest run` checkpoint. If a phase goes sideways, `git revert` that phase's commits back to the last checkpoint.
+
+---
 
 ## 1. Testing Strategy
 
-### Test-First (Red Phase) — Written Before Implementation
+### Existing Safety Net
 
-All test files are written first so every implementation task has a clear "green" target.
+| Test File | Lines | Covers |
+|-----------|-------|--------|
+| `usePersistence.test.ts` | 894 | All 11 persistence operations |
+| `useBoardState.test.ts` | 775 | State mutations, group/ungroup, z-order, broadcast coalescing |
+| `useConnectorActions.test.ts` | 685 | Anchor snap, endpoint drag, connector creation |
+| `useTableActions.test.ts` | 667 | Table cell/row/col mutations |
+| `useKeyboardShortcuts.test.ts` | 546 | All shortcut keys, editing guard |
+| `useBroadcast.test.ts` | 484 | Broadcast batching, coalescing, flush |
+| `useStyleActions.test.ts` | 468 | Color, stroke, opacity, markers |
+| `boardsApi.test.ts` | 403 | Board CRUD, sharing, invite acceptance |
+| `shapeUtils.test.ts` | 390 | Transform, snap, outline/shadow props |
+| `BoardList.test.tsx` | 458 | Board list rendering, duplication |
+| `BoardContext.test.tsx` | 104 | Provider/consumer contract |
 
-| Test File | Tests | What It Covers |
-|-----------|-------|----------------|
-| `src/lib/table/tableUtils.test.ts` | 38 | All pure utility functions — CRUD, resize, navigation, serialization |
-| `src/hooks/board/useTableActions.test.ts` | 12 | Action hook — add/delete row/col, cell update, undo, canEdit guard |
-| `src/hooks/board/useTextEditing.test.ts` | +8 | Cell editing start/finish, Tab/Enter/Escape nav, coords cleared |
-| `src/hooks/board/usePersistence.test.ts` | +3 | addObject table, updateObject table_data, duplicateObject table |
-| `src/components/board/shapeUtils.test.ts` | +2 | Transform distribution for tables |
-| `src/hooks/board/useTableIntegration.test.ts` | 6 | Cross-hook: delete/duplicate/color/group/transform |
+### New Tests Required (by priority)
 
-**Total: 69 new tests** across 6 test files (3 new, 3 existing).
+1. **`useUndoExecution.test.ts`** — Currently ZERO coverage for `executeUndo` (91 lines, 7 entry types). Must cover all undo/redo paths for: add, delete, update, move, duplicate, group, ungroup. **TDD candidate.**
+2. **`BoardStateContext.test.tsx` / `BoardMutationsContext.test.tsx` / `BoardToolContext.test.tsx`** — Throw-outside-provider guard + field accessibility for each split context. **TDD candidate.**
+3. **`useObjectLoader.test.ts` / `useObjectWriter.test.ts` / `useDragPersistence.test.ts`** — Sub-hook coverage after usePersistence split.
+4. **`ContextMenu.test.tsx`** — Currently no tests for a 490-line, 39-prop component being refactored.
+5. **`useClickOutside.test.ts`** — Hook exists, test does not.
+6. **`useSyncRef.test.ts`** — Pure hook, trivial TDD.
+7. **`getUserDisplayName.test.ts`** — Pure function.
+8. **Geometry migration tests** — Import path changes only; migrate existing tests from `shapePresets.test.ts`.
 
-### Test Infrastructure Needed
-- `src/test/boardObjectFactory.ts` — add `makeTable(overrides?)` factory function
-- No new test utilities or mocks needed — existing `makeDeps()` pattern covers everything
+### Test Infrastructure Changes
+
+1. **`src/test/renderWithBoardContext.tsx`** — Shared wrapper for all three split contexts. Prevents every component test from duplicating the three-provider wrapping.
+2. **`src/test/mocks/supabase.ts`** — Centralize `chainMock` helper (currently duplicated inline across test files).
+3. **`src/test/boardObjectFactory.ts`** — Add typed factory functions for discriminated union variants (`makeConnector`, `makeNgon`, `makeLockedRectangle`).
+
+### Verification Checkpoints
+
+| After Phase | Commands |
+|---|---|
+| Phase 1 | `npx tsc --noEmit && npx vitest run` |
+| Phase 2 | `npx tsc --noEmit && npx vitest run && npx vitest run src/contexts/` |
+| Phase 3 | `npx tsc --noEmit && npx vitest run` — `usePersistence.test.ts` must still pass |
+| Phase 4 | `npx tsc --noEmit && npx vitest run` |
+| Phase 5 | `npx tsc --noEmit && npx vitest run && npx next build` |
 
 ### Acceptance Criteria
-- All 69 new tests pass
-- All existing ~639 tests still pass
-- `npx tsc --noEmit` clean
-- No regressions in shape rendering, editing, or persistence
+
+- Zero regressions: all existing tests pass, no tests deleted
+- Zero `// @ts-ignore` or `as any` introduced
+- `useUndoExecution.test.ts` covers all 7 UndoEntry types for both undo and redo
+- Every new module with non-trivial logic has a co-located test file
+- Production build succeeds: `npx next build`
+
+---
 
 ## 2. Implementation Plan
 
-### Task Breakdown (Ordered with Dependencies)
+### Phase 1: Type System as Specification
 
-#### Round 1 — Foundation (3 parallel tasks, no shared files)
+**Goal:** Group BoardObject's 50+ fields into typed sub-interfaces. Non-breaking intersection type preserves all 44 consumer imports.
 
-**Task 1A: Types + Pure Utilities**
-- Create `src/lib/table/tableTypes.ts` — `TableCell`, `TableColumn`, `TableRow`, `TableData`, constants
-- Create `src/lib/table/tableUtils.ts` — 17 pure functions (all immutable, return new objects)
-- Create `src/lib/table/tableUtils.test.ts` — 38 tests
-- **Target:** tableUtils.test.ts all green
+**Create:**
+- `src/types/boardObject.ts` — 10 sub-interfaces + composed `BoardObject`:
+  - `BoardObjectIdentity` (id, board_id, type, created_by, timestamps)
+  - `BoardObjectGeometry` (x, y, x2, y2, width, height, rotation)
+  - `BoardObjectHierarchy` (z_index, parent_id)
+  - `BoardObjectText` (text, title, rich_text, font_size, font_family, font_style, text_align, text_vertical_align, text_padding, text_color)
+  - `BoardObjectAppearance` (color, stroke_color, stroke_width, stroke_dash, opacity, corner_radius, shadow_*)
+  - `BoardObjectConnector` (connect_start/end_id, connect_start/end_anchor, waypoints, marker_start/end)
+  - `BoardObjectPolygon` (sides, custom_points)
+  - `BoardObjectTable` (table_data)
+  - `BoardObjectFile` (storage_path, file_name, mime_type, file_size)
+  - `BoardObjectCollab` (locked_by, field_clocks, deleted_at)
+  - `type BoardObject = Identity & Geometry & Hierarchy & Text & Appearance & Connector & Polygon & Table & File & Collab`
 
-**Task 1B: BoardObject Type Extension + Test Factory**
-- Edit `src/types/board.ts` — add `'table'` to `BoardObjectType` union, add `table_data?: string | null` to `BoardObject`
-- Edit `src/test/boardObjectFactory.ts` — add `makeTable(overrides?)` factory
-- **Target:** Types compile, factory usable in later tests
+**Modify:**
+- `src/types/board.ts` — Remove `BoardObject` interface, add `export type { BoardObject } from './boardObject'` re-export
+- `src/test/boardObjectFactory.ts` — Update factory to build sub-interface categories
 
-**Task 1C: Database Migration**
-- Create `supabase/migrations/20260219100000_add_table_type.sql`
-- `ALTER TABLE board_objects ADD COLUMN IF NOT EXISTS table_data JSONB`
-- Drop + recreate type CHECK constraint to include `'table'` (dynamic `pg_constraint` lookup, same pattern as ngon migration)
-- **Target:** Migration file ready for deployment
+**Task order:** Write boardObject.ts → Update board.ts re-export → Update factory → `tsc --noEmit`
 
-#### Round 2 — Persistence + Action Hook (2 parallel tasks)
+---
 
-**Task 2A: Persistence Layer + Tests**
-- Edit `src/hooks/board/usePersistence.ts`:
-  - Add `'table_data'` to `BOARD_OBJECT_COLUMNS`
-  - Add `table` entry to `manualDefaults`: `{ width: 360, height: 128, color: '#FFFFFF', text: '' }`
-- Add 3 tests to `src/hooks/board/usePersistence.test.ts`
-- **Target:** Persistence tests green
+### Phase 2: Context Architecture
 
-**Task 2B: useTableActions Hook + Tests**
-- Create `src/hooks/board/useTableActions.ts` — follows `useStyleActions` pattern
-- Create `src/hooks/board/useTableActions.test.ts` — 12 tests
-- **Deps interface:** `objects`, `selectedIds`, `canEdit`, `updateObject`, `undoStack`
-- **Returns:** `handleAddRow`, `handleDeleteRow`, `handleAddColumn`, `handleDeleteColumn`, `handleTableDataChange`, `handleCellTextUpdate`
-- Each handler: `canEdit` guard → parse `table_data` → capture before-state → call pure util → `updateObject` with `{ table_data, width, height }` → push undo
-- **Target:** useTableActions.test.ts all green
+**Goal:** Split `BoardContext` into 3 focused contexts. Eliminate Canvas's 75-prop interface. Delete `CanvasOverlays`.
 
-#### Round 3 — Cell Editing + Transform (2 parallel tasks)
+**Create:**
+- `src/contexts/BoardStateContext.tsx` — Read-only state (current 20 fields from BoardContext)
+- `src/contexts/BoardMutationsContext.tsx` — All mutation callbacks (currently threaded as Canvas props: ~55 callbacks for drawing, selection, drag, text, transform, clipboard, style, z-order, groups, lock, connectors, vertices, undo, tables, settings, cursor/activity)
+- `src/contexts/BoardToolContext.tsx` — Lightweight tool state (activeTool, activePreset, vertexEditId, canEditVertices)
+- `src/components/board/TextareaOverlay.tsx` — Extracted from CanvasOverlays lines 101-133 (textarea char-limit routing + escape/blur handling)
+- `src/components/board/ConnectorHintButton.tsx` — Extracted from CanvasOverlays lines 135-186 (positioned button with ref mutations)
 
-**Task 3A: useTextEditing Extension + Tests**
-- Edit `src/hooks/board/useTextEditing.ts`:
-  - Add state: `editingCellCoords: { row: number; col: number } | null`
-  - Add to deps: `onUpdateTableCell?: (id: string, row: number, col: number, text: string) => void`
-  - Add `handleStartCellEdit(id, textNode, row, col)` — sets editingId + editingCellCoords, positions textarea
-  - Add `handleCellKeyDown(e)` — Tab/Shift+Tab (→/← cell), Enter (↓ cell), Escape (finish)
-  - Modify `handleFinishEdit` — call `onUpdateTableCell` when `editingCellCoords` set, then clear coords
-- Edit `src/components/board/renderShape.tsx`:
-  - Add `editingCellCoords?: { row: number; col: number } | null` to `ShapeState`
-  - Add `handleStartCellEdit?` and `handleTableDataChange?` to `ShapeCallbacks`
-- Add 8 tests to `src/hooks/board/useTextEditing.test.ts`
-- **Target:** Cell editing tests green
+**Modify:**
+- `src/contexts/BoardContext.tsx` — Becomes backward-compat shim re-exporting `BoardStateContext` (removed in Phase 5)
+- `src/components/board/Canvas.tsx` — Remove 75-prop `CanvasProps` interface. Read mutations from `useBoardMutationsContext()`. Remove CanvasOverlays render, replace with `<TextareaOverlay>` + `<ConnectorHintButton>`
+- `src/components/board/BoardClient.tsx` — Add `<BoardMutationsProvider>` wrapping. Remove all prop-threading to Canvas (lines 789-864 become just `<Canvas />`)
+- `src/components/board/ContextMenu.tsx` — Reduce from 39 props to ~3 (`position`, `objectId`, `onClose`). Read everything else from contexts.
 
-**Task 3B: Transform Distribution + Tests**
-- Edit `src/components/board/shapeUtils.ts`:
-  - Add table branch in `handleShapeTransformEnd` — call `distributeScale()`, compute width/height, reset scale to 1
-- Add 2 tests to `src/components/board/shapeUtils.test.ts`
-- **Target:** Transform tests green
+**Delete:**
+- `src/components/board/CanvasOverlays.tsx`
 
-#### Round 4 — TableShape Component (1 task, builds on Rounds 1-3)
+**Task order:** Create 3 contexts → Update BoardContext shim → Extract TextareaOverlay + ConnectorHintButton → Update ContextMenu → Update Canvas → Update BoardClient → Delete CanvasOverlays → `tsc --noEmit`
 
-**Task 4A: TableShape Konva Component**
-- Create `src/components/board/TableShape.tsx`
-- **Konva structure:**
-  - `<Group>` root — draggable, positioned at obj.x/y
-  - `<Rect>` background — white fill, rounded corners, shadow via `getShadowProps`
-  - Header row: `<Rect>` per header cell (gray bg) + `<Text>` per column name
-  - Body: `<Rect>` per cell (optional bg_color) + `<Text>` per cell text
-  - Grid lines: `<Line>` per row/column boundary
-  - Column resize handles: invisible `<Rect>` (6px wide, full height), cursor `col-resize`
-  - Row resize handles: invisible `<Rect>` (full width, 6px tall), cursor `row-resize`
-- **Performance optimizations (from research):**
-  - `listening={false}` on all decorative Rects and Lines (grid lines, cell backgrounds)
-  - `perfectDrawEnabled={false}` on all cell Text nodes
-  - `transformsEnabled="position"` on cell Text nodes (no rotation/scale needed)
-  - Name-based event delegation: `name="cell:${rowIdx}:${colIdx}"` on interactive cell rects
-  - `.cache()` on the Group when not editing (invalidate on table_data change)
-- **Key behaviors:**
-  - Double-click cell → `onStartCellEdit(id, textNode, row, col)` — find Text node by name
-  - During editing: hide cell's `<Text>` (StickyNote pattern)
-  - Column/row resize via drag on invisible handles → `onTableDataChange`
-  - `React.memo` with `areShapePropsEqual` comparator
-  - Outline via `getOutlineProps`, shadow via `getShadowProps`
-- **Target:** Component renders, editing and resize work
+**Key constraints:**
+- Canvas already reads 19 fields from `useBoardContext()` — those migrate to `useBoardStateContext()` seamlessly
+- ContextMenu reads `objects.get(objectId)` from context to derive `isLine`, `isTable`, current style values
+- Konva refs (`shapeRefs`, `trRef`, `stageRef`) stay in Canvas — they cannot go in context (imperative Konva lifecycle, SSR safety)
 
-#### Round 5 — Wiring (1 task, touches many files but all are edits)
+---
 
-**Task 5A: Wire Everything Together**
+### Phase 3: Hook Decomposition
 
-| File | Changes |
-|------|---------|
-| `renderShape.tsx` | Add `case 'table':` → `<TableShape>` with cell editing + table data props |
-| `shapePresets.ts` | Add `TABLE_PRESET` (dbType: `'table'`, grid SVG icon, 360×128 default) |
-| `ShapeIcon.tsx` | Add `case 'table':` — grid SVG (rect + horizontal/vertical lines) |
-| `LeftToolbar.tsx` | Add `'table'` to `BASICS_IDS`, add TABLE_PRESET button in Basics flyout |
-| `ContextMenu.tsx` | Add `isTable` boolean + conditional table section (Add/Delete Row/Column) |
-| `BoardClient.tsx` | Import `useTableActions`, wire handlers to Canvas + ContextMenu, pass `onUpdateTableCell` to `useTextEditing` |
-| `Canvas.tsx` | Pass `editingCellCoords` + `handleStartCellEdit` + `handleCellKeyDown` through to renderShape + CanvasOverlays |
+**Goal:** Split usePersistence into focused sub-hooks. Extract connection manager, grid settings, undo execution from BoardClient. Unify text editing hooks. Move group persistence. Parameterize z-order.
 
-- **Target:** Table creatable from toolbar, editable, resizable, context menu works
+**Create:**
+- `src/hooks/board/usePersistenceCore.ts` — `loadObjects`, `reconcileOnReconnect`, `waitForPersist`. Owns `persistPromisesRef`.
+- `src/hooks/board/usePersistenceWrite.ts` — `addObject`, `addObjectWithId`, `updateObject`, `deleteObject`. Receives `persistPromisesRef` from core.
+- `src/hooks/board/usePersistenceDrag.ts` — `updateObjectDrag`, `updateObjectDragEnd`, `moveGroupChildren`.
+- `src/hooks/board/usePersistenceComposite.ts` — `duplicateObject` (calls `addObject`), `persistZIndexBatch`.
+- `src/hooks/board/useGroupPersistence.ts` — `groupSelected`, `ungroupSelected` (moved from useBoardState where they bypass usePersistence and directly call supabase).
+- `src/hooks/board/useConnectionManager.ts` — Reconnect state machine extracted from BoardClient (3 refs: `hasConnectedRef`, `reconnectTimerRef`, `reconnectAttemptRef` + `connectionStatus` state + reconnect logic with exponential backoff + auth expiry detection).
+- `src/hooks/board/useGridSettings.ts` — 8 grid useState calls consolidated into single `useReducer` + persist-on-change via `fireAndRetry`.
+- `src/hooks/board/useUndoExecution.ts` — `executeUndo` (91 lines, 7 entry types) + `performUndo` + `performRedo`. Colocated with undo domain. **Closes over:** `objects`, `deleteObject`, `addObjectWithId`, `updateObject`, `getDescendants`.
+- `src/hooks/board/useUnifiedTextEditing.ts` — Merges `useTextEditing` + `useRichTextEditing`. Calls both unconditionally (React hook rules), selects return value based on `RICH_TEXT_ENABLED` flag.
 
-#### Round 6 — Integration Tests (1 task)
+**Modify:**
+- `src/hooks/board/usePersistence.ts` — Becomes thin orchestrator calling 4 sub-hooks, merging returns. Backward-compatible API preserved for useBoardState.
+- `src/hooks/useBoardState.ts` — Remove `groupSelected`/`ungroupSelected` (moved to useGroupPersistence). Extract `applyZOrderSwap()` helper to parameterize `bringForward`/`sendBackward` (eliminates ~90 duplicate lines).
+- `src/components/board/BoardClient.tsx` — Replace connection state machine with `useConnectionManager`. Replace 8 grid useState with `useGridSettings`. Replace executeUndo/performUndo/performRedo with `useUndoExecution`. **BoardClient drops from ~897L to ~450L.**
+- `src/components/board/Canvas.tsx` — Replace dual useTextEditing/useRichTextEditing with `useUnifiedTextEditing`.
 
-**Task 6A: Integration Tests**
-- Create `src/hooks/board/useTableIntegration.test.ts` — 6 tests:
-  - Delete table via `useClipboardActions` captures snapshot for undo
-  - Duplicate table via `useClipboardActions` clones `table_data`
-  - Color/opacity change on table via `useStyleActions`
-  - Table in group: group/ungroup preserves `table_data`
-  - Table transform distributes scale correctly
-  - Cell editing round-trip (start → type → finish → verify)
-- **Target:** All 69 new tests + all existing tests pass
+**Key constraints:**
+- `persistPromisesRef` is a single instance created in `usePersistenceCore`, passed by reference to `usePersistenceWrite`. Do NOT create in multiple places.
+- `useUnifiedTextEditing` calls both hooks unconditionally (React hook rules prohibit conditional hooks), selects return value.
+- `channel.subscribe()` must remain the last call in BoardClient's useEffect. `useConnectionManager` preserves this ordering by accepting the channel as a prop.
+- `useGroupPersistence` receives `updateObject` as a parameter to avoid circular dep with `usePersistenceWrite`.
+
+**Task order (with internal parallelism):**
+- Agent A: Split usePersistence (core → write → drag → composite → orchestrator)
+- Agent B: useConnectionManager + useGridSettings (from BoardClient)
+- Agent C: useUndoExecution (TDD: tests first, then extraction)
+- Agent D: useUnifiedTextEditing
+- Agent E: useGroupPersistence + z-order parameterization
+- Sequential after all agents: Update BoardClient + Canvas
+
+---
+
+### Phase 4: Shared Utilities
+
+**Goal:** Extract shared hooks and utilities. Eliminate all copy-paste patterns.
+
+**Create:**
+- `src/hooks/useSyncRef.ts` — Replaces 6x `useRef` + `useEffect` boilerplate in useRichTextEditing. Signature: `useSyncRef<T>(value: T): React.RefObject<T>`.
+- `src/hooks/useFlyoutPosition.ts` — Replaces duplicated flyout positioning in LeftToolbar's ToolGroupButton and NgonGroupButton (byte-for-byte identical 18-line useEffect). Returns `{ containerRef, panelRef, panelPos }`.
+- `src/hooks/usePopover.ts` — Replaces duplicated compact popover pattern in StylePanel and FontSelector (with rAF viewport-clamp divergence fixed). Uses `useClickOutside` internally.
+- `src/lib/textConstants.ts` — `TEXTAREA_BASE_STYLE` constant (`position: absolute`, `background: transparent`, `border: none`, `outline: none`, `resize: none`, `overflow: hidden`, `padding: 0`, `margin: 0`, `zIndex: 100`).
+- `src/lib/userUtils.ts` — `getUserDisplayName(user)` replacing duplicated `full_name ?? email.split('@')[0] ?? 'Unknown'` chain.
+
+**Modify:**
+- `src/hooks/board/useRichTextEditing.ts` — 6 ref-sync pairs → 6 `useSyncRef()` calls (12 lines removed, 6 added)
+- `src/components/board/LeftToolbar.tsx` — ToolGroupButton + NgonGroupButton use `useFlyoutPosition`
+- `src/components/board/StylePanel.tsx` — Use `usePopover` (with rAF viewport-clamp)
+- `src/components/board/FontSelector.tsx` — Use `usePopover` (fixes missing rAF viewport-clamp bug)
+- `src/components/board/BoardTopBar.tsx` — Replace 2x manual `document.addEventListener('mousedown')` with `useClickOutside` + add Escape key handling
+- `src/hooks/board/useTextEditing.ts` — Use `TEXTAREA_BASE_STYLE`
+- `src/hooks/board/useRichTextEditing.ts` — Use `TEXTAREA_BASE_STYLE`
+- `src/app/board/[id]/page.tsx` — Use `getUserDisplayName()`
+- `src/components/boards/BoardsHeader.tsx` — Use `getUserDisplayName()`
+
+**All extractions are independent — fully parallelizable within phase.**
+
+---
+
+### Phase 5: Shape System + Final Type Tightening
+
+**Goal:** Extract geometry helpers. Split ShapeCallbacks. Clean VectorShape. Move table transform. Final type narrowing.
+
+**Create:**
+- `src/lib/geometry/starPoints.ts` — `computeStarPoints` (from shapePresets.ts lines 38-60)
+- `src/lib/geometry/customPoints.ts` — `scaleCustomPoints` (from shapePresets.ts lines 555+), `getInitialVertexPoints` (from shapeUtils.ts)
+- `src/lib/geometry/bbox.ts` — `getGroupBoundingBox`, `isObjectInViewport` (pure functions from Canvas.tsx lines 434-478)
+- `src/lib/geometry/waypoints.ts` — `buildWaypointSegments` (extracted from VectorShape IIFE, lines 275-327)
+- `src/lib/geometry/index.ts` — Barrel export
+- `src/lib/table/tableTransform.ts` — Table-specific transform logic from shapeUtils.ts lines 120-148
+- `src/components/board/WaypointAddButton.tsx` — Extracted from VectorShape IIFE JSX (midpoint add-waypoint circles)
+- `src/components/board/renderShape/types.ts` — Split interfaces: `BaseShapeCallbacks` (9 universal), `VectorShapeCallbacks` (7 vector-specific), `TableShapeCallbacks` (6 table-specific)
+- `src/components/board/renderShape/index.tsx` — Slimmed `renderShape()` function
+
+**Modify:**
+- `src/components/board/shapePresets.ts` — Remove `computeStarPoints`, `scaleCustomPoints`; import from `lib/geometry/`
+- `src/components/board/shapeUtils.ts` — Remove table branch from `handleShapeTransformEnd`, remove `getInitialVertexPoints`; import from respective lib modules
+- `src/components/board/VectorShape.tsx` — Remove IIFE, use `buildWaypointSegments()` + `<WaypointAddButton>`
+- `src/components/board/Canvas.tsx` — Use `lib/geometry/bbox.ts` for group bounding box + viewport culling
+
+**Final type tightening:**
+- `src/types/boardObject.ts` — Add narrowed types:
+  - `VectorObject = BoardObjectIdentity & BoardObjectGeometry & BoardObjectHierarchy & BoardObjectAppearance & Required<BoardObjectConnector> & { type: 'line' | 'arrow' }`
+  - `TableObject = ... & Required<BoardObjectTable> & { type: 'table' }`
+  - `FileObject = ... & Required<BoardObjectFile> & { type: 'file' }`
+  - `GenericObject = ... & { type: 'sticky_note' | 'rectangle' | 'circle' | 'frame' | 'group' | 'triangle' | 'chevron' | 'parallelogram' | 'ngon' }`
+- Update 6 key consumers that benefit from narrowing: VectorShape, TableShape, renderShape, usePersistenceWrite, anchorPoints, autoRoute
+- Remove `BoardContext.tsx` backward-compat shim
+
+**Delete:**
+- `src/components/board/renderShape.tsx` (replaced by `renderShape/` directory)
+
+**Task order (with internal parallelism):**
+- Agent A: lib/geometry/ extractions + tests
+- Agent B: ShapeCallbacks split + renderShape directory
+- Agent C: VectorShape cleanup (buildWaypointSegments + WaypointAddButton)
+- Agent D: Table transform extraction
+- Sequential after all agents: Final type tightening + remove BoardContext shim
+
+---
 
 ## 3. Error Handling
 
-### Failure Modes
+### Failure Modes During Refactoring
 
-| Failure | Where | Handling |
-|---------|-------|----------|
-| `table_data` JSON parse failure | `parseTableData()` | Returns `null`, `TableShape` renders empty state, logs warning |
-| DB write failure on cell edit | `useTableActions` → `updateObject` → `usePersistence` | Existing `retryWithRollback` handles it — optimistic local update, rollback + toast on failure |
-| DB write failure on resize | Same path | Same handling |
-| Oversized table broadcast (>64KB) | `queueBroadcast` | Existing chunking in `broadcastChanges` handles it — warn at 50KB, auto-chunk at 64KB |
-| Cell text exceeds limit | `setCellText()` | Truncate to `TABLE_CELL_CHAR_LIMIT` (256 chars) |
-| Column/row count explosion | `addColumn`/`addRow` | No hard cap now, but `distributeScale` + `getTableWidth/Height` keep dimensions sane. Future: add MAX_COLUMNS=50, MAX_ROWS=100 constants |
-| Invalid resize (below minimum) | `resizeColumn`/`resizeRow` | Clamp to `MIN_COL_WIDTH`/`MIN_ROW_HEIGHT` |
-| Concurrent edit conflict | CRDT | `table_data` is atomic JSONB — last writer wins on the whole field. This is acceptable for v1 (cell-level CRDT is a future optimization) |
-| Double-click on resize handle | Event handling | Name-based delegation: resize handles have distinct names from cell rects, no ambiguity |
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| Type intersection doesn't match flat interface | All 44 consumers break | Verify with `tsc --noEmit` immediately after Phase 1 before proceeding |
+| Context split breaks hook registration order | Realtime channel fails to connect | Preserve `channel.subscribe()` as last call in BoardClient; test connection manually |
+| usePersistence split breaks `persistPromisesRef` sharing | `waitForPersist` hangs forever | Single ref instance in usePersistenceCore, passed by reference to write sub-hook |
+| `executeUndo` extraction misses a closure variable | Undo silently fails for one entry type | TDD: write useUndoExecution tests for all 7 types BEFORE extracting |
+| CanvasOverlays deletion breaks textarea editing | Can't edit text on shapes | Extract TextareaOverlay BEFORE deleting CanvasOverlays; manual smoke test |
+| React hook rule violation in useUnifiedTextEditing | Runtime crash | Call both hooks unconditionally, select return value (never conditional hooks) |
+| Circular dependency useGroupPersistence <-> usePersistenceWrite | Build fails | useGroupPersistence receives `updateObject` as a parameter, not an import |
+| BoardObject type narrowing breaks runtime code | Shapes don't render | Keep `BoardObject` as the union (backward-compat); narrow only in files that benefit |
 
-### Error Boundaries
-- Parse errors caught in `parseTableData()` — returns null, component renders gracefully
-- All DB writes go through existing `retryWithRollback`/`fireAndRetry` — no new error paths
-- Transform errors caught in `handleShapeTransformEnd` table branch — clamp values, never produce NaN
+### Rollback Strategy
 
-### User-Facing Errors
-- Cell edit fail: toast "Failed to save changes. Please try again." (existing pattern)
-- Table creation fail: toast "Failed to create table." (existing pattern via `addObject`)
-- No new error UI needed
+Each phase produces independent commits on the feature branch:
+- **Phase fails type-check:** `git revert` the phase's commits, investigate, retry
+- **Phase fails tests:** Fix in-place (most likely import path issues), re-commit
+- **Phase introduces runtime bug:** Identified by manual testing after each phase. Revert phase, add regression test, retry.
+- **Nuclear option:** `git reset --hard` to the commit before the phase. Maximum loss = one phase of work.
+
+---
 
 ## 4. Execution Strategy
 
 ### Parallelization Map
 
 ```
-Round 1: [1A: Types+Utils] [1B: Type Extension] [1C: Migration]  ← 3 parallel
-Round 2: [2A: Persistence]  [2B: useTableActions]                 ← 2 parallel
-Round 3: [3A: Cell Editing]  [3B: Transform]                      ← 2 parallel
-Round 4: [4A: TableShape]                                         ← 1 sequential
-Round 5: [5A: Wiring]                                             ← 1 sequential
-Round 6: [6A: Integration Tests]                                  ← 1 sequential
+Phase 1: Types                              [SEQUENTIAL — foundation]
+  4 tasks, ~30 min agent work
+
+Phase 2: Context Architecture               [SEQUENTIAL — depends on Phase 1]
+  10 tasks, ~60 min agent work
+
+Phase 3: Hook Decomposition                 [INTERNAL PARALLELISM — 5 agents]
+  Agent A: Split usePersistence (core/write/drag/composite)
+  Agent B: useConnectionManager + useGridSettings
+  Agent C: useUndoExecution (TDD)
+  Agent D: useUnifiedTextEditing
+  Agent E: useGroupPersistence + z-order parameterization
+  Then sequential: Update BoardClient + Canvas
+
+Phase 4: Shared Utilities                   [FULLY PARALLEL — all independent]
+  6 independent extractions, each ~15 min
+
+Phase 5: Shape System + Final              [INTERNAL PARALLELISM — 4 agents]
+  Agent A: lib/geometry/ extractions + tests
+  Agent B: ShapeCallbacks split + renderShape directory
+  Agent C: VectorShape cleanup
+  Agent D: Table transform extraction
+  Then sequential: Final type tightening
 ```
 
-**Why Rounds 4-6 are sequential:** TableShape depends on all prior types, utilities, and interfaces. Wiring depends on TableShape. Integration tests depend on everything wired.
+### Cross-Phase Dependency DAG
+
+```
+Phase 1 (Types)
+  └─> Phase 2 (Contexts) — needs stable BoardObject
+      └─> Phase 3 (Hooks) — needs BoardMutationsContext
+          └─> Phase 5 (Shape System + Type Tightening)
+
+Phase 4 (Utilities) — can run in parallel with Phase 3 (no blockers)
+```
 
 ### Commit Strategy
-- One commit per round (6 commits total for implementation)
-- Additional commits for quality loop fixes
-- All on `feat/canvas-tables` branch (already exists, currently at main)
 
-### Performance Considerations
-- Tables with >20 rows should use `.cache()` on the Konva Group when not being edited
-- Invalidate cache on: `table_data` change, selection, editing start/end
-- Cell Text nodes: `perfectDrawEnabled={false}` + `transformsEnabled="position"`
-- Decorative nodes (grid lines, cell bg rects): `listening={false}`
-- Future optimization: viewport virtualization for tables >50 rows (not in this plan)
+Each task = one commit. Format: `refactor(phase-N): <what changed>`
 
-### Incremental Delivery
-- After Round 4: tables are renderable and editable (manual testing possible)
-- After Round 5: fully integrated — can be used end-to-end
-- After Round 6: test coverage complete
+### Files Affected Summary
+
+| Phase | New Files | Modified Files | Deleted Files |
+|-------|-----------|----------------|---------------|
+| 1 | 1 | 2 | 0 |
+| 2 | 5 | 4 | 1 |
+| 3 | 9 | 4 | 0 |
+| 4 | 5 | 9 | 0 |
+| 5 | 9 | 6 | 1 |
+| **Total** | **29** | **25** | **2** |
+
+### End State
+
+| Component | Before | After |
+|-----------|--------|-------|
+| `BoardClient.tsx` | 897L, 41 imports | ~450L, thin shell composing providers |
+| `Canvas.tsx` | 863L, 75 props | ~400L, reads from context, minimal props |
+| `CanvasOverlays.tsx` | 249L pass-through | **Deleted** |
+| `usePersistence.ts` | 757L, 11 operations | Thin orchestrator + 4 focused sub-hooks |
+| `useBoardState.ts` | 672L, 36 exports | ~400L, delegates to sub-hooks |
+| `BoardObject` type | 50+ flat optional fields | 10 sub-interfaces + discriminated union |
+| Text editing | 676L across 2 hooks | Single unified hook ~350L |
+| Duplication sites | 6 copy-paste patterns | 0 — shared hooks/utilities |
+| `executeUndo` | 0 tests | All 7 entry types covered |
+
+### Structural Guardrails (prevent re-accumulation)
+
+1. **Discriminated union types** — Compiler rejects adding fields to wrong shape type
+2. **Split contexts** — New features consume context, don't thread props through 4 levels
+3. **Focused hook pattern** — Precedent: "add a new hook" not "append to the 757-line one"
+4. **Shared utility hooks** — Reuse is easier than copy-paste
+5. **Split ShapeCallbacks** — New shape types implement only their relevant callback interface
+
+---
 
 ## 5. Definition of Done
 
-- [ ] All 69 new tests passing
-- [ ] All existing ~639 tests still passing
-- [ ] `npx tsc --noEmit` clean
-- [ ] Error handling covers all identified failure modes
-- [ ] Konva performance optimizations applied (listening, perfectDrawEnabled, transformsEnabled)
-- [ ] Code reviewed (via /audit)
-- [ ] Retrospective completed (via /retrospective)
-- [ ] Lessons learned updated
+- [ ] All existing tests passing (zero regressions)
+- [ ] `npx tsc --noEmit` — zero type errors, zero `@ts-ignore` or `as any` introduced
+- [ ] `npx next build` — production build succeeds
+- [ ] `useUndoExecution.test.ts` covers all 7 UndoEntry types (undo + redo)
+- [ ] Every new module with non-trivial logic has co-located tests
+- [ ] BoardClient < 500 lines
+- [ ] Canvas props interface < 10 props
+- [ ] CanvasOverlays.tsx deleted
+- [ ] Zero copy-paste duplication sites remaining
+- [ ] Code reviewed via `/audit`
+- [ ] Retrospective completed via `/retrospective`

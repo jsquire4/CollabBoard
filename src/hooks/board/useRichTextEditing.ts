@@ -64,8 +64,7 @@ export function useRichTextEditing({
   const [textareaStyle, setTextareaStyle] = useState<React.CSSProperties>({})
 
   const editor = useEditor({
-    // When disabled, use minimal config to avoid wasting memory on unused extensions
-    extensions: enabled ? TIPTAP_EXTENSIONS : [],
+    extensions: TIPTAP_EXTENSIONS,
     content: '',
     editable: enabled,
     // Don't auto-focus — we do it manually after positioning

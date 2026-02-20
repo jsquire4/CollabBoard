@@ -470,4 +470,37 @@ describe('useUndoExecution', () => {
       expect(undoStack.pushUndo).not.toHaveBeenCalled()
     })
   })
+
+  describe('stress', () => {
+    it('undo 100 deletes restores all 100 objects via addObjectWithId', () => {
+      const N = 100
+      const deleteEntries: UndoEntry[] = []
+      for (let i = 0; i < N; i++) {
+        const id = `obj-${i}`
+        const obj = makeRectangle({ id, board_id: 'board-1', x: i * 10, y: i * 10 })
+        deleteEntries.push({ type: 'delete', objects: [obj] })
+      }
+
+      const undoStack = makeUndoStack()
+      let callIndex = 0
+      ;(undoStack.popUndo as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        if (callIndex < N) return deleteEntries[callIndex++]
+        return undefined
+      })
+
+      const addObjectWithId = vi.fn()
+      const deps = makeDeps({ objects: new Map(), undoStack, addObjectWithId })
+      const { result } = renderHook(() => useUndoExecution(deps))
+
+      for (let i = 0; i < N; i++) {
+        act(() => { result.current.performUndo() })
+      }
+
+      expect(addObjectWithId).toHaveBeenCalledTimes(N)
+      const restoredIds = new Set(addObjectWithId.mock.calls.map((c) => c[0].id))
+      for (let i = 0; i < N; i++) {
+        expect(restoredIds.has(`obj-${i}`)).toBe(true)
+      }
+    })
+  })
 })

@@ -811,6 +811,59 @@ describe('usePersistence', () => {
     Object.defineProperty(crdtModule, 'CRDT_ENABLED', { value: originalCRDT, writable: true, configurable: true })
   })
 
+  it('reconcileOnReconnect with 100 local wins sends merge and reloads (connection resilience)', async () => {
+    const crdtModule = await import('@/hooks/board/useBroadcast')
+    const originalCRDT = crdtModule.CRDT_ENABLED
+    Object.defineProperty(crdtModule, 'CRDT_ENABLED', { value: true, writable: true, configurable: true })
+
+    const N = 100
+    const objects = new Map<string, BoardObject>()
+    const fieldClocks = new Map<string, FieldClocks>()
+    const localClock = { ts: 100, c: 0, n: 'u1' }
+    const dbClock = { ts: 50, c: 0, n: 'u1' }
+    for (let i = 0; i < N; i++) {
+      const id = `obj-${i}`
+      objects.set(id, makeRectangle({ id, board_id: 'board-1', x: 100 + i, y: 200 }))
+      fieldClocks.set(id, { x: localClock, y: localClock })
+    }
+
+    let fromCallCount = 0
+    mockFrom.mockImplementation(() => {
+      fromCallCount++
+      if (fromCallCount === 1) {
+        const dbData = Array.from({ length: N }, (_, i) => ({
+          id: `obj-${i}`,
+          field_clocks: { x: dbClock, y: dbClock },
+        }))
+        return chainMock({ data: dbData, error: null })
+      }
+      return chainMock({ data: Array.from(objects.values()), error: null })
+    })
+
+    const supabase = mockSupabase()
+    const setObjects = vi.fn()
+    const deps = makeDeps({
+      supabase,
+      objectsRef: { current: objects },
+      fieldClocksRef: { current: fieldClocks },
+      setObjects,
+    })
+    const { result } = renderHook(() => usePersistence(deps))
+
+    await act(async () => { await result.current.reconcileOnReconnect() })
+
+    expect(supabase.functions.invoke).toHaveBeenCalledWith('merge-board-state', {
+      body: expect.objectContaining({
+        boardId: 'board-1',
+        changes: expect.any(Array),
+      }),
+    })
+    const changes = (supabase.functions.invoke as ReturnType<typeof vi.fn>).mock.calls[0][1].body.changes
+    expect(changes).toHaveLength(N)
+    expect(setObjects).toHaveBeenCalled()
+    Object.defineProperty(crdtModule, 'CRDT_ENABLED', { value: originalCRDT, writable: true, configurable: true })
+  })
+
   it('addObject creates table with table_data and correct defaults', () => {
     const tableData = JSON.stringify({
       columns: [{ id: 'c1', name: 'Col 1', width: 120 }],

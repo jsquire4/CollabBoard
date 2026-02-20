@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { coalesceBroadcastQueue, useBoardState } from './useBoardState'
 import { makeRectangle, makeCircle, makeGroup, makeFrame } from '@/test/boardObjectFactory'
@@ -11,8 +11,9 @@ vi.mock('@/lib/supabase/client', () => ({
   }),
 }))
 
+let uuidCounter = -1
 vi.mock('uuid', () => ({
-  v4: () => 'mock-uuid-123',
+  v4: () => (uuidCounter >= 0 ? `obj-${uuidCounter++}` : 'mock-uuid-123'),
 }))
 
 type BoardChange = Parameters<typeof coalesceBroadcastQueue>[0][number]
@@ -745,6 +746,82 @@ describe('useBoardState', () => {
     expect(result.current.isObjectLocked('p1')).toBe(true)
     // Grandparent is directly locked
     expect(result.current.isObjectLocked('gp')).toBe(true)
+  })
+})
+
+describe('useBoardState stress', () => {
+  beforeEach(() => {
+    uuidCounter = 0
+    mockFrom.mockImplementation(() =>
+      createBoardObjectsChain({ data: [], error: null })
+    )
+  })
+
+  afterEach(() => {
+    uuidCounter = -1
+  })
+
+  it('creates 500 objects and persists each', async () => {
+    const { result } = renderHook(() =>
+      useBoardState('u1', 'board-1', 'editor', null, [])
+    )
+
+    await waitFor(() => expect(result.current.objects).toBeDefined())
+
+    act(() => {
+      for (let i = 0; i < 500; i++) {
+        result.current.addObject('rectangle', 10 + i * 2, 10 + i * 2)
+      }
+    })
+
+    await waitFor(
+      () => expect(result.current.objects.size).toBe(500),
+      { timeout: 5000 }
+    )
+
+    for (let i = 0; i < 500; i++) {
+      const id = `obj-${i}`
+      expect(result.current.objects.has(id)).toBe(true)
+      expect(result.current.objects.get(id)!.type).toBe('rectangle')
+    }
+  })
+
+  it('creates 500 objects, selects all, deletes all', async () => {
+    const mockDelete = vi.fn(() => ({
+      eq: vi.fn(() => Promise.resolve({ error: null })),
+      in: vi.fn(() => Promise.resolve({ error: null })),
+    }))
+    mockFrom.mockImplementation(() =>
+      createBoardObjectsChain({ data: [], error: null }, { mockDelete })
+    )
+
+    const { result } = renderHook(() =>
+      useBoardState('u1', 'board-1', 'editor', null, [])
+    )
+
+    await waitFor(() => expect(result.current.objects).toBeDefined())
+
+    act(() => {
+      for (let i = 0; i < 500; i++) {
+        result.current.addObject('rectangle', 10 + i * 2, 10 + i * 2)
+      }
+    })
+
+    await waitFor(
+      () => expect(result.current.objects.size).toBe(500),
+      { timeout: 5000 }
+    )
+
+    const allIds = Array.from(result.current.objects.keys())
+    act(() => result.current.selectObjects(allIds))
+    expect(result.current.selectedIds.size).toBe(500)
+
+    act(() => result.current.deleteSelected())
+
+    await waitFor(
+      () => expect(result.current.objects.size).toBe(0),
+      { timeout: 5000 }
+    )
   })
 })
 

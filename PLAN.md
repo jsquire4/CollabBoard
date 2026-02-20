@@ -6,27 +6,31 @@ Types-first, architecture-second execution across 5 phases and 12 consolidation 
 
 **Branch:** `refactor/complexity-sweep` (already created)
 
-**Version Control:** Commit after every logical unit. `npx tsc --noEmit` before every commit. Each phase ends with a full `npx tsc --noEmit && npx vitest run` checkpoint. If a phase goes sideways, `git revert` that phase's commits back to the last checkpoint.
+**Version Control:** Commit after every logical unit. `npx tsc --noEmit` before every commit. Each phase ends with a full `npx tsc --noEmit && npm run test` checkpoint. If a phase goes sideways, `git revert` that phase's commits back to the last checkpoint.
 
 ---
 
 ## 1. Testing Strategy
 
-### Existing Safety Net
+> **Current regime:** See `CLAUDE.md` and `README.md` for the full testing index. Summary: `npm run test` (unit), `npm run test:stress` (CRDT/undo/reconnect), `npm run test:e2e` (smoke), `npm run test:e2e:stress` (performance + multi-user load), `npm run test:all` (full suite).
 
-| Test File | Lines | Covers |
-|-----------|-------|--------|
-| `usePersistence.test.ts` | 894 | All 11 persistence operations |
-| `useBoardState.test.ts` | 775 | State mutations, group/ungroup, z-order, broadcast coalescing |
-| `useConnectorActions.test.ts` | 685 | Anchor snap, endpoint drag, connector creation |
-| `useTableActions.test.ts` | 667 | Table cell/row/col mutations |
-| `useKeyboardShortcuts.test.ts` | 546 | All shortcut keys, editing guard |
-| `useBroadcast.test.ts` | 484 | Broadcast batching, coalescing, flush |
-| `useStyleActions.test.ts` | 468 | Color, stroke, opacity, markers |
-| `boardsApi.test.ts` | 403 | Board CRUD, sharing, invite acceptance |
-| `shapeUtils.test.ts` | 390 | Transform, snap, outline/shadow props |
-| `BoardList.test.tsx` | 458 | Board list rendering, duplication |
-| `BoardContext.test.tsx` | 104 | Provider/consumer contract |
+### Existing Safety Net (Unit)
+
+| Test File | Covers |
+|-----------|--------|
+| `usePersistence.test.ts` | All 11 persistence operations, reconnect reconciliation |
+| `useBoardState.test.ts` | State mutations, group/ungroup, z-order, broadcast coalescing |
+| `useConnectorActions.test.ts` | Anchor snap, endpoint drag, connector creation |
+| `useTableActions.test.ts` | Table cell/row/col mutations |
+| `useKeyboardShortcuts.test.ts` | All shortcut keys, editing guard |
+| `useBroadcast.test.ts` | Broadcast batching, coalescing, flush |
+| `useStyleActions.test.ts` | Color, stroke, opacity, markers |
+| `boardsApi.test.ts` | Board CRUD, sharing, invite acceptance |
+| `shapeUtils.test.ts` | Transform, snap, outline/shadow props |
+| `BoardList.test.tsx` | Board list rendering, duplication |
+| `BoardContext.test.tsx` | Provider/consumer contract |
+| `src/lib/crdt/*.test.ts` | Merge, HLC, dispatch-logic, edge-function-parity |
+| `*.stress.test.ts` | CRDT 500-object convergence, useBoardState bulk, usePersistence reconnect, useUndoExecution undo |
 
 ### New Tests Required (by priority)
 
@@ -49,11 +53,11 @@ Types-first, architecture-second execution across 5 phases and 12 consolidation 
 
 | After Phase | Commands |
 |---|---|
-| Phase 1 | `npx tsc --noEmit && npx vitest run` |
-| Phase 2 | `npx tsc --noEmit && npx vitest run && npx vitest run src/contexts/` |
-| Phase 3 | `npx tsc --noEmit && npx vitest run` — `usePersistence.test.ts` must still pass |
-| Phase 4 | `npx tsc --noEmit && npx vitest run` |
-| Phase 5 | `npx tsc --noEmit && npx vitest run && npx next build` |
+| Phase 1 | `npx tsc --noEmit && npm run test` |
+| Phase 2 | `npx tsc --noEmit && npm run test && npm run test:stress` |
+| Phase 3 | `npx tsc --noEmit && npm run test` — `usePersistence.test.ts` must still pass |
+| Phase 4 | `npx tsc --noEmit && npm run test` |
+| Phase 5 | `npx tsc --noEmit && npm run test && npx next build` |
 
 ### Acceptance Criteria
 

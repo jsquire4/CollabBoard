@@ -123,6 +123,11 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     isObjectLocked, lockObject, unlockObject,
     waitForPersist,
   } = useBoardState(userId, boardId, userRole, channel, onlineUsers)
+  // Expose object count for E2E performance tests (no cleanup — survives hot-reload)
+  useEffect(() => {
+    (window as unknown as Record<string, unknown>).__boardObjectCount = objects.size
+  }, [objects.size])
+
   const [shareOpen, setShareOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [isEditingText, setIsEditingText] = useState(false)

@@ -432,11 +432,11 @@ export function Canvas() {
                 width={bbox.width}
                 height={bbox.height}
                 fill="transparent"
-                stroke="#0EA5E9"
+                stroke="#1B3A6B"
                 strokeWidth={2}
                 dash={[8, 4]}
                 cornerRadius={6}
-                shadowColor="rgba(14, 165, 233, 0.3)"
+                shadowColor="rgba(27, 58, 107, 0.3)"
                 shadowBlur={12}
                 shadowOffsetX={0}
                 shadowOffsetY={0}
@@ -456,8 +456,8 @@ export function Canvas() {
                 y={bbox.y}
                 width={bbox.width}
                 height={bbox.height}
-                fill="rgba(14, 165, 233, 0.05)"
-                stroke="#0EA5E9"
+                fill="rgba(27, 58, 107, 0.05)"
+                stroke="#1B3A6B"
                 strokeWidth={1}
                 dash={[4, 4]}
                 cornerRadius={6}
@@ -489,8 +489,8 @@ export function Canvas() {
               y={marquee.y}
               width={marquee.width}
               height={marquee.height}
-              fill="rgba(14, 165, 233, 0.1)"
-              stroke="#0EA5E9"
+              fill="rgba(27, 58, 107, 0.1)"
+              stroke="#1B3A6B"
               strokeWidth={1}
               dash={[4, 2]}
               listening={false}
@@ -503,8 +503,8 @@ export function Canvas() {
               x={snapIndicator.x}
               y={snapIndicator.y}
               radius={8 / stageScale}
-              fill="rgba(59, 130, 246, 0.4)"
-              stroke="#3B82F6"
+              fill="rgba(27, 58, 107, 0.4)"
+              stroke="#1B3A6B"
               strokeWidth={2 / stageScale}
               listening={false}
             />
@@ -517,8 +517,8 @@ export function Canvas() {
               x={anchor.x}
               y={anchor.y}
               radius={5 / stageScale}
-              fill="rgba(59, 130, 246, 0.3)"
-              stroke="#3B82F6"
+              fill="rgba(27, 58, 107, 0.3)"
+              stroke="#1B3A6B"
               strokeWidth={1.5 / stageScale}
               listening={false}
             />
@@ -531,8 +531,8 @@ export function Canvas() {
               y={drawPreview.y}
               width={drawPreview.width}
               height={drawPreview.height}
-              fill="rgba(99, 102, 241, 0.08)"
-              stroke="#6366F1"
+              fill="rgba(30, 67, 48, 0.08)"
+              stroke="#1E4330"
               strokeWidth={1.5}
               dash={[6, 3]}
               listening={false}
@@ -543,7 +543,7 @@ export function Canvas() {
           {linePreview && (
             <KonvaLine
               points={[linePreview.x1, linePreview.y1, linePreview.x2, linePreview.y2]}
-              stroke="#6366F1"
+              stroke="#1E4330"
               strokeWidth={1.5 / stageScale}
               dash={[6 / stageScale, 3 / stageScale]}
               listening={false}
@@ -617,8 +617,8 @@ export function Canvas() {
                       x={mx}
                       y={my}
                       radius={4 / stageScale}
-                      fill="#E0E7FF"
-                      stroke="#818CF8"
+                      fill="#FAF8F4"
+                      stroke="#1B3A6B"
                       strokeWidth={1.5 / stageScale}
                       hitStrokeWidth={12 / stageScale}
                       onClick={() => onVertexInsert?.(vertexEditId, i)}
@@ -634,7 +634,7 @@ export function Canvas() {
                     y={pts[i * 2 + 1]}
                     radius={6 / stageScale}
                     fill="white"
-                    stroke="#6366F1"
+                    stroke="#1E4330"
                     strokeWidth={2 / stageScale}
                     draggable
                     onDragEnd={(e) => {

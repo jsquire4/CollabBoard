@@ -78,7 +78,7 @@ export const TRIANGLE_PRESETS: ShapePreset[] = [
     defaultHeight: 90,
     overrides: {
       custom_points: pts([0, 90, 100, 90, 0, 0]),
-      color: '#8B5CF6',
+      color: '#7B6FD4',
     },
     scalablePoints: true,
     iconPath: 'M3 21h18L3 3v18z',
@@ -91,7 +91,7 @@ export const TRIANGLE_PRESETS: ShapePreset[] = [
     defaultHeight: 100,
     overrides: {
       custom_points: pts([40, 0, 80, 100, 0, 100]),
-      color: '#8B5CF6',
+      color: '#7B6FD4',
     },
     scalablePoints: true,
     iconPath: 'M12 2L20 22H4L12 2z',
@@ -132,7 +132,7 @@ export const QUAD_PRESETS: ShapePreset[] = [
     dbType: 'ngon',
     defaultWidth: 120,
     defaultHeight: 120,
-    overrides: { sides: 4, color: '#F97316' },
+    overrides: { sides: 4, color: '#D4854A' },
     iconPath: 'M12 2l10 10-10 10L2 12z',
   },
   {
@@ -143,7 +143,7 @@ export const QUAD_PRESETS: ShapePreset[] = [
     defaultHeight: 80,
     overrides: {
       custom_points: pts([28, 0, 112, 0, 140, 80, 0, 80]),
-      color: '#F97316',
+      color: '#D4854A',
     },
     scalablePoints: true,
     iconPath: 'M6 4h12l4 16H2L6 4z',
@@ -162,7 +162,7 @@ function starPreset(n: number, label: string, iconPath: string): ShapePreset {
     defaultHeight: h,
     overrides: {
       custom_points: pts(computeStarPoints(n, w, h)),
-      color: '#FBBF24',
+      color: '#C9A84C',
     },
     scalablePoints: true,
     iconPath,
@@ -200,7 +200,7 @@ export const SYMBOL_PRESETS: ShapePreset[] = [
       custom_points: pts([
         40, 0, 80, 0, 80, 40, 120, 40, 120, 80, 80, 80, 80, 120, 40, 120, 40, 80, 0, 80, 0, 40, 40, 40,
       ]),
-      color: '#EF4444',
+      color: '#C85C5C',
     },
     scalablePoints: true,
     iconPath: 'M8 2h8v6h6v8h-6v6H8v-6H2v-8h6z',
@@ -213,7 +213,7 @@ export const SYMBOL_PRESETS: ShapePreset[] = [
     defaultHeight: 120,
     overrides: {
       custom_points: pts([0, 48, 60, 0, 120, 48, 120, 120, 0, 120]),
-      color: '#78716C',
+      color: '#8896A5',
     },
     scalablePoints: true,
     iconPath: 'M3 10.5L12 3l9 7.5V21H3z',
@@ -226,7 +226,7 @@ export const SYMBOL_PRESETS: ShapePreset[] = [
     defaultHeight: 80,
     overrides: {
       custom_points: pts(blockArrowPoints('right', 140, 80)),
-      color: '#3B82F6',
+      color: '#5B8DEF',
     },
     scalablePoints: true,
     iconPath: 'M2 8h12V4l8 8-8 8v-4H2z',
@@ -239,7 +239,7 @@ export const SYMBOL_PRESETS: ShapePreset[] = [
     defaultHeight: 80,
     overrides: {
       custom_points: pts(blockArrowPoints('left', 140, 80)),
-      color: '#3B82F6',
+      color: '#5B8DEF',
     },
     scalablePoints: true,
     iconPath: 'M22 8H10V4L2 12l8 8v-4h12z',
@@ -252,7 +252,7 @@ export const SYMBOL_PRESETS: ShapePreset[] = [
     defaultHeight: 140,
     overrides: {
       custom_points: pts(blockArrowPoints('up', 80, 140)),
-      color: '#3B82F6',
+      color: '#5B8DEF',
     },
     scalablePoints: true,
     iconPath: 'M8 22V10H4l8-8 8 8h-4v12z',
@@ -265,7 +265,7 @@ export const SYMBOL_PRESETS: ShapePreset[] = [
     defaultHeight: 140,
     overrides: {
       custom_points: pts(blockArrowPoints('down', 80, 140)),
-      color: '#3B82F6',
+      color: '#5B8DEF',
     },
     scalablePoints: true,
     iconPath: 'M8 2v12H4l8 8 8-8h-4V2z',
@@ -355,7 +355,7 @@ export const FLOWCHART_PRESETS: ShapePreset[] = [
     defaultHeight: 100,
     overrides: {
       custom_points: pts(documentPoints(140, 100)),
-      color: '#60A5FA',
+      color: '#5B8DEF',
     },
     scalablePoints: true,
     iconPath: 'M4 2h16v16c0 0-4-2-8 0s-8 2-8 2V2z',
@@ -368,7 +368,7 @@ export const FLOWCHART_PRESETS: ShapePreset[] = [
     defaultHeight: 120,
     overrides: {
       custom_points: pts(databasePoints(100, 120)),
-      color: '#A78BFA',
+      color: '#7B6FD4',
     },
     scalablePoints: true,
     iconPath: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3v12c0 1.7-3.6 3-8 3s-8-1.3-8-3V6z M4 6c0 1.7 3.6 3 8 3s8-1.3 8-3',
@@ -381,7 +381,7 @@ export const FLOWCHART_PRESETS: ShapePreset[] = [
     defaultHeight: 100,
     overrides: {
       custom_points: pts(cloudPoints(140, 100)),
-      color: '#93C5FD',
+      color: '#5B8DEF',
     },
     scalablePoints: true,
     iconPath: 'M6 19a5 5 0 0 1-.5-9.96A7 7 0 0 1 18.5 9 4.5 4.5 0 0 1 18 18H6z',
@@ -394,7 +394,7 @@ export const FLOWCHART_PRESETS: ShapePreset[] = [
     defaultHeight: 60,
     overrides: {
       custom_points: pts(terminatorPoints(160, 60)),
-      color: '#34D399',
+      color: '#3D9E8C',
     },
     scalablePoints: true,
     iconPath: 'M7 7h10a5 5 0 0 1 0 10H7a5 5 0 0 1 0-10z',
@@ -407,7 +407,7 @@ export const FLOWCHART_PRESETS: ShapePreset[] = [
     defaultHeight: 80,
     overrides: {
       custom_points: pts([0, 20, 140, 0, 140, 80, 0, 80]),
-      color: '#FBBF24',
+      color: '#C9A84C',
     },
     scalablePoints: true,
     iconPath: 'M3 7l18-3v18H3z',
@@ -420,7 +420,7 @@ export const FLOWCHART_PRESETS: ShapePreset[] = [
     defaultHeight: 80,
     overrides: {
       custom_points: pts(delayPoints(120, 80)),
-      color: '#F472B6',
+      color: '#C4907A',
     },
     scalablePoints: true,
     iconPath: 'M3 4h10a7 7 0 0 1 0 16H3z',
@@ -444,7 +444,7 @@ export const STANDALONE_PRESETS: ShapePreset[] = [
     dbType: 'rectangle',
     defaultWidth: 200,
     defaultHeight: 140,
-    overrides: { color: 'transparent', text: '', corner_radius: 0, stroke_color: '#94a3b8', stroke_dash: '[6,4]' },
+    overrides: { color: 'transparent', text: '', corner_radius: 0, stroke_color: '#E8E3DA', stroke_dash: '[6,4]' },
     iconPath: 'M4 6h16 M4 6v12h16V6 M8 10h8 M8 14h5',
     autoEdit: true,
   },
@@ -537,13 +537,13 @@ export const SHAPE_GROUPS: ShapeGroup[] = [
 export const AGENT_PRESETS: ShapePreset[] = [
   { id: 'agent', label: 'Agent', dbType: 'agent', defaultWidth: 200, defaultHeight: 140,
     iconPath: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
-    overrides: { color: '#EEF2FF', agent_state: 'idle' } },
+    overrides: { color: '#F0EBE3', agent_state: 'idle' } },
   { id: 'agent_output', label: 'Output', dbType: 'agent_output', defaultWidth: 240, defaultHeight: 160,
     iconPath: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-    overrides: { color: '#F0FDF4' } },
+    overrides: { color: '#EAF4EE' } },
   { id: 'context_object', label: 'Context', dbType: 'context_object', defaultWidth: 180, defaultHeight: 100,
     iconPath: 'M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z',
-    overrides: { color: '#F1F5F9' } },
+    overrides: { color: '#FAF8F4' } },
 ]
 
 // ── Data presets ─────────────────────────────────────────────
@@ -551,10 +551,10 @@ export const AGENT_PRESETS: ShapePreset[] = [
 export const DATA_PRESETS: ShapePreset[] = [
   { id: 'data_connector', label: 'Data Link', dbType: 'data_connector', defaultWidth: 120, defaultHeight: 2,
     iconPath: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1',
-    overrides: { color: '#7C3AED', stroke_color: '#7C3AED', stroke_width: 2 } },
+    overrides: { color: '#1E4330', stroke_color: '#1E4330', stroke_width: 2 } },
   { id: 'api_object', label: 'API', dbType: 'api_object', defaultWidth: 180, defaultHeight: 100,
     iconPath: 'M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-    overrides: { color: '#FEF3C7' } },
+    overrides: { color: '#F0EBE3' } },
 ]
 
 // ── Content presets ───────────────────────────────────────────

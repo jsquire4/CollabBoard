@@ -94,7 +94,7 @@ export const FrameShape = memo(function FrameShape({
   const shadow = getShadowProps(object)
 
   // Frame uses its own border logic: dashed border when not selected, solid selection border
-  const borderStroke = isSelected ? '#0EA5E9' : (object.stroke_color || 'rgba(148,163,184,0.5)')
+  const borderStroke = isSelected ? '#1B3A6B' : (object.stroke_color || 'rgba(148,163,184,0.5)')
   const borderWidth = isSelected ? 2 : (object.stroke_color ? (object.stroke_width ?? 1) : 1)
   const borderDash = isSelected ? undefined : (object.stroke_color ? undefined : [8, 4])
 
@@ -163,7 +163,7 @@ export const FrameShape = memo(function FrameShape({
             y={4}
             width={32}
             height={20}
-            fill="#6366F1"
+            fill="#1C1C1E"
             cornerRadius={4}
             listening={false}
           />

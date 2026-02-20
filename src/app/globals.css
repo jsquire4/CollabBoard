@@ -10,6 +10,11 @@
   --color-parchment-border: #E8E3DA;
   --color-parchment-dark: #F0EBE3;
 
+  /* Canvas editor dark surfaces */
+  --color-canvas-surface: #1C2333;
+  --color-panel-bg: #1E293B;
+  --color-chrome-bg: #111827;
+
   --font-sans: var(--font-geist-sans);
   --font-display: var(--font-dm-serif-display);
   --animate-float: float 6s ease-in-out infinite;

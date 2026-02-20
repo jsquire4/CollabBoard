@@ -154,7 +154,7 @@ export const VectorShape = memo(function VectorShape({
 
   const strokeColorBase = object.stroke_color ?? object.color
   const strokeColor = variant === 'data_connector' && !object.stroke_color
-    ? '#7C3AED'
+    ? '#1E4330'
     : strokeColorBase
   const effectiveStrokeWidth = isSelected ? Math.max(strokeWidth + 2, 4) : strokeWidth
   const shadowProps = getShadowProps(object)
@@ -162,7 +162,7 @@ export const VectorShape = memo(function VectorShape({
   // Line-specific: selection stroke boost + custom shadow when selected
   const lineShadow = variant === 'line' || variant === 'data_connector'
     ? {
-        shadowColor: isSelected ? '#0EA5E9' : shadowProps.shadowColor,
+        shadowColor: isSelected ? '#1B3A6B' : shadowProps.shadowColor,
         shadowBlur: isSelected ? 8 : shadowProps.shadowBlur,
         shadowOffsetX: isSelected ? 0 : shadowProps.shadowOffsetX,
         shadowOffsetY: isSelected ? 0 : shadowProps.shadowOffsetY,
@@ -224,7 +224,7 @@ export const VectorShape = memo(function VectorShape({
             y={0}
             radius={6}
             fill="white"
-            stroke="#0EA5E9"
+            stroke="#1B3A6B"
             strokeWidth={2}
             draggable
             onDragMove={handleStartAnchorDragMove}
@@ -235,7 +235,7 @@ export const VectorShape = memo(function VectorShape({
             y={dy}
             radius={6}
             fill="white"
-            stroke="#0EA5E9"
+            stroke="#1B3A6B"
             strokeWidth={2}
             draggable
             onDragMove={handleEndAnchorDragMove}
@@ -254,8 +254,8 @@ export const VectorShape = memo(function VectorShape({
                 x={wpRelX}
                 y={wpRelY}
                 radius={5}
-                fill="#E0E7FF"
-                stroke="#6366F1"
+                fill="#FAF8F4"
+                stroke="#1B3A6B"
                 strokeWidth={2}
                 draggable
                 onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
@@ -304,18 +304,18 @@ export const VectorShape = memo(function VectorShape({
                   <Circle
                     radius={7}
                     fill="white"
-                    stroke="#6366F1"
+                    stroke="#1B3A6B"
                     strokeWidth={1.5}
                   />
                   <Line
                     points={[-3, 0, 3, 0]}
-                    stroke="#6366F1"
+                    stroke="#1B3A6B"
                     strokeWidth={1.5}
                     lineCap="round"
                   />
                   <Line
                     points={[0, -3, 0, 3]}
-                    stroke="#6366F1"
+                    stroke="#1B3A6B"
                     strokeWidth={1.5}
                     lineCap="round"
                   />

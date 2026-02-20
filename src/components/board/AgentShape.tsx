@@ -5,8 +5,8 @@ import { AgentObject } from '@/types/boardObject'
 import { ShapeProps, getOutlineProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
 
 export const AGENT_STATE_COLORS: Record<string, string> = {
-  idle: '#94A3B8',
-  thinking: '#3B82F6',
+  idle: '#8896A5',
+  thinking: '#5B8DEF',
   done: '#22C55E',
   error: '#EF4444',
 }

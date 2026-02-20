@@ -52,7 +52,7 @@ function tryParseJson(s: string): number[] | undefined {
 export function getOutlineProps(obj: BoardObject, isSelected: boolean) {
   if (isSelected) {
     return {
-      stroke: '#0EA5E9',
+      stroke: '#1B3A6B',
       strokeWidth: 2,
       dash: undefined as number[] | undefined,
     }

@@ -17,7 +17,7 @@ describe('shapeRegistry', () => {
     expect(def.strategy).toBe('rect')
     expect(def.defaultWidth).toBe(200)
     expect(def.defaultHeight).toBe(140)
-    expect(def.defaultColor).toBe('#2196F3')
+    expect(def.defaultColor).toBe('#5B8DEF')
 
     const inset = def.getTextInset(200, 140, 8)
     expect(inset).toEqual({ x: 8, y: 0, width: 184, height: 140 })

@@ -4,7 +4,6 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { BoardWithRole } from '@/types/sharing'
 import { createClient } from '@/lib/supabase/client'
-import { useDarkModeValue } from '@/hooks/useDarkMode'
 import { toast } from 'sonner'
 import { BoardCard } from './BoardCard'
 import { NewBoardCard } from './NewBoardCard'
@@ -25,7 +24,6 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
   const supabaseRef = useRef(createClient())
   const supabase = supabaseRef.current
 
-  const dk = useDarkModeValue()
   const [activeTab, setActiveTab] = useState<'boards' | 'files'>('boards')
 
 
@@ -187,8 +185,8 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
           onClick={() => setActiveTab('files')}
           className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
             activeTab === 'files'
-              ? (dk ? 'border-indigo-400 text-indigo-400' : 'border-indigo-600 text-indigo-600')
-              : (dk ? 'border-transparent text-slate-400 hover:text-slate-200' : 'border-transparent text-slate-500 hover:text-slate-700')
+              ? 'border-navy text-navy'
+              : 'border-transparent text-charcoal/50 hover:text-charcoal'
           }`}
         >
           My Files
@@ -198,12 +196,12 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
       {/* My Files empty state */}
       {activeTab === 'files' && (
         <div className="flex flex-col items-center justify-center py-24 gap-3">
-          <svg className={`w-12 h-12 ${dk ? 'text-slate-600' : 'text-slate-200'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-12 h-12 text-parchment-border" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
               d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <p className={`text-base font-medium ${dk ? 'text-slate-300' : 'text-slate-600'}`}>No files yet.</p>
-          <p className={`text-sm ${dk ? 'text-slate-500' : 'text-slate-400'}`}>
+          <p className="text-base font-medium text-charcoal">No files yet.</p>
+          <p className="text-sm text-charcoal/50">
             Upload files from a board to see them here.
           </p>
         </div>
@@ -212,7 +210,7 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
       {activeTab === 'boards' && (
         <>
           <section>
-            <h2 className={`mb-4 text-2xl font-bold tracking-tight sm:text-3xl ${dk ? 'text-white' : 'text-slate-900'}`}>
+            <h2 className="mb-4 text-2xl font-bold tracking-tight sm:text-3xl text-charcoal">
               My Boards
             </h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

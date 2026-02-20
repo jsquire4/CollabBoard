@@ -21,9 +21,9 @@ interface TableShapeProps extends Omit<ShapeProps, 'object'> {
 
 const CELL_PAD = 4
 const RESIZE_HANDLE_WIDTH = 6
-const HEADER_BG = '#F3F4F6'
-const HEADER_TEXT_COLOR = '#374151'
-const GRID_COLOR = '#E5E7EB'
+const HEADER_BG = '#F0EBE3'
+const HEADER_TEXT_COLOR = '#1C1C1E'
+const GRID_COLOR = '#E8E3DA'
 const CELL_FONT_SIZE = 13
 const HEADER_FONT_SIZE = 13
 const BOUNDARY_ZONE = 18 // px radius around row/col boundaries that triggers button panel
@@ -376,9 +376,9 @@ export const TableShape = memo(function TableShape({
 
       {/* Resize guide lines — hidden by default, updated imperatively during drag */}
       <Line ref={(n) => { colGuideRef.current = n }} points={[0, 0, 0, 0]}
-        stroke="#6366f1" strokeWidth={2} dash={[5, 3]} opacity={0} listening={false} />
+        stroke="#1B3A6B" strokeWidth={2} dash={[5, 3]} opacity={0} listening={false} />
       <Line ref={(n) => { rowGuideRef.current = n }} points={[0, 0, 0, 0]}
-        stroke="#6366f1" strokeWidth={2} dash={[5, 3]} opacity={0} listening={false} />
+        stroke="#1B3A6B" strokeWidth={2} dash={[5, 3]} opacity={0} listening={false} />
 
       {/* Column resize handles */}
       {editable && data.columns.map((col, colIdx) => (

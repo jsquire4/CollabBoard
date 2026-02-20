@@ -39,7 +39,7 @@ shapeRegistry.set('rectangle', {
   strategy: 'rect',
   defaultWidth: 200,
   defaultHeight: 140,
-  defaultColor: '#2196F3',
+  defaultColor: '#5B8DEF',
   defaultOverrides: { text: '' },
   konvaProps: (obj) => ({ cornerRadius: obj.corner_radius ?? 6 }),
   getTextInset: (w, h, padding) => ({
@@ -55,7 +55,7 @@ shapeRegistry.set('circle', {
   strategy: 'circle',
   defaultWidth: 120,
   defaultHeight: 120,
-  defaultColor: '#4CAF50',
+  defaultColor: '#3D9E8C',
   defaultOverrides: { text: '' },
   centerOrigin: true,
   handleTransformEnd: (e, obj, callback) => {
@@ -92,7 +92,7 @@ shapeRegistry.set('triangle', {
   strategy: 'polygon',
   defaultWidth: 100,
   defaultHeight: 90,
-  defaultColor: '#8B5CF6',
+  defaultColor: '#7B6FD4',
   defaultOverrides: { text: '' },
   getPoints: (w, h, _obj) => [w / 2, 0, w, h, 0, h],
   getTextInset: (w, h, padding) => {
@@ -112,7 +112,7 @@ shapeRegistry.set('chevron', {
   strategy: 'polygon',
   defaultWidth: 100,
   defaultHeight: 87,
-  defaultColor: '#10B981',
+  defaultColor: '#3D9E8C',
   defaultOverrides: { text: '' },
   getPoints: (w, h, _obj) => [0, h / 2, w / 4, 0, (3 * w) / 4, 0, w, h / 2, (3 * w) / 4, h, w / 4, h],
   getTextInset: (w, h, padding) => {
@@ -131,7 +131,7 @@ shapeRegistry.set('parallelogram', {
   strategy: 'polygon',
   defaultWidth: 140,
   defaultHeight: 80,
-  defaultColor: '#EC4899',
+  defaultColor: '#C4907A',
   defaultOverrides: { text: '' },
   getPoints: (w, h, _obj) => {
     const skew = w * 0.15
@@ -153,7 +153,7 @@ shapeRegistry.set('ngon', {
   strategy: 'polygon',
   defaultWidth: 120,
   defaultHeight: 120,
-  defaultColor: '#F97316',
+  defaultColor: '#D4854A',
   defaultOverrides: { text: '', sides: 5 },
   getPoints: (w, h, obj) => {
     const n = obj.sides ?? 5
@@ -251,7 +251,7 @@ shapeRegistry.set('api_object', {
   strategy: 'rect',
   defaultWidth: 180,
   defaultHeight: 100,
-  defaultColor: '#FEF3C7',
+  defaultColor: '#F0EBE3',
   defaultOverrides: { text: '' },
   konvaProps: (obj) => ({ cornerRadius: obj.corner_radius ?? 6 }),
   getTextInset: (w, h, padding) => ({
@@ -267,7 +267,7 @@ shapeRegistry.set('context_object', {
   strategy: 'rect',
   defaultWidth: 180,
   defaultHeight: 100,
-  defaultColor: '#F1F5F9',
+  defaultColor: '#FAF8F4',
   defaultOverrides: { text: '' },
   konvaProps: (obj) => ({ cornerRadius: obj.corner_radius ?? 6 }),
   getTextInset: (w, h, padding) => ({
@@ -299,7 +299,7 @@ shapeRegistry.set('agent_output', {
   strategy: 'rect',
   defaultWidth: 240,
   defaultHeight: 160,
-  defaultColor: '#F0FDF4',
+  defaultColor: '#EAF4EE',
   defaultOverrides: { text: '' },
   konvaProps: (obj) => ({ cornerRadius: obj.corner_radius ?? 8 }),
   getTextInset: (w, h, padding) => ({

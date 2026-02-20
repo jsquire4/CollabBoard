@@ -59,7 +59,7 @@ describe('shapeUtils', () => {
     it('returns selection stroke when selected', () => {
       const obj = makeRectangle({ id: 'r1' })
       expect(getOutlineProps(obj, true)).toEqual({
-        stroke: '#0EA5E9',
+        stroke: '#1B3A6B',
         strokeWidth: 2,
         dash: undefined,
       })
@@ -104,7 +104,7 @@ describe('shapeUtils', () => {
 
     it('selection overrides user stroke', () => {
       const obj = makeRectangle({ id: 'r1', stroke_color: '#FF0000' })
-      expect(getOutlineProps(obj, true).stroke).toBe('#0EA5E9')
+      expect(getOutlineProps(obj, true).stroke).toBe('#1B3A6B')
     })
   })
 

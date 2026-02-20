@@ -684,6 +684,10 @@ export function createTools(ctx: ToolContext): {
       if (!obj.mime_type?.startsWith('image/')) {
         return { error: `Object is not an image (mime: ${obj.mime_type})` }
       }
+      // Guard: storage path must be scoped to this board
+      if (!obj.storage_path.startsWith(`files/${ctx.boardId}/`)) {
+        return { error: 'File access denied' }
+      }
 
       const admin = createAdminClient()
       const { data: signedUrl, error: urlError } = await admin
@@ -714,6 +718,10 @@ export function createTools(ctx: ToolContext): {
       const obj = ctx.state.objects.get(objectId)
       if (!obj) return { error: `Object ${objectId} not found` }
       if (!obj.storage_path) return { error: 'Object has no file attached' }
+      // Guard: storage path must be scoped to this board
+      if (!obj.storage_path.startsWith(`files/${ctx.boardId}/`)) {
+        return { error: 'File access denied' }
+      }
 
       const allowedMimes = ['text/plain', 'text/markdown', 'text/csv', 'application/pdf']
       if (!obj.mime_type || !allowedMimes.includes(obj.mime_type)) {

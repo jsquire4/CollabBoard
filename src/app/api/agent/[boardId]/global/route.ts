@@ -74,21 +74,33 @@ export async function POST(
   const roleName = member.role as string
 
   // ── Load board state + history (parallel) ────────────────
-  const [boardState, historyResult] = await Promise.all([
-    loadBoardState(boardId),
-    admin
-      .from('board_messages')
-      .select('role, content, user_display_name')
-      .eq('board_id', boardId)
-      .is('agent_object_id', null)
-      .order('created_at', { ascending: true })
-      .limit(20),
-  ])
+  let boardState: Awaited<ReturnType<typeof loadBoardState>>
+  let historyResult: { data: { role: string; content: string; user_display_name: string | null }[] | null; error: unknown }
+  try {
+    [boardState, historyResult] = await Promise.all([
+      loadBoardState(boardId),
+      admin
+        .from('board_messages')
+        .select('role, content, user_display_name')
+        .eq('board_id', boardId)
+        .is('agent_object_id', null)
+        .order('created_at', { ascending: true })
+        .limit(20),
+    ])
+  } catch (err) {
+    console.error('[api/agent/global] Failed to load board data:', err)
+    return Response.json({ error: 'Failed to load board data' }, { status: 503 })
+  }
+
+  if (historyResult.error) {
+    console.error('[api/agent/global] Failed to load history:', historyResult.error)
+  }
 
   const history = (historyResult.data ?? []) as { role: string; content: string; user_display_name: string | null }[]
 
   // ── Persist user message ──────────────────────────────────
-  const prefixedMessage = `[${userDisplayName} (${roleName})]: ${message}`
+  const safeDisplayName = userDisplayName.replace(/[\[\]()]/g, '')
+  const prefixedMessage = `[${safeDisplayName} (${roleName})]: ${message}`
 
   await admin.from('board_messages').insert({
     board_id: boardId,
@@ -212,9 +224,12 @@ You can read and modify the board using the available tools. Be helpful to all t
 
         enqueue({ type: 'done' })
       } catch (err) {
-        console.error('[api/agent/global] Stream error:', err)
-        const msg = (err as Error).message ?? 'Unknown error'
-        enqueue({ type: 'error', error: msg.includes('429') ? 'Rate limit reached, please try again.' : msg })
+        console.error('[api/agent/global] Stream error details:', err)
+        const errMsg = (err as Error).message ?? ''
+        const errorMsg = errMsg.includes('429')
+          ? 'Rate limit reached, please try again.'
+          : 'An error occurred. Please try again.'
+        enqueue({ type: 'error', error: errorMsg })
       } finally {
         controller.close()
       }

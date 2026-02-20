@@ -83,6 +83,7 @@ export function useGlobalAgentChat({ boardId, enabled = true }: UseGlobalAgentCh
         }
       }
     } finally {
+      try { reader.cancel() } catch { /* ignore */ }
       if (!receivedDone) {
         setMessages(prev => prev.map(m =>
           m.id === assistantId ? { ...m, isStreaming: false } : m,
@@ -181,7 +182,10 @@ export function useGlobalAgentChat({ boardId, enabled = true }: UseGlobalAgentCh
     }
 
     init()
-    return () => { abortController.abort() }
+    return () => {
+      abortController.abort()
+      abortRef.current?.abort()
+    }
   }, [boardId, enabled])
 
   const cancel = useCallback(() => {

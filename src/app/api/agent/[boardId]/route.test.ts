@@ -64,13 +64,11 @@ vi.mock('@/lib/supabase/admin', () => ({
         }
       }
       if (table === 'board_objects') {
-        return {
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              is: mockAgentStateUpdate,
-            }),
-          }),
-        }
+        // Chain: .update({}).eq('id', x).eq('board_id', y).is('deleted_at', null)
+        // Both .eq() calls must be chainable before reaching .is()
+        const chain: Record<string, unknown> = { is: mockAgentStateUpdate }
+        chain.eq = vi.fn().mockReturnValue(chain)
+        return { update: vi.fn().mockReturnValue(chain) }
       }
       return {}
     }),
@@ -101,6 +99,7 @@ vi.mock('@/lib/userUtils', () => ({
 // Import route AFTER mocks are registered
 import { POST } from './route'
 import { createTools } from '@/lib/agent/tools'
+import { loadBoardState } from '@/lib/agent/boardState'
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 function makeRequest(body: Record<string, unknown>): NextRequest {
@@ -116,6 +115,17 @@ function makeParams(boardId = TEST_BOARD_ID) {
 }
 
 const defaultBody = () => ({ message: 'Hello', agentObjectId: TEST_AGENT_ID })
+
+// Minimal agent object in board state — needed for the agentObj existence check
+const MOCK_AGENT_OBJ = {
+  id: TEST_AGENT_ID,
+  board_id: TEST_BOARD_ID,
+  type: 'agent',
+  text: 'Test Agent',
+  model: 'gpt-4o',
+  x: 100, y: 100, width: 200, height: 200,
+  z_index: 1, rotation: 0,
+} as unknown as import('@/types/board').BoardObject
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -135,6 +145,12 @@ beforeEach(() => {
     makeFakeChatStream([{ type: 'text', text: 'Hello!' }, { type: 'done' }])
   )
   vi.mocked(createTools).mockReturnValue({ definitions: [], executors: new Map() })
+  // Board state must contain the agent object for the agentObj existence check
+  vi.mocked(loadBoardState).mockResolvedValue({
+    boardId: TEST_BOARD_ID,
+    objects: new Map([[TEST_AGENT_ID, MOCK_AGENT_OBJ]]),
+    fieldClocks: new Map(),
+  })
 })
 
 afterEach(() => {

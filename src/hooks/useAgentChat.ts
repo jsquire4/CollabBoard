@@ -94,6 +94,7 @@ export function useAgentChat({ boardId, agentObjectId, enabled = true }: UseAgen
         }
       }
     } finally {
+      try { reader.cancel() } catch { /* ignore */ }
       if (!receivedDone) {
         setMessages(prev => prev.map(m =>
           m.id === assistantId
@@ -236,7 +237,12 @@ export function useAgentChat({ boardId, agentObjectId, enabled = true }: UseAgen
 
     init()
 
-    return () => { abortController.abort() }
+    return () => {
+      abortController.abort()
+      abortRef.current?.abort()
+      loadedRef.current = false
+      greetedRef.current = false
+    }
   }, [boardId, agentObjectId, enabled, consumeSSE])
 
   // ── Cancel ────────────────────────────────────────────────

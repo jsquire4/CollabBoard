@@ -5,21 +5,12 @@ import { useGlobalAgentChat, type ChatMessage } from '@/hooks/useGlobalAgentChat
 
 export interface GlobalAgentPanelProps {
   boardId: string
-  currentUserId: string
   isOpen: boolean
   onClose: () => void
 }
 
-function MessageRow({
-  msg,
-  currentUserId,
-}: {
-  msg: ChatMessage
-  currentUserId: string
-}) {
-  const isCurrentUser = msg.role === 'user'
-  // We don't have userId here, use display name direction heuristics
-  const isRight = isCurrentUser
+function MessageRow({ msg }: { msg: ChatMessage }) {
+  const isRight = msg.role === 'user'
   const attribution = msg.user_display_name
 
   return (
@@ -44,7 +35,7 @@ function MessageRow({
   )
 }
 
-export function GlobalAgentPanel({ boardId, currentUserId, isOpen, onClose }: GlobalAgentPanelProps) {
+export function GlobalAgentPanel({ boardId, isOpen, onClose }: GlobalAgentPanelProps) {
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -99,7 +90,7 @@ export function GlobalAgentPanel({ boardId, currentUserId, isOpen, onClose }: Gl
           <p className="text-xs text-slate-400 text-center">Start a conversation with the board assistant.</p>
         )}
         {messages.map(msg => (
-          <MessageRow key={msg.id} msg={msg} currentUserId={currentUserId} />
+          <MessageRow key={msg.id} msg={msg} />
         ))}
         {error && (
           <p className="text-xs text-red-500 text-center mt-2">{error}</p>

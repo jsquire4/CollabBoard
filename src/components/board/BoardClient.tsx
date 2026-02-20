@@ -820,7 +820,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
       />
       <GlobalAgentPanel
         boardId={boardId}
-        currentUserId={userId}
         isOpen={globalAgentOpen}
         onClose={() => setGlobalAgentOpen(false)}
       />

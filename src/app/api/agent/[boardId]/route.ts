@@ -75,23 +75,34 @@ export async function POST(
   const userDisplayName = getUserDisplayName(user)
 
   // ── Parallel data loading ─────────────────────────────────
-  const [boardState, historyResult] = await Promise.all([
-    loadBoardState(boardId),
-    admin
-      .from('board_messages')
-      .select('role, content')
-      .eq('board_id', boardId)
-      .eq('agent_object_id', agentObjectId)
-      .order('created_at', { ascending: true })
-      .limit(20),
-  ])
+  let boardState: Awaited<ReturnType<typeof loadBoardState>>
+  let historyResult: { data: { role: string; content: string }[] | null; error: unknown }
+  try {
+    [boardState, historyResult] = await Promise.all([
+      loadBoardState(boardId),
+      admin
+        .from('board_messages')
+        .select('role, content')
+        .eq('board_id', boardId)
+        .eq('agent_object_id', agentObjectId)
+        .order('created_at', { ascending: true })
+        .limit(20),
+    ])
+  } catch (err) {
+    console.error('[api/agent] Failed to load board data:', err)
+    return Response.json({ error: 'Failed to load board data' }, { status: 503 })
+  }
 
   if (historyResult.error) {
     console.error('[api/agent] Failed to load history:', historyResult.error)
   }
 
   const history = (historyResult.data ?? []) as { role: string; content: string }[]
+
   const agentObj = boardState.objects.get(agentObjectId)
+  if (!agentObj || (agentObj as any).board_id !== boardId) {
+    return Response.json({ error: 'Agent not found' }, { status: 404 })
+  }
   const agentModel = agentObj?.model ?? 'gpt-4o'
   const agentName = agentObj?.text || 'Board Agent'
 
@@ -115,6 +126,7 @@ Guidelines:
     .from('board_objects')
     .update({ agent_state: 'thinking' })
     .eq('id', agentObjectId)
+    .eq('board_id', boardId)
     .is('deleted_at', null)
 
   // ── Client disconnect handler ─────────────────────────────
@@ -123,6 +135,7 @@ Guidelines:
       .from('board_objects')
       .update({ agent_state: 'idle' })
       .eq('id', agentObjectId)
+      .eq('board_id', boardId)
       .is('deleted_at', null)
   })
 
@@ -264,15 +277,16 @@ Guidelines:
           .from('board_objects')
           .update({ agent_state: 'done' })
           .eq('id', agentObjectId)
+          .eq('board_id', boardId)
           .is('deleted_at', null)
 
         enqueue({ type: 'done' })
       } catch (err) {
-        console.error('[api/agent] Stream error:', err)
-        const message = (err as Error).message ?? 'Unknown error'
-        const errorMsg = message.includes('429')
+        console.error('[api/agent] Stream error details:', err)
+        const errMsg = (err as Error).message ?? ''
+        const errorMsg = errMsg.includes('429')
           ? 'Rate limit reached, please try again.'
-          : message
+          : 'An error occurred. Please try again.'
 
         try {
           enqueue({ type: 'error', error: errorMsg })
@@ -280,6 +294,7 @@ Guidelines:
             .from('board_objects')
             .update({ agent_state: 'error' })
             .eq('id', agentObjectId)
+            .eq('board_id', boardId)
             .is('deleted_at', null)
         } catch { /* best effort */ }
       } finally {

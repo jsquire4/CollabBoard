@@ -10,17 +10,19 @@ import { v4 as uuidv4 } from 'uuid'
 
 const MAX_SIZE_BYTES = 50 * 1024 * 1024 // 50MB
 
+// SVG excluded: browsers execute embedded scripts in SVG served from storage URLs (XSS risk).
 const ALLOWED_MIMES = new Set([
   'image/jpeg',
   'image/png',
   'image/gif',
   'image/webp',
-  'image/svg+xml',
   'application/pdf',
   'text/plain',
   'text/markdown',
   'text/csv',
 ])
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function extFromMime(mime: string): string {
   const map: Record<string, string> = {
@@ -28,7 +30,6 @@ function extFromMime(mime: string): string {
     'image/png': 'png',
     'image/gif': 'gif',
     'image/webp': 'webp',
-    'image/svg+xml': 'svg',
     'application/pdf': 'pdf',
     'text/plain': 'txt',
     'text/markdown': 'md',
@@ -58,6 +59,7 @@ export async function POST(request: NextRequest) {
 
   if (!file) return Response.json({ error: 'file is required' }, { status: 400 })
   if (!boardId) return Response.json({ error: 'boardId is required' }, { status: 400 })
+  if (!UUID_RE.test(boardId)) return Response.json({ error: 'Invalid board ID' }, { status: 400 })
 
   // Validate MIME type before anything else
   if (!ALLOWED_MIMES.has(file.type)) {

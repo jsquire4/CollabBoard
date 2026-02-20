@@ -24,7 +24,7 @@ export function LoginContent() {
       {/* Left panel — navy, hidden on mobile */}
       <div className="hidden lg:flex lg:w-[45%] flex-col items-center justify-center bg-navy px-12 relative overflow-hidden">
         {/* Subtle grid texture overlay */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:2rem_2rem]" />
+        <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:2rem_2rem]" />
 
         {/* Brand content */}
         <div className="relative z-10 flex flex-col items-center text-center">
@@ -50,7 +50,7 @@ export function LoginContent() {
             href="/"
             className="text-sm text-charcoal/50 hover:text-navy flex items-center gap-1.5 mb-10 transition-colors"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             Back to home
@@ -68,7 +68,7 @@ export function LoginContent() {
 
           {/* Auth error banner */}
           {authError && (
-            <p className="mt-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-100">
+            <p role="alert" className="mt-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-100">
               Authentication failed. Please try again.
             </p>
           )}

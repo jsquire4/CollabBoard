@@ -177,7 +177,6 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
                 onCreate={handleCreate}
                 onCancel={() => { setShowNameInput(false); setNewName('') }}
                 onClick={() => setShowNameInput(true)}
-                dark={false}
               />
               {myBoards.map((board) => (
                   <BoardCard
@@ -193,7 +192,6 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
                     onDelete={handleDelete}
                     onLeave={handleLeaveBoard}
                     onNavigate={(id) => router.push(`/board/${id}`)}
-                    dark={false}
                   />
                 ))}
         </div>
@@ -219,7 +217,6 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
                     onDelete={handleDelete}
                     onLeave={handleLeaveBoard}
                     onNavigate={(id) => router.push(`/board/${id}`)}
-                    dark={false}
                   />
                 ))}
           </div>

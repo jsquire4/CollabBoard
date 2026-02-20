@@ -19,7 +19,7 @@ export function Hero({ isAuthenticated }: HeroProps) {
 
       {/* Blurred canvas mockup — Theorem palette, pointer-events-none */}
       <div className="pointer-events-none absolute inset-0 -z-10 [filter:blur(1.5px)] opacity-85">
-        <svg className="absolute inset-0 h-full w-full" viewBox="-200 -80 1000 560" preserveAspectRatio="xMidYMid meet">
+        <svg aria-hidden="true" className="absolute inset-0 h-full w-full" viewBox="-200 -80 1000 560" preserveAspectRatio="xMidYMid meet">
           {/* Connectors — leather and navy dotted lines */}
           <path d="M 100 50 L 180 120" stroke="rgba(196,154,108,0.4)" strokeWidth="1" strokeDasharray="4 4" />
           <path d="M 80 180 L 150 260" stroke="rgba(27,58,107,0.3)" strokeWidth="1" strokeDasharray="4 4" />
@@ -221,7 +221,7 @@ export function Hero({ isAuthenticated }: HeroProps) {
             className="inline-flex items-center gap-2 rounded-xl bg-navy px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-navy/30 transition-all hover:bg-navy/90 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-navy focus:ring-offset-2"
           >
             Open Theorem
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
             </svg>
           </Link>
@@ -232,12 +232,12 @@ export function Hero({ isAuthenticated }: HeroProps) {
               className="inline-flex items-center gap-2 rounded-xl bg-navy px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-navy/30 transition-all hover:bg-navy/90 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-navy focus:ring-offset-2"
             >
               Start thinking
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
             </Link>
             <Link
-              href="/login"
+              href="#features"
               className="inline-flex items-center gap-2 rounded-xl border border-navy px-8 py-3.5 text-base font-semibold text-navy transition-all hover:bg-navy/5 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-navy focus:ring-offset-2"
             >
               See it in action

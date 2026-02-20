@@ -53,7 +53,7 @@ export function Features() {
         <p className="mx-auto mt-4 max-w-2xl text-center text-lg text-charcoal/65">
           Purpose-built for strategic synthesis — not just a whiteboard.
         </p>
-        <div className="mt-16 grid gap-10 sm:grid-cols-2 lg:grid-cols-2">
+        <div className="mt-16 grid gap-10 sm:grid-cols-2">
           {features.map((feature) => (
             <FeatureCard key={feature.title} {...feature} />
           ))}

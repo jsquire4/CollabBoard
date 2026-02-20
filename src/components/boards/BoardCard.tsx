@@ -44,7 +44,6 @@ interface BoardCardProps {
   onDelete: (boardId: string) => void
   onLeave: (boardId: string) => void
   onNavigate: (boardId: string) => void
-  dark?: boolean
 }
 
 const STATUS_LABELS: Record<'active' | 'idle' | 'offline', string> = {
@@ -71,12 +70,10 @@ function MemberList({
   summary,
   onlineUsers,
   excludeOwnerId,
-  dark = false,
 }: {
   summary?: BoardCardSummary
   onlineUsers: BoardPresenceUser[]
   excludeOwnerId?: string
-  dark?: boolean
 }) {
   if (!summary) return null
 
@@ -136,9 +133,7 @@ export function BoardCard({
   onDelete,
   onLeave,
   onNavigate,
-  dark = false,
 }: BoardCardProps) {
-  const dk = false
   const isOwner = board.role === 'owner'
   const cardRef = useRef<HTMLDivElement>(null)
   const [isVisible, setIsVisible] = useState(false)
@@ -211,7 +206,6 @@ export function BoardCard({
           summary={board.summary}
           onlineUsers={onlineUsers}
           excludeOwnerId={isOwner ? board.created_by : undefined}
-          dark={dk}
         />
         {/* Separator + current viewers — fixed at bottom of collaborators area */}
         <div className="mt-auto border-t border-parchment-border pt-3">

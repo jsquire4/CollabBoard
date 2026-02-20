@@ -45,54 +45,66 @@ describe('LoginContent', () => {
 
   it('renders the "Welcome to Theorem" heading', () => {
     render(<LoginContent />)
-    expect(screen.getByRole('heading', { name: /welcome to theorem/i })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /welcome to theorem/i })).toBeInTheDocument()
   })
 
-  it('renders the Theorem wordmark', () => {
+  it('renders both Theorem wordmarks (desktop left panel + mobile)', () => {
     render(<LoginContent />)
-    // Two instances: left panel (desktop) + mobile-only
     const wordmarks = screen.getAllByText('Theorem')
-    expect(wordmarks.length).toBeGreaterThanOrEqual(1)
+    expect(wordmarks).toHaveLength(2)
   })
 
   it('renders left-panel tagline', () => {
     render(<LoginContent />)
-    expect(screen.getByText(/every position begins with a question/i)).toBeTruthy()
+    expect(screen.getByText(/every position begins with a question/i)).toBeInTheDocument()
   })
 
   it('renders a "Back to home" link pointing to /', () => {
     render(<LoginContent />)
     const link = screen.getByRole('link', { name: /back to home/i })
-    expect(link.getAttribute('href')).toBe('/')
+    expect(link).toBeInTheDocument()
+    expect(link).toHaveAttribute('href', '/')
   })
 
   it('renders the Google sign-in button', () => {
     render(<LoginContent />)
-    expect(screen.getByRole('button', { name: /sign in with google/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /sign in with google/i })).toBeInTheDocument()
   })
 
-  it('calls supabase.auth.signInWithOAuth with google provider on button click', async () => {
+  it('calls supabase.auth.signInWithOAuth with google provider and callback path on button click', async () => {
     const user = userEvent.setup()
     render(<LoginContent />)
     await user.click(screen.getByRole('button', { name: /sign in with google/i }))
     expect(mockSignInWithOAuth).toHaveBeenCalledWith(
-      expect.objectContaining({ provider: 'google' })
+      expect.objectContaining({
+        provider: 'google',
+        options: expect.objectContaining({
+          redirectTo: expect.stringContaining('/auth/callback'),
+        }),
+      })
     )
   })
 
   it('does not show auth error banner when no error param', () => {
     render(<LoginContent />)
-    expect(screen.queryByText(/authentication failed/i)).toBeNull()
+    expect(screen.queryByText(/authentication failed/i)).not.toBeInTheDocument()
   })
 
-  it('shows auth error banner when error param is present', () => {
+  it('shows auth error banner with role="alert" when error param is present', () => {
     mockSearchParams = new URLSearchParams({ error: 'access_denied' })
     render(<LoginContent />)
-    expect(screen.getByText(/authentication failed/i)).toBeTruthy()
+    const banner = screen.getByText(/authentication failed/i)
+    expect(banner).toBeInTheDocument()
+    expect(banner).toHaveAttribute('role', 'alert')
+  })
+
+  it('renders the sign-in subtext', () => {
+    render(<LoginContent />)
+    expect(screen.getByText(/sign in with your google account/i)).toBeInTheDocument()
   })
 
   it('renders the terms of service note', () => {
     render(<LoginContent />)
-    expect(screen.getByText(/terms of service/i)).toBeTruthy()
+    expect(screen.getByText(/terms of service/i)).toBeInTheDocument()
   })
 })

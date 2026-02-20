@@ -7,7 +7,6 @@ interface NewBoardCardProps {
   onCreate: () => void
   onCancel: () => void
   onClick: () => void
-  dark?: boolean
 }
 
 export function NewBoardCard({
@@ -17,10 +16,7 @@ export function NewBoardCard({
   onCreate,
   onCancel,
   onClick,
-  dark = false,
 }: NewBoardCardProps) {
-  const dk = false
-
   if (isCreating) {
     return (
       <div

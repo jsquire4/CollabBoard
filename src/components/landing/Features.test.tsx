@@ -14,12 +14,12 @@ vi.mock('./FeatureCard', () => ({
 describe('Features', () => {
   it('renders the section heading', () => {
     render(<Features />)
-    expect(screen.getByText(/the canvas that thinks with you/i)).toBeTruthy()
+    expect(screen.getByText(/the canvas that thinks with you/i)).toBeInTheDocument()
   })
 
   it('renders the section subhead', () => {
     render(<Features />)
-    expect(screen.getByText(/purpose-built for strategic synthesis/i)).toBeTruthy()
+    expect(screen.getByText(/purpose-built for strategic synthesis/i)).toBeInTheDocument()
   })
 
   it('renders all four feature pillars', () => {
@@ -28,23 +28,27 @@ describe('Features', () => {
     expect(cards).toHaveLength(4)
   })
 
-  it('renders AI Board Agents pillar', () => {
+  it('renders AI Board Agents pillar with description', () => {
     render(<Features />)
-    expect(screen.getByText('AI Board Agents')).toBeTruthy()
+    expect(screen.getByText('AI Board Agents')).toBeInTheDocument()
+    expect(screen.getByText(/intelligent agents analyze your canvas/i)).toBeInTheDocument()
   })
 
-  it('renders Real-time Collaboration pillar', () => {
+  it('renders Real-time Collaboration pillar with description', () => {
     render(<Features />)
-    expect(screen.getByText('Real-time Collaboration')).toBeTruthy()
+    expect(screen.getByText('Real-time Collaboration')).toBeInTheDocument()
+    expect(screen.getByText(/live cursors/i)).toBeInTheDocument()
   })
 
-  it('renders Connected Workflows pillar', () => {
+  it('renders Connected Workflows pillar with description', () => {
     render(<Features />)
-    expect(screen.getByText('Connected Workflows')).toBeTruthy()
+    expect(screen.getByText('Connected Workflows')).toBeInTheDocument()
+    expect(screen.getByText(/integrate with your existing tools/i)).toBeInTheDocument()
   })
 
-  it('renders Structured Synthesis pillar', () => {
+  it('renders Structured Synthesis pillar with description', () => {
     render(<Features />)
-    expect(screen.getByText('Structured Synthesis')).toBeTruthy()
+    expect(screen.getByText('Structured Synthesis')).toBeInTheDocument()
+    expect(screen.getByText(/frameworks, tables, connectors/i)).toBeInTheDocument()
   })
 })

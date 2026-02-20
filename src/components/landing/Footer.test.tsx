@@ -11,17 +11,25 @@ vi.mock('next/link', () => ({
 describe('Footer', () => {
   it('renders the Theorem brand name in the copyright line', () => {
     render(<Footer />)
-    expect(screen.getByText(/theorem\. the intelligent strategy canvas/i)).toBeTruthy()
+    expect(screen.getByText(/theorem\. the intelligent strategy canvas/i)).toBeInTheDocument()
+  })
+
+  it('renders the current year in the copyright line', () => {
+    render(<Footer />)
+    expect(screen.getByText(new RegExp(String(new Date().getFullYear())))).toBeInTheDocument()
   })
 
   it('renders "Open Theorem" link pointing to /boards', () => {
     render(<Footer />)
     const link = screen.getByRole('link', { name: /open theorem/i })
-    expect(link.getAttribute('href')).toBe('/boards')
+    expect(link).toBeInTheDocument()
+    expect(link).toHaveAttribute('href', '/boards')
   })
 
-  it('renders a copyright notice', () => {
+  it('renders "Sign in" link pointing to /login', () => {
     render(<Footer />)
-    expect(screen.getByText(/intelligent strategy canvas/i)).toBeTruthy()
+    const link = screen.getByRole('link', { name: /sign in/i })
+    expect(link).toBeInTheDocument()
+    expect(link).toHaveAttribute('href', '/login')
   })
 })

@@ -61,7 +61,6 @@ export function StylePanel({
   compact,
   dark = false,
 }: StylePanelProps) {
-  const dk = dark
   const [showPopover, setShowPopover] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
@@ -86,12 +85,12 @@ export function StylePanel({
     return () => cancelAnimationFrame(rafId)
   }, [compact, showPopover])
 
-  const sectionLabel = `mb-1 text-xs font-medium ${dk ? 'text-slate-400' : 'text-slate-500'}`
-  const subLabel = `mb-1 text-xs ${dk ? 'text-slate-500' : 'text-slate-400'}`
-  const valueLabelSm = `text-right text-xs ${dk ? 'text-slate-400' : 'text-slate-500'}`
-  const rangeTrack = `h-1 w-full cursor-pointer appearance-none rounded accent-indigo-600 ${dk ? 'bg-slate-700' : 'bg-slate-200'}`
-  const presetActive = 'bg-indigo-100 text-indigo-700'
-  const presetInactive = dk ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+  const sectionLabel = `mb-1 text-xs font-medium text-charcoal/70 dark:text-parchment/60`
+  const subLabel = `mb-1 text-xs text-charcoal/70 dark:text-parchment/60`
+  const valueLabelSm = `text-right text-xs text-charcoal/70 dark:text-parchment/60`
+  const rangeTrack = `h-1 w-full cursor-pointer appearance-none rounded accent-navy bg-slate-200 dark:bg-slate-700`
+  const presetActive = 'bg-navy/10 text-navy'
+  const presetInactive = `bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-[#1E293B] dark:text-parchment/80 dark:hover:bg-white/15`
 
   const content = (
     <div className="w-56 space-y-3 p-3">
@@ -102,9 +101,7 @@ export function StylePanel({
           <button
             type="button"
             onClick={() => onStrokeStyleChange({ stroke_color: null })}
-            className={`h-6 w-6 rounded-full border-2 transition hover:scale-110 flex items-center justify-center ${
-              dk ? 'border-slate-600' : 'border-slate-300'
-            } ${!strokeColor ? (dk ? 'ring-2 ring-slate-400 ring-offset-1 ring-offset-slate-900' : 'ring-2 ring-slate-700 ring-offset-1') : ''}`}
+            className={`h-6 w-6 rounded-full border-2 transition hover:scale-110 flex items-center justify-center border-parchment-border dark:border-white/10 ${!strokeColor ? 'ring-2 ring-slate-700 ring-offset-1 dark:ring-offset-[#111827]' : ''}`}
             title="No outline"
           >
             <span className="text-xs text-red-400 font-bold">/</span>
@@ -115,10 +112,10 @@ export function StylePanel({
               type="button"
               onClick={() => onStrokeStyleChange({ stroke_color: color })}
               className={`h-6 w-6 rounded-full transition hover:scale-110 ${
-                color === '#FFFFFF' ? (dk ? 'border border-slate-600' : 'border border-slate-300') : ''
+                color === '#FFFFFF' ? 'border border-parchment-border dark:border-white/10' : ''
               } ${
                 color === strokeColor
-                  ? (dk ? 'ring-2 ring-slate-400 ring-offset-1 ring-offset-slate-900' : 'ring-2 ring-slate-700 ring-offset-1')
+                  ? 'ring-2 ring-slate-700 ring-offset-1 dark:ring-offset-[#111827]'
                   : ''
               }`}
               style={{ backgroundColor: color }}
@@ -241,18 +238,18 @@ export function StylePanel({
           aria-label="Style options"
           aria-expanded={showPopover}
           aria-haspopup="dialog"
-          className={`flex h-10 w-10 flex-col items-center justify-center rounded-lg transition ${dk ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}
+          className="flex h-10 w-10 flex-col items-center justify-center rounded-lg transition hover:bg-parchment-dark dark:hover:bg-white/10"
           title="Style"
         >
-          <svg className={`h-5 w-5 ${dk ? 'text-slate-400' : 'text-slate-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+          <svg className="h-5 w-5 text-charcoal/70 dark:text-parchment/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
           </svg>
         </button>
         {showPopover && (
           <div
             role="dialog"
             aria-label="Style options"
-            className={`fixed z-[200] rounded-xl border shadow-xl ${dk ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}
+            className="fixed z-[200] rounded-xl border shadow-lg ring-1 ring-black/10 dark:ring-white/10 border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#1E293B]"
             style={{ top: popoverPos.top, left: popoverPos.left }}
           >
             {content}
@@ -263,7 +260,7 @@ export function StylePanel({
   }
 
   return (
-    <div className={`rounded-xl border p-3 shadow-lg ${dk ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}>
+    <div className="rounded-xl border p-3 shadow-lg border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#1E293B]">
       {content}
     </div>
   )

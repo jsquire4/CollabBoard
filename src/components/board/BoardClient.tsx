@@ -54,7 +54,7 @@ const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canv
   ssr: false,
   loading: () => (
     <div className="flex h-screen w-screen items-center justify-center bg-slate-100">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-600" />
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-navy" />
     </div>
   ),
 })
@@ -77,7 +77,7 @@ interface BoardClientProps {
   initialSubdivisionColor?: string
 }
 
-export function BoardClient({ userId, boardId, boardName, userRole, displayName, initialGridSize = 40, initialGridSubdivisions = 1, initialGridVisible = true, initialSnapToGrid = false, initialGridStyle = 'lines', initialCanvasColor = '#e8ecf1', initialGridColor = '#b4becd', initialSubdivisionColor = '#b4becd' }: BoardClientProps) {
+export function BoardClient({ userId, boardId, boardName, userRole, displayName, initialGridSize = 40, initialGridSubdivisions = 1, initialGridVisible = true, initialSnapToGrid = false, initialGridStyle = 'lines', initialCanvasColor = '#FAF8F4', initialGridColor = '#E8E3DA', initialSubdivisionColor = '#E8E3DA' }: BoardClientProps) {
   const channel = useRealtimeChannel(boardId)
   const { onlineUsers, trackPresence, updatePresence } = usePresence(channel, userId, userRole, displayName)
   const userCount = onlineUsers.length + 1 // include self
@@ -658,7 +658,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     <BoardProvider value={boardContextValue}>
     <BoardMutationsProvider value={mutationsValue}>
     <BoardToolProvider value={toolValue}>
-    <div className="relative flex h-screen flex-col">
+    <div className={`relative flex h-screen flex-col ${uiDarkMode ? 'dark' : ''}`}>
       <BoardTopBar
         boardId={boardId}
         boardName={boardName}
@@ -750,7 +750,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
       {/* AI Chat toggle button — positioned above zoom controls */}
       <button
         onClick={() => setChatOpen(prev => !prev)}
-        className="fixed bottom-16 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700"
+        className="fixed bottom-16 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-navy text-white shadow-lg hover:bg-navy/90"
         aria-label="Toggle AI chat"
       >
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

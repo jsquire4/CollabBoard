@@ -22,8 +22,8 @@ const FONT_STYLES: { value: FontStyle; label: string }[] = [
 
 const TEXT_COLOR_SWATCHES = [
   '#000000', '#1E293B', '#374151', '#FFFFFF',
-  '#EF4444', '#F97316', '#EAB308', '#22C55E',
-  '#3B82F6', '#8B5CF6', '#EC4899', '#14B8A6',
+  '#C85C5C', '#D4854A', '#C9A84C', '#3D9E8C',
+  '#5B8DEF', '#7B6FD4', '#C4907A', '#8896A5',
 ]
 
 interface FontSelectorProps {
@@ -64,13 +64,12 @@ export function FontSelector({
 
   useClickOutside([popoverRef, popoverPanelRef], showPopover, () => setShowPopover(false))
 
-  const dk = dark
-  const labelCls = `text-xs font-medium ${dk ? 'text-slate-400' : 'text-slate-500'}`
+  const labelCls = `text-xs font-medium text-charcoal/70 dark:text-parchment/60`
   const btnCls = (active: boolean) =>
     `rounded px-2 py-1 text-xs font-medium transition disabled:opacity-50 ${
       active
-        ? 'bg-indigo-100 text-indigo-700'
-        : dk ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+        ? 'bg-navy/10 text-navy'
+        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-[#1E293B] dark:text-parchment/60 dark:hover:bg-white/15'
     }`
 
   const content = (
@@ -81,9 +80,7 @@ export function FontSelector({
           value={fontFamily}
           onChange={(e) => onFontChange({ font_family: e.target.value })}
           disabled={disabled}
-          className={`w-full rounded border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 ${
-            dk ? 'border-slate-600 bg-slate-800 text-slate-300' : 'border-slate-300 bg-white text-slate-900'
-          }`}
+          className="w-full rounded border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-navy disabled:opacity-50 border-parchment-border bg-parchment text-charcoal dark:border-white/10 dark:bg-[#1E293B] dark:text-parchment/80"
         >
           {FONT_FAMILIES.map((f) => (
             <option key={f.value} value={f.value}>
@@ -179,9 +176,9 @@ export function FontSelector({
                   onClick={() => onTextStyleChange({ text_color: color })}
                   disabled={disabled}
                   className={`h-5 w-5 rounded-full transition hover:scale-110 disabled:opacity-50 ${
-                    color === '#FFFFFF' ? `border ${dk ? 'border-slate-600' : 'border-slate-300'}` : ''
+                    color === '#FFFFFF' ? 'border border-parchment-border dark:border-white/10' : ''
                   } ${
-                    color === textColor ? `ring-2 ring-slate-700 ${dk ? 'ring-offset-slate-900' : ''} ring-offset-1` : ''
+                    color === textColor ? 'ring-2 ring-slate-700 ring-offset-1 dark:ring-offset-[#111827]' : ''
                   }`}
                   style={{ backgroundColor: color }}
                   title={color}
@@ -192,12 +189,10 @@ export function FontSelector({
                 type="button"
                 onClick={() => textColorPickerRef.current?.click()}
                 disabled={disabled}
-                className={`h-5 w-5 rounded-full border border-dashed flex items-center justify-center hover:scale-110 transition disabled:opacity-50 ${
-                  dk ? 'border-slate-500 bg-slate-800' : 'border-slate-400 bg-white'
-                }`}
+                className="h-5 w-5 rounded-full border border-dashed flex items-center justify-center hover:scale-110 transition disabled:opacity-50 border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#1E293B]"
                 title="Custom color"
               >
-                <svg className={`h-2.5 w-2.5 ${dk ? 'text-slate-500' : 'text-slate-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <svg className="h-2.5 w-2.5 text-charcoal/70 dark:text-parchment/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m-7-7h14" />
                 </svg>
               </button>
@@ -235,11 +230,11 @@ export function FontSelector({
           aria-label="Font options"
           aria-expanded={showPopover}
           aria-haspopup="dialog"
-          className={`flex h-9 w-9 flex-col items-center justify-center rounded-lg transition disabled:opacity-50 ${dk ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}
+          className="flex h-9 w-9 flex-col items-center justify-center rounded-lg transition disabled:opacity-50 hover:bg-parchment-dark dark:hover:bg-white/10"
           title="Font options"
         >
-          <svg className={`h-5 w-5 ${dk ? 'text-slate-400' : 'text-slate-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+          <svg className="h-5 w-5 text-charcoal/70 dark:text-parchment/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
           </svg>
         </button>
         {showPopover && popoverPos && (
@@ -247,7 +242,7 @@ export function FontSelector({
             ref={popoverPanelRef}
             role="dialog"
             aria-label="Font options"
-            className={`fixed z-[200] rounded-xl border shadow-xl ${dk ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}
+            className="fixed z-[200] rounded-xl border shadow-lg ring-1 ring-black/10 dark:ring-white/10 border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#1E293B]"
             style={{ top: popoverPos.top, left: popoverPos.left }}
             onMouseDown={e => e.preventDefault()}
           >
@@ -258,5 +253,5 @@ export function FontSelector({
     )
   }
 
-  return <div className={`rounded-xl border p-3 shadow-lg ${dk ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}>{content}</div>
+  return <div className="rounded-xl border p-3 shadow-lg border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#1E293B]">{content}</div>
 }

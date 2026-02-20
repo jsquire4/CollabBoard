@@ -28,8 +28,8 @@ function ToolbarButton({ label, shortLabel, isActive, onClick, dark, style }: To
       }}
       className={`flex h-8 w-8 items-center justify-center rounded text-xs font-medium transition-colors
         ${isActive
-          ? (dark ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-700')
-          : (dark ? 'text-slate-300 hover:bg-slate-700' : 'text-slate-600 hover:bg-slate-100')
+          ? (dark ? 'bg-navy text-parchment' : 'bg-navy/10 text-navy')
+          : (dark ? 'text-parchment/80 hover:bg-white/15' : 'text-charcoal/70 hover:bg-parchment-dark')
         }`}
       style={style}
     >
@@ -138,7 +138,7 @@ export function RichTextToolbar({ editor, dark }: RichTextToolbarProps) {
         style={{ textDecoration: 'line-through' }}
       />
 
-      <div className={`my-1 h-px w-8 ${dark ? 'bg-slate-700' : 'bg-slate-200'}`} />
+      <div className={`my-1 h-px w-8 ${dark ? 'bg-white/10' : 'bg-parchment-border'}`} />
 
       {/* Highlight */}
       <ToolbarButton
@@ -150,7 +150,7 @@ export function RichTextToolbar({ editor, dark }: RichTextToolbarProps) {
         style={{ backgroundColor: active.highlight ? '#fef08a' : undefined }}
       />
 
-      <div className={`my-1 h-px w-8 ${dark ? 'bg-slate-700' : 'bg-slate-200'}`} />
+      <div className={`my-1 h-px w-8 ${dark ? 'bg-white/10' : 'bg-parchment-border'}`} />
 
       {/* Lists */}
       <ToolbarButton
@@ -175,7 +175,7 @@ export function RichTextToolbar({ editor, dark }: RichTextToolbarProps) {
         dark={dark}
       />
 
-      <div className={`my-1 h-px w-8 ${dark ? 'bg-slate-700' : 'bg-slate-200'}`} />
+      <div className={`my-1 h-px w-8 ${dark ? 'bg-white/10' : 'bg-parchment-border'}`} />
 
       {/* Headings */}
       <ToolbarButton

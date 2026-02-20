@@ -238,8 +238,8 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
   const tabClasses = (t: Tab) =>
     `rounded-lg px-4 py-2 text-sm font-medium transition ${
       tab === t
-        ? 'bg-indigo-600 text-white'
-        : 'bg-transparent text-slate-600 hover:bg-slate-100'
+        ? 'bg-navy text-parchment'
+        : 'bg-transparent text-charcoal/70 hover:bg-slate-100'
     }`
 
   const getRoleOptions = () => {
@@ -256,21 +256,21 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[500px] max-h-[80vh] overflow-auto rounded-2xl bg-white p-6 shadow-xl"
+        className="w-full max-w-[500px] max-h-[80vh] overflow-auto rounded-2xl bg-parchment p-6 shadow-xl"
         onClick={e => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-slate-900">Share Board</h2>
+          <h2 className="text-xl font-semibold text-charcoal">Share Board</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+            className="rounded p-1 text-charcoal/70 transition hover:bg-slate-100 hover:text-charcoal"
           >
             ×
           </button>
         </div>
 
-        <div className="mb-5 flex gap-1 rounded-lg bg-slate-100 p-1">
+        <div className="mb-5 flex gap-1 rounded-lg bg-parchment-dark p-1">
           <button type="button" className={tabClasses('members')} onClick={() => setTab('members')}>
             Members
           </button>
@@ -292,25 +292,25 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                 {members.map(member => (
                   <div
                     key={member.id}
-                    className="flex items-center justify-between border-b border-slate-100 py-2.5"
+                    className="flex items-center justify-between border-b border-parchment-border py-2.5"
                   >
                     <div>
                       {member.display_name && (
-                        <div className="text-sm font-medium text-slate-800">{member.display_name}</div>
+                        <div className="text-sm font-medium text-charcoal">{member.display_name}</div>
                       )}
-                      <div className="text-xs text-slate-500">{member.email ?? member.user_id.slice(0, 8) + '...'}</div>
+                      <div className="text-xs text-charcoal/70">{member.email ?? member.user_id.slice(0, 8) + '...'}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       {member.role === 'owner' && !isOwner ? (
-                        <span className="text-sm font-medium text-slate-500">Owner</span>
+                        <span className="text-sm font-medium text-charcoal/70">Owner</span>
                       ) : member.role === 'owner' && isOwner ? (
-                        <span className="text-sm font-medium text-slate-500">Owner (you)</span>
+                        <span className="text-sm font-medium text-charcoal/70">Owner (you)</span>
                       ) : (
                         <>
                           <select
                             value={member.role}
                             onChange={e => handleRoleChange(member.id, member.user_id, e.target.value as BoardRole)}
-                            className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="rounded-md border border-slate-300 px-2 py-1 text-sm text-charcoal outline-none focus:ring-2 focus:ring-navy"
                           >
                             {getRoleOptions().map(opt => (
                               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -332,15 +332,15 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
 
                 {invites.length > 0 && (
                   <>
-                    <div className="mb-2 mt-4 text-xs font-medium text-slate-500">Pending Invites</div>
+                    <div className="mb-2 mt-4 text-xs font-medium text-charcoal/70">Pending Invites</div>
                     {invites.map(invite => (
                       <div
                         key={invite.id}
-                        className="flex items-center justify-between border-b border-slate-100 py-2"
+                        className="flex items-center justify-between border-b border-parchment-border py-2"
                       >
-                        <div className="text-sm text-slate-500">
+                        <div className="text-sm text-charcoal/70">
                           {invite.email}
-                          <span className="ml-2 text-xs text-slate-400">({invite.role})</span>
+                          <span className="ml-2 text-xs text-charcoal/60">({invite.role})</span>
                         </div>
                         <button
                           type="button"
@@ -367,12 +367,12 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                     onChange={e => setInviteEmail(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') handleInvite() }}
                     placeholder="Email address"
-                    className="flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-navy"
                   />
                   <select
                     value={inviteRole}
                     onChange={e => setInviteRole(e.target.value as BoardRole)}
-                    className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-charcoal outline-none focus:ring-2 focus:ring-navy"
                   >
                     {ROLE_OPTIONS.map(opt => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -383,7 +383,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                   type="button"
                   onClick={handleInvite}
                   disabled={!inviteEmail.trim()}
-                  className="w-full rounded-lg bg-indigo-600 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="w-full rounded-lg bg-navy py-2.5 text-sm font-medium text-parchment transition hover:bg-navy/90 disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   Send Invite
                 </button>
@@ -400,17 +400,17 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
               <div>
                 {shareLink ? (
                   <div>
-                    <div className="mb-3 break-all rounded-lg bg-slate-100 px-3 py-2.5 text-sm text-slate-600">
+                    <div className="mb-3 break-all rounded-lg bg-parchment-dark px-3 py-2.5 text-sm text-charcoal/70">
                       {`${window.location.origin}/board/join/${shareLink.token}`}
                     </div>
-                    <div className="mb-3 text-sm text-slate-500">
+                    <div className="mb-3 text-sm text-charcoal/70">
                       Anyone with this link joins as <strong>{shareLink.role}</strong>
                     </div>
                     <div className="flex gap-2">
                       <button
                         type="button"
                         onClick={copyLink}
-                        className="flex-1 rounded-lg bg-indigo-600 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500"
+                        className="flex-1 rounded-lg bg-navy py-2.5 text-sm font-medium text-parchment transition hover:bg-navy/90"
                       >
                         {copied ? 'Copied!' : 'Copy Link'}
                       </button>
@@ -425,14 +425,14 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                   </div>
                 ) : (
                   <div>
-                    <p className="mb-3 text-sm text-slate-600">
+                    <p className="mb-3 text-sm text-charcoal/70">
                       Generate a shareable link. Anyone with the link can join the board.
                     </p>
                     <div className="flex gap-2">
                       <select
                         value={linkRole}
                         onChange={e => setLinkRole(e.target.value as 'editor' | 'viewer')}
-                        className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-charcoal outline-none focus:ring-2 focus:ring-navy"
                       >
                         <option value="editor">Editor</option>
                         <option value="viewer">Viewer</option>
@@ -440,7 +440,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                       <button
                         type="button"
                         onClick={handleGenerateLink}
-                        className="flex-1 rounded-lg bg-indigo-600 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500"
+                        className="flex-1 rounded-lg bg-navy py-2.5 text-sm font-medium text-parchment transition hover:bg-navy/90"
                       >
                         Generate Link
                       </button>
@@ -455,16 +455,16 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
         {/* Ownership transfer confirmation */}
         {transferTarget && (
           <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/50">
-            <div className="w-[360px] rounded-xl bg-white p-6 shadow-xl">
-              <h3 className="mb-3 text-base font-semibold text-slate-900">Transfer Ownership?</h3>
-              <p className="mb-5 text-sm text-slate-600">
+            <div className="w-[360px] rounded-xl bg-parchment p-6 shadow-xl">
+              <h3 className="mb-3 text-base font-semibold text-charcoal">Transfer Ownership?</h3>
+              <p className="mb-5 text-sm text-charcoal/70">
                 This will make the selected user the owner and change your role to manager. This action cannot be undone.
               </p>
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setTransferTarget(null)}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm transition hover:bg-slate-50"
+                  className="rounded-lg border border-parchment-border px-4 py-2 text-sm transition hover:bg-parchment-dark"
                 >
                   Cancel
                 </button>

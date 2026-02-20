@@ -35,7 +35,7 @@ describe('RichTextToolbar', () => {
     ;(editor.isActive as ReturnType<typeof vi.fn>).mockImplementation((name: string) => name === 'bold')
     const { container } = render(<RichTextToolbar editor={editor} />)
     const boldButton = container.querySelectorAll('button')[0]
-    expect(boldButton.className).toContain('bg-indigo-100')
+    expect(boldButton.className).toContain('bg-navy/10')
   })
 
   it('prevents blur via mouseDown preventDefault on wrapper', () => {
@@ -65,7 +65,7 @@ describe('RichTextToolbar', () => {
     const editor = createMockEditor()
     const { container } = render(<RichTextToolbar editor={editor} dark />)
     const firstButton = container.querySelectorAll('button')[0]
-    expect(firstButton.className).toContain('text-slate-300')
+    expect(firstButton.className).toContain('text-parchment/80')
   })
 
   it('subscribes to editor events and updates active state', () => {

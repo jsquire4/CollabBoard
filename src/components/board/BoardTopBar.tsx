@@ -82,6 +82,7 @@ export function BoardTopBar({
       setName(boardName)
       setRenameError('Failed to rename board')
       setTimeout(() => setRenameError(null), 3000)
+      return
     }
     setEditing(false)
   }

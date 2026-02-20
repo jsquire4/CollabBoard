@@ -162,7 +162,6 @@ export function CanvasOverlays({
           onZoomIn={zoomIn}
           onZoomOut={zoomOut}
           onReset={resetZoom}
-          uiDarkMode={uiDarkMode}
         />
       </div>
 

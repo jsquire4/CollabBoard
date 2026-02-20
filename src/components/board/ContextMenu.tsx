@@ -283,10 +283,10 @@ export function ContextMenu({
       {!isLocked && isTable && (
         <>
           <hr className="my-1 border-parchment-border opacity-60 dark:border-white/10" />
-          <MenuItem onClick={() => onAddRow()} label="Add Row" />
-          <MenuItem onClick={() => onDeleteRow()} label="Delete Row" />
-          <MenuItem onClick={() => onAddColumn()} label="Add Column" />
-          <MenuItem onClick={() => onDeleteColumn()} label="Delete Column" />
+          <MenuItem onClick={() => { onAddRow(); onClose() }} label="Add Row" />
+          <MenuItem onClick={() => { onDeleteRow(); onClose() }} label="Delete Row" />
+          <MenuItem onClick={() => { onAddColumn(); onClose() }} label="Add Column" />
+          <MenuItem onClick={() => { onDeleteColumn(); onClose() }} label="Delete Column" />
         </>
       )}
 

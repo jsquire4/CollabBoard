@@ -134,10 +134,15 @@ export function FloatingPropertyPanel({ stagePos, stageScale }: FloatingProperty
   } = useBoardMutations()
 
   const panelRef = useRef<HTMLDivElement>(null)
+  const colorInputRef = useRef<HTMLInputElement>(null)
+  const strokeInputRef = useRef<HTMLInputElement>(null)
   const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(null)
 
   useEffect(() => {
-    if (selectedIds.size === 0) return
+    if (selectedIds.size === 0) {
+      setPanelPos(null)
+      return
+    }
 
     const bbox = selectionBBox(selectedIds, objects)
     if (!bbox) return
@@ -171,6 +176,10 @@ export function FloatingPropertyPanel({ stagePos, stageScale }: FloatingProperty
 
   const swatchColor = selectedColor ?? '#5B8DEF'
 
+  // Derive the current stroke color from the first selected object
+  const firstId = selectedIds.values().next().value
+  const selectedStrokeColor = firstId ? (objects.get(firstId)?.stroke_color ?? null) : null
+
   return (
     <div
       ref={panelRef}
@@ -180,10 +189,19 @@ export function FloatingPropertyPanel({ stagePos, stageScale }: FloatingProperty
       style={panelPos ? { top: panelPos.top, left: panelPos.left } : { visibility: 'hidden' }}
     >
       {/* Color swatch */}
+      <input
+        ref={colorInputRef}
+        type="color"
+        className="sr-only"
+        aria-hidden="true"
+        value={swatchColor}
+        onChange={e => onColorChange(e.target.value)}
+      />
       <button
         className={NORMAL_BTN}
         aria-label="Color"
-        onClick={() => onColorChange(swatchColor)}
+        onClick={() => colorInputRef.current?.click()}
+        disabled={anySelectedLocked || !onColorChange}
         title="Change color"
       >
         <div
@@ -193,10 +211,19 @@ export function FloatingPropertyPanel({ stagePos, stageScale }: FloatingProperty
       </button>
 
       {/* Stroke/outline style */}
+      <input
+        ref={strokeInputRef}
+        type="color"
+        className="sr-only"
+        aria-hidden="true"
+        value={selectedStrokeColor ?? '#1B3A6B'}
+        onChange={e => onStrokeStyleChange({ stroke_color: e.target.value })}
+      />
       <button
         className={NORMAL_BTN}
         aria-label="Style"
-        onClick={() => onStrokeStyleChange({})}
+        onClick={() => strokeInputRef.current?.click()}
+        disabled={anySelectedLocked || !onStrokeStyleChange}
         title="Stroke style"
       >
         <IconStroke />

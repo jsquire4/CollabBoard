@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { FloatingPropertyPanel } from './FloatingPropertyPanel'
 import { createBoardContextWrapper } from '@/test/renderWithBoardContext'
@@ -95,7 +95,7 @@ describe('FloatingPropertyPanel', () => {
     expect(onDuplicate).toHaveBeenCalledTimes(1)
   })
 
-  it('renders a color swatch for the current selectedColor and calls onColorChange when clicked', async () => {
+  it('renders a color swatch for the current selectedColor and calls onColorChange when the hidden input changes', () => {
     const onColorChange = vi.fn()
     const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1', color: '#EF4444' })]])
     const Wrapper = createBoardContextWrapper({
@@ -110,21 +110,25 @@ describe('FloatingPropertyPanel', () => {
       },
     })
 
-    render(
+    const { container } = render(
       <Wrapper>
         <FloatingPropertyPanel {...DEFAULT_PROPS} />
       </Wrapper>
     )
 
-    // The color swatch button should be visible (accessible by its color label or role)
+    // The color swatch button should be visible
     const colorSwatch = screen.getByRole('button', { name: /color/i })
     expect(colorSwatch).toBeInTheDocument()
 
-    await userEvent.click(colorSwatch)
-    expect(onColorChange).toHaveBeenCalled()
+    // Simulate the color input changing — use native setter so React picks up the value
+    const colorInput = container.querySelector('input[type="color"]') as HTMLInputElement
+    const nativeSet = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+    nativeSet.call(colorInput, '#ff0000')
+    fireEvent.change(colorInput)
+    expect(onColorChange).toHaveBeenCalledWith('#ff0000')
   })
 
-  it('disables Delete and Duplicate buttons when anySelectedLocked is true', () => {
+  it('disables Delete, Duplicate, Color, and Stroke buttons when anySelectedLocked is true', () => {
     const onDelete = vi.fn()
     const onDuplicate = vi.fn()
     const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
@@ -148,6 +152,8 @@ describe('FloatingPropertyPanel', () => {
 
     expect(screen.getByRole('button', { name: /delete/i })).toBeDisabled()
     expect(screen.getByRole('button', { name: /duplicate/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /color/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /style/i })).toBeDisabled()
   })
 
   it('renders the Group button when canGroup is true', () => {
@@ -266,5 +272,80 @@ describe('FloatingPropertyPanel', () => {
     )
 
     expect(screen.getByRole('toolbar')).toBeInTheDocument()
+  })
+
+  it('shows the default color #5B8DEF when selectedColor is not provided', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    const Wrapper = createBoardContextWrapper({
+      boardValue: {
+        selectedIds: new Set(['obj-1']),
+        objects,
+      },
+      mutationsValue: {
+        selectedColor: undefined,
+        anySelectedLocked: false,
+      },
+    })
+
+    const { container } = render(
+      <Wrapper>
+        <FloatingPropertyPanel {...DEFAULT_PROPS} />
+      </Wrapper>
+    )
+
+    // The hidden color input should default to #5B8DEF
+    const colorInput = container.querySelector('input[type="color"]') as HTMLInputElement
+    expect(colorInput).toBeInTheDocument()
+    expect(colorInput.value).toBe('#5b8def')
+  })
+
+  it('renders panel with visibility hidden when selectedIds contains IDs not present in the objects map', () => {
+    // selectedIds has IDs but none exist in the objects map → selectionBBox returns null
+    // so panelPos is never set and the panel renders with visibility:hidden
+    const Wrapper = createBoardContextWrapper({
+      boardValue: {
+        selectedIds: new Set(['ghost-1', 'ghost-2']),
+        objects: new Map(),
+      },
+    })
+
+    const { container } = render(
+      <Wrapper>
+        <FloatingPropertyPanel {...DEFAULT_PROPS} />
+      </Wrapper>
+    )
+
+    const toolbar = container.querySelector('[role="toolbar"]')
+    expect(toolbar).toBeInTheDocument()
+    expect(toolbar).toHaveStyle({ visibility: 'hidden' })
+  })
+
+  it('renders both Group and Ungroup buttons when canGroup and canUngroup are both true', () => {
+    const objects = new Map([
+      ['obj-1', makeRectangle({ id: 'obj-1' })],
+      ['obj-2', makeCircle({ id: 'obj-2' })],
+    ])
+    const Wrapper = createBoardContextWrapper({
+      boardValue: {
+        selectedIds: new Set(['obj-1', 'obj-2']),
+        objects,
+      },
+      mutationsValue: {
+        canGroup: true,
+        canUngroup: true,
+        onGroup: vi.fn(),
+        onUngroup: vi.fn(),
+        anySelectedLocked: false,
+      },
+    })
+
+    render(
+      <Wrapper>
+        <FloatingPropertyPanel {...DEFAULT_PROPS} />
+      </Wrapper>
+    )
+
+    expect(screen.getByRole('button', { name: /^group/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /ungroup/i })).toBeInTheDocument()
   })
 })

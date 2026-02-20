@@ -25,10 +25,9 @@ interface ColorPickerProps {
   compact?: boolean
   /** Optional label for the compact button tooltip */
   label?: string
-  dark?: boolean
 }
 
-export function ColorPicker({ selectedColor, onColorChange, disabled, compact, label = 'Color', dark = false }: ColorPickerProps) {
+export function ColorPicker({ selectedColor, onColorChange, disabled, compact, label = 'Color' }: ColorPickerProps) {
   const [showPopover, setShowPopover] = useState(false)
   const [customColor, setCustomColor] = useState(selectedColor || '#1B3A6B')
   const popoverRef = useRef<HTMLDivElement>(null)
@@ -61,7 +60,9 @@ export function ColorPicker({ selectedColor, onColorChange, disabled, compact, l
             onClick={() => onColorChange(color)}
             disabled={disabled}
             className={`h-6 w-6 rounded-full transition hover:scale-110 disabled:opacity-50 disabled:hover:scale-100 ${
-              color === selectedColor ? 'ring-2 ring-slate-700 ring-offset-2 dark:ring-offset-[#111827]' : ''
+              color === '#FFFFFF' ? 'ring-1 ring-parchment-border' : ''
+            } ${
+              color === selectedColor ? 'ring-2 ring-charcoal ring-offset-2 dark:ring-offset-[#111827]' : ''
             }`}
             style={{ backgroundColor: color }}
             title={color}

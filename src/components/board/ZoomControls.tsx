@@ -5,10 +5,9 @@ interface ZoomControlsProps {
   onZoomIn: () => void
   onZoomOut: () => void
   onReset: () => void
-  uiDarkMode?: boolean
 }
 
-export function ZoomControls({ scale, onZoomIn, onZoomOut, onReset, uiDarkMode = false }: ZoomControlsProps) {
+export function ZoomControls({ scale, onZoomIn, onZoomOut, onReset }: ZoomControlsProps) {
   const percent = Math.round(scale * 100)
 
   return (

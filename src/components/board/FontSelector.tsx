@@ -38,7 +38,6 @@ interface FontSelectorProps {
   onTextStyleChange?: (updates: { text_align?: string; text_vertical_align?: string; text_color?: string }) => void
   disabled?: boolean
   compact?: boolean
-  dark?: boolean
 }
 
 export function FontSelector({
@@ -53,7 +52,6 @@ export function FontSelector({
   onTextStyleChange,
   disabled,
   compact,
-  dark = false,
 }: FontSelectorProps) {
   const [showPopover, setShowPopover] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
@@ -69,7 +67,7 @@ export function FontSelector({
     `rounded px-2 py-1 text-xs font-medium transition disabled:opacity-50 ${
       active
         ? 'bg-navy/10 text-navy'
-        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-[#1E293B] dark:text-parchment/60 dark:hover:bg-white/15'
+        : 'bg-parchment-dark text-charcoal hover:bg-parchment-dark dark:bg-[#1E293B] dark:text-parchment/60 dark:hover:bg-white/15'
     }`
 
   const content = (
@@ -178,7 +176,7 @@ export function FontSelector({
                   className={`h-5 w-5 rounded-full transition hover:scale-110 disabled:opacity-50 ${
                     color === '#FFFFFF' ? 'border border-parchment-border dark:border-white/10' : ''
                   } ${
-                    color === textColor ? 'ring-2 ring-slate-700 ring-offset-1 dark:ring-offset-[#111827]' : ''
+                    color === textColor ? 'ring-2 ring-charcoal ring-offset-1 dark:ring-offset-[#111827]' : ''
                   }`}
                   style={{ backgroundColor: color }}
                   title={color}

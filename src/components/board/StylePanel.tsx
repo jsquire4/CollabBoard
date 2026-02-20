@@ -43,7 +43,6 @@ interface StylePanelProps {
   onShadowChange: (updates: { shadow_blur?: number; shadow_color?: string; shadow_offset_x?: number; shadow_offset_y?: number }) => void
   onCornerRadiusChange?: (corner_radius: number) => void
   compact?: boolean
-  dark?: boolean
 }
 
 export function StylePanel({
@@ -59,7 +58,6 @@ export function StylePanel({
   onShadowChange,
   onCornerRadiusChange,
   compact,
-  dark = false,
 }: StylePanelProps) {
   const [showPopover, setShowPopover] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
@@ -88,9 +86,9 @@ export function StylePanel({
   const sectionLabel = `mb-1 text-xs font-medium text-charcoal/70 dark:text-parchment/60`
   const subLabel = `mb-1 text-xs text-charcoal/70 dark:text-parchment/60`
   const valueLabelSm = `text-right text-xs text-charcoal/70 dark:text-parchment/60`
-  const rangeTrack = `h-1 w-full cursor-pointer appearance-none rounded accent-navy bg-slate-200 dark:bg-slate-700`
+  const rangeTrack = `h-1 w-full cursor-pointer appearance-none rounded accent-navy bg-parchment-dark dark:bg-white/10`
   const presetActive = 'bg-navy/10 text-navy'
-  const presetInactive = `bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-[#1E293B] dark:text-parchment/80 dark:hover:bg-white/15`
+  const presetInactive = `bg-parchment-dark text-charcoal hover:bg-parchment-dark dark:bg-[#1E293B] dark:text-parchment/80 dark:hover:bg-white/15`
 
   const content = (
     <div className="w-56 space-y-3 p-3">
@@ -101,7 +99,7 @@ export function StylePanel({
           <button
             type="button"
             onClick={() => onStrokeStyleChange({ stroke_color: null })}
-            className={`h-6 w-6 rounded-full border-2 transition hover:scale-110 flex items-center justify-center border-parchment-border dark:border-white/10 ${!strokeColor ? 'ring-2 ring-slate-700 ring-offset-1 dark:ring-offset-[#111827]' : ''}`}
+            className={`h-6 w-6 rounded-full border-2 transition hover:scale-110 flex items-center justify-center border-parchment-border dark:border-white/10 ${!strokeColor ? 'ring-2 ring-charcoal ring-offset-1 dark:ring-offset-[#111827]' : ''}`}
             title="No outline"
           >
             <span className="text-xs text-red-400 font-bold">/</span>
@@ -115,7 +113,7 @@ export function StylePanel({
                 color === '#FFFFFF' ? 'border border-parchment-border dark:border-white/10' : ''
               } ${
                 color === strokeColor
-                  ? 'ring-2 ring-slate-700 ring-offset-1 dark:ring-offset-[#111827]'
+                  ? 'ring-2 ring-charcoal ring-offset-1 dark:ring-offset-[#111827]'
                   : ''
               }`}
               style={{ backgroundColor: color }}

@@ -100,7 +100,6 @@ export function LeftToolbar({
                 <RichTextToolbar editor={richTextEditor} dark={uiDarkMode} />
               ) : (
                 <FontSelector
-                  dark={uiDarkMode}
                   fontFamily={selectedFontFamily}
                   fontSize={selectedFontSize}
                   fontStyle={selectedFontStyle}
@@ -285,9 +284,6 @@ export function LeftToolbar({
 
 /* ── Shared small components ── */
 
-function Divider() {
-  return <div className="my-1 h-px w-8 bg-parchment-border dark:bg-white/10" />
-}
 
 /** SVG icon rendered from a path string in a 24x24 viewBox */
 function PresetIcon({ iconPath, className = 'h-4.5 w-4.5' }: { iconPath: string; className?: string }) {
@@ -422,7 +418,7 @@ function NgonGroupButton({ isOpen, activePreset, sides, onSidesChange, onToggle,
       dbType: 'ngon',
       defaultWidth: 120,
       defaultHeight: 120,
-      overrides: { sides, color: '#F97316' },
+      overrides: { sides, color: '#D4854A' },
       iconPath: 'M12 2L22.5 9.6 18.5 21.4H5.5L1.5 9.6Z',
     }
     onPresetSelect(preset)

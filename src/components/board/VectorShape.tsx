@@ -9,7 +9,7 @@ import { buildWaypointSegments } from '@/lib/geometry/waypoints'
 
 interface VectorShapeProps extends Omit<ShapeProps, 'object'> {
   object: VectorObject
-  variant: 'line' | 'arrow'
+  variant: 'line' | 'arrow' | 'data_connector'
   /** Pre-computed auto-route waypoints (absolute coords, only when no manual waypoints) */
   autoRoutePoints?: number[] | null
   onWaypointDragEnd?: (id: string, waypointIndex: number, x: number, y: number) => void
@@ -45,6 +45,11 @@ export const VectorShape = memo(function VectorShape({
     } catch {
       dash = undefined
     }
+  }
+
+  // data_connector overrides: force dashed purple style, no default arrow markers
+  if (variant === 'data_connector') {
+    dash = [8, 6]
   }
 
   // Resolve marker types — backward compat: arrows default to filled triangle end
@@ -147,12 +152,15 @@ export const VectorShape = memo(function VectorShape({
     onEndpointDragEnd(object.id, { x2: newX2, y2: newY2 })
   }
 
-  const strokeColor = object.stroke_color ?? object.color
+  const strokeColorBase = object.stroke_color ?? object.color
+  const strokeColor = variant === 'data_connector' && !object.stroke_color
+    ? '#7C3AED'
+    : strokeColorBase
   const effectiveStrokeWidth = isSelected ? Math.max(strokeWidth + 2, 4) : strokeWidth
   const shadowProps = getShadowProps(object)
 
   // Line-specific: selection stroke boost + custom shadow when selected
-  const lineShadow = variant === 'line'
+  const lineShadow = variant === 'line' || variant === 'data_connector'
     ? {
         shadowColor: isSelected ? '#0EA5E9' : shadowProps.shadowColor,
         shadowBlur: isSelected ? 8 : shadowProps.shadowBlur,

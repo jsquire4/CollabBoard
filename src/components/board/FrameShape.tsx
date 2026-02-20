@@ -155,6 +155,32 @@ export const FrameShape = memo(function FrameShape({
           lineHeight={titleLineHeight}
         />
       )}
+      {/* Slide badge — shown when this frame is a slide */}
+      {object.is_slide === true && (
+        <>
+          <Rect
+            x={object.width - 36}
+            y={4}
+            width={32}
+            height={20}
+            fill="#6366F1"
+            cornerRadius={4}
+          />
+          <Text
+            x={object.width - 36}
+            y={4}
+            width={32}
+            height={20}
+            text={String(object.slide_index ?? '')}
+            fontSize={11}
+            fontFamily="sans-serif"
+            fontStyle="bold"
+            fill="white"
+            align="center"
+            verticalAlign="middle"
+          />
+        </>
+      )}
     </Group>
   )
 }, areShapePropsEqual)

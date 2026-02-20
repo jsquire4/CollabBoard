@@ -64,6 +64,46 @@ const SHAPE_DEFAULTS: Record<string, ShapeDefaults> = {
     width: 0, height: 0, color: 'transparent',
     text: '',
   },
+  data_connector: {
+    width: 120, height: 2, color: '#7C3AED',
+    stroke_width: 2,
+  },
+  context_object: {
+    width: 180, height: 100, color: '#F1F5F9',
+    text: '',
+  },
+  agent: {
+    width: 200, height: 140, color: '#EEF2FF',
+    text: '',
+  },
+  agent_output: {
+    width: 240, height: 160, color: '#F0FDF4',
+    text: '',
+  },
+  text: {
+    width: 200, height: 60, color: 'transparent',
+    text: '',
+  },
+  status_badge: {
+    width: 100, height: 32, color: '#22C55E',
+    text: '',
+  },
+  section_header: {
+    width: 400, height: 40, color: 'transparent',
+    text: '',
+  },
+  metric_card: {
+    width: 160, height: 100, color: '#FFFFFF',
+    text: '',
+  },
+  checklist: {
+    width: 200, height: 160, color: '#FFFFFF',
+    text: '',
+  },
+  api_object: {
+    width: 180, height: 100, color: '#FEF3C7',
+    text: '',
+  },
 }
 
 export function getShapeDefaults(type: string): ShapeDefaults {

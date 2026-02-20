@@ -85,6 +85,23 @@ export interface BoardObjectCollab {
   deleted_at?: string | null
 }
 
+export interface BoardObjectAgent {
+  agent_state?: 'idle' | 'thinking' | 'done' | 'error' | null
+  agent_session_id?: string | null
+  source_agent_id?: string | null
+}
+
+export interface BoardObjectMeta {
+  file_id?: string | null
+  formula?: string | null
+}
+
+export interface BoardObjectSlide {
+  is_slide?: boolean | null
+  slide_index?: number | null
+  deck_id?: string | null
+}
+
 // --- Composed type ---
 
 export type BoardObject =
@@ -97,13 +114,16 @@ export type BoardObject =
   BoardObjectPolygon &
   BoardObjectTable &
   BoardObjectFile &
-  BoardObjectCollab
+  BoardObjectCollab &
+  BoardObjectAgent &
+  BoardObjectMeta &
+  BoardObjectSlide
 
 // --- Narrowed discriminated types ---
 
 /** Line or arrow shape with required endpoint coordinates */
 export type VectorObject = BoardObject & {
-  type: 'line' | 'arrow'
+  type: 'line' | 'arrow' | 'data_connector'
   x2: number
   y2: number
 }
@@ -125,4 +145,11 @@ export type FileObject = BoardObject & {
 /** Generic shape (registry-based + sticky_note + frame + group) */
 export type GenericShapeObject = BoardObject & {
   type: 'sticky_note' | 'rectangle' | 'circle' | 'frame' | 'group' | 'triangle' | 'chevron' | 'parallelogram' | 'ngon'
+    | 'status_badge' | 'section_header' | 'metric_card' | 'checklist' | 'api_object' | 'context_object' | 'agent_output'
+}
+
+/** Agent shape with required agent_state */
+export type AgentObject = BoardObject & {
+  type: 'agent'
+  agent_state: 'idle' | 'thinking' | 'done' | 'error'
 }

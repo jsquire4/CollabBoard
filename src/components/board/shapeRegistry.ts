@@ -181,3 +181,115 @@ shapeRegistry.set('ngon', {
     }
   },
 })
+
+// ── Status Badge ────────────────────────────────────────────
+shapeRegistry.set('status_badge', {
+  strategy: 'rect',
+  defaultWidth: 100,
+  defaultHeight: 32,
+  defaultColor: '#22C55E',
+  defaultOverrides: { text: '' },
+  konvaProps: (obj) => ({ cornerRadius: obj.corner_radius ?? 16 }),
+  getTextInset: (w, h, padding) => ({
+    x: padding,
+    y: 0,
+    width: w - 2 * padding,
+    height: h,
+  }),
+})
+
+// ── Section Header ──────────────────────────────────────────
+shapeRegistry.set('section_header', {
+  strategy: 'rect',
+  defaultWidth: 400,
+  defaultHeight: 40,
+  defaultColor: 'transparent',
+  defaultOverrides: { text: '' },
+  konvaProps: (_obj) => ({ cornerRadius: 0 }),
+  getTextInset: (w, h, padding) => ({
+    x: padding,
+    y: 0,
+    width: w - 2 * padding,
+    height: h,
+  }),
+})
+
+// ── Metric Card ─────────────────────────────────────────────
+shapeRegistry.set('metric_card', {
+  strategy: 'rect',
+  defaultWidth: 160,
+  defaultHeight: 100,
+  defaultColor: '#FFFFFF',
+  defaultOverrides: { text: '' },
+  konvaProps: (obj) => ({ cornerRadius: obj.corner_radius ?? 8 }),
+  getTextInset: (w, h, padding) => ({
+    x: padding,
+    y: padding,
+    width: w - 2 * padding,
+    height: h - 2 * padding,
+  }),
+})
+
+// ── Checklist ───────────────────────────────────────────────
+shapeRegistry.set('checklist', {
+  strategy: 'rect',
+  defaultWidth: 200,
+  defaultHeight: 160,
+  defaultColor: '#FFFFFF',
+  defaultOverrides: { text: '' },
+  konvaProps: (obj) => ({ cornerRadius: obj.corner_radius ?? 6 }),
+  getTextInset: (w, h, padding) => ({
+    x: padding,
+    y: padding,
+    width: w - 2 * padding,
+    height: h - 2 * padding,
+  }),
+})
+
+// ── API Object ──────────────────────────────────────────────
+shapeRegistry.set('api_object', {
+  strategy: 'rect',
+  defaultWidth: 180,
+  defaultHeight: 100,
+  defaultColor: '#FEF3C7',
+  defaultOverrides: { text: '' },
+  konvaProps: (obj) => ({ cornerRadius: obj.corner_radius ?? 6 }),
+  getTextInset: (w, h, padding) => ({
+    x: padding,
+    y: padding,
+    width: w - 2 * padding,
+    height: h - 2 * padding,
+  }),
+})
+
+// ── Context Object ──────────────────────────────────────────
+shapeRegistry.set('context_object', {
+  strategy: 'rect',
+  defaultWidth: 180,
+  defaultHeight: 100,
+  defaultColor: '#F1F5F9',
+  defaultOverrides: { text: '' },
+  konvaProps: (obj) => ({ cornerRadius: obj.corner_radius ?? 6 }),
+  getTextInset: (w, h, padding) => ({
+    x: padding,
+    y: padding,
+    width: w - 2 * padding,
+    height: h - 2 * padding,
+  }),
+})
+
+// ── Agent Output ────────────────────────────────────────────
+shapeRegistry.set('agent_output', {
+  strategy: 'rect',
+  defaultWidth: 240,
+  defaultHeight: 160,
+  defaultColor: '#F0FDF4',
+  defaultOverrides: { text: '' },
+  konvaProps: (obj) => ({ cornerRadius: obj.corner_radius ?? 8 }),
+  getTextInset: (w, h, padding) => ({
+    x: padding,
+    y: padding,
+    width: w - 2 * padding,
+    height: h - 2 * padding,
+  }),
+})

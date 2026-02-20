@@ -21,6 +21,7 @@ import { useShapeDrag } from '@/hooks/board/useShapeDrag'
 import { useContextMenu } from '@/hooks/board/useContextMenu'
 import { shapeRegistry } from './shapeRegistry'
 import { isVectorType } from './shapeUtils'
+import { getGroupBoundingBox as getGroupBoundingBoxPure, isObjectInViewport } from '@/lib/geometry/bbox'
 import { renderShape, ShapeCallbacks, ShapeState } from './renderShape'
 import { computeAutoRoute } from './autoRoute'
 import { RemoteSelectionHighlights } from './RemoteSelectionHighlights'
@@ -344,44 +345,14 @@ export function Canvas() {
     const right = (-stagePos.x + dimensions.width) / stageScale + margin
     const bottom = (-stagePos.y + dimensions.height) / stageScale + margin
 
-    return sortedObjects.filter(obj => {
-      if (obj.type === 'group' || obj.type === 'file') return false // groups and files render nothing on canvas
-      if (isVectorType(obj.type)) {
-        const ex2 = obj.x2 ?? obj.x + obj.width
-        const ey2 = obj.y2 ?? obj.y + obj.height
-        const objLeft = Math.min(obj.x, ex2)
-        const objTop = Math.min(obj.y, ey2)
-        const objRight = Math.max(obj.x, ex2)
-        const objBottom = Math.max(obj.y, ey2)
-        return objRight >= left && objLeft <= right && objBottom >= top && objTop <= bottom
-      }
-      return (obj.x + obj.width) >= left && obj.x <= right &&
-             (obj.y + obj.height) >= top && obj.y <= bottom
-    })
+    return sortedObjects.filter(obj => isObjectInViewport(obj, left, top, right, bottom))
   }, [sortedObjects, stagePos, stageScale, dimensions])
 
   // Compute group bounding boxes for visual treatment
-  const getGroupBoundingBox = useCallback((groupId: string) => {
-    const children = getDescendants(groupId).filter(c => c.type !== 'group')
-    if (children.length === 0) return null
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-    for (const c of children) {
-      if (isVectorType(c.type)) {
-        const cx2 = c.x2 ?? c.x + c.width
-        const cy2 = c.y2 ?? c.y + c.height
-        minX = Math.min(minX, c.x, cx2)
-        minY = Math.min(minY, c.y, cy2)
-        maxX = Math.max(maxX, c.x, cx2)
-        maxY = Math.max(maxY, c.y, cy2)
-      } else {
-        minX = Math.min(minX, c.x)
-        minY = Math.min(minY, c.y)
-        maxX = Math.max(maxX, c.x + c.width)
-        maxY = Math.max(maxY, c.y + c.height)
-      }
-    }
-    return { x: minX - 8, y: minY - 8, width: maxX - minX + 16, height: maxY - minY + 16 }
-  }, [getDescendants])
+  const getGroupBoundingBox = useCallback(
+    (groupId: string) => getGroupBoundingBoxPure(groupId, getDescendants),
+    [getDescendants]
+  )
 
   // Determine which groups are selected (for drop shadow visual)
   const selectedGroupIds = useMemo(() => {

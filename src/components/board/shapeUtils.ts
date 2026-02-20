@@ -1,7 +1,7 @@
 import Konva from 'konva'
 import { BoardObject, BoardObjectType } from '@/types/board'
-import { shapeRegistry } from './shapeRegistry'
-import { parseTableData, serializeTableData, distributeScale, getTableWidth, getTableHeight } from '@/lib/table/tableUtils'
+import { applyTableTransformScale } from '@/lib/table/tableTransform'
+export { getInitialVertexPoints } from '@/lib/geometry/customPoints'
 
 /** Default grid size in canvas units. */
 export const GRID_SIZE = 40
@@ -136,55 +136,14 @@ export function handleShapeTransformEnd(
   }
   // Table: distribute scale to columns/rows and recompute dimensions
   if (object.type === 'table' && object.table_data && (scaleX !== 1 || scaleY !== 1)) {
-    const data = parseTableData(object.table_data)
-    if (data) {
-      const scaled = distributeScale(data, scaleX, scaleY)
-      updates.table_data = serializeTableData(scaled)
-      updates.width = getTableWidth(scaled)
-      updates.height = getTableHeight(scaled)
+    const result = applyTableTransformScale(object.table_data, scaleX, scaleY)
+    if (result) {
+      updates.table_data = result.table_data
+      updates.width = result.width
+      updates.height = result.height
     }
   }
   onTransformEnd(object.id, updates)
 }
 
-/**
- * Compute initial vertex points for a shape entering vertex edit mode.
- * Returns flat [x1,y1,x2,y2,...] relative to the shape's (0,0) origin.
- */
-export function getInitialVertexPoints(obj: BoardObject): number[] {
-  // If already has custom points, parse them
-  if (obj.custom_points) {
-    try { return JSON.parse(obj.custom_points) } catch { /* fall through */ }
-  }
-
-  const w = obj.width
-  const h = obj.height
-  const def = shapeRegistry.get(obj.type)
-
-  // Polygon shapes: use registry getPoints
-  if (def?.strategy === 'polygon' && def.getPoints) {
-    return def.getPoints(w, h, obj)
-  }
-
-  // Rectangle: 4 corners
-  if (def?.strategy === 'rect') {
-    return [0, 0, w, 0, w, h, 0, h]
-  }
-
-  // Circle: 24-point approximation on the ellipse
-  if (def?.strategy === 'circle') {
-    const n = 24
-    const pts: number[] = []
-    const cx = w / 2
-    const cy = h / 2
-    const rx = w / 2
-    const ry = h / 2
-    for (let i = 0; i < n; i++) {
-      const angle = (2 * Math.PI * i) / n - Math.PI / 2
-      pts.push(cx + rx * Math.cos(angle), cy + ry * Math.sin(angle))
-    }
-    return pts
-  }
-
-  return []
-}
+// getInitialVertexPoints is re-exported from @/lib/geometry/customPoints (see top of file).

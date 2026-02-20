@@ -1,4 +1,6 @@
 import type { BoardObjectType, BoardObject } from '@/types/board'
+export { computeStarPoints } from '@/lib/geometry/starPoints'
+export { scaleCustomPoints } from '@/lib/geometry/customPoints'
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -33,31 +35,9 @@ interface ShapeGroup {
 }
 
 // ── Helpers ──────────────────────────────────────────────────
-
-/** Compute star polygon vertices. Returns flat [x1,y1,...] in a w×h box. */
-export function computeStarPoints(
-  numPoints: number,
-  w: number,
-  h: number,
-  innerRatio = 0.4
-): number[] {
-  const pts: number[] = []
-  const cx = w / 2
-  const cy = h / 2
-  const outerRx = w / 2
-  const outerRy = h / 2
-  const innerRx = outerRx * innerRatio
-  const innerRy = outerRy * innerRatio
-  const total = numPoints * 2
-  for (let i = 0; i < total; i++) {
-    const angle = (Math.PI * 2 * i) / total - Math.PI / 2
-    const isOuter = i % 2 === 0
-    const rx = isOuter ? outerRx : innerRx
-    const ry = isOuter ? outerRy : innerRy
-    pts.push(cx + rx * Math.cos(angle), cy + ry * Math.sin(angle))
-  }
-  return pts
-}
+// computeStarPoints and scaleCustomPoints are re-exported from @/lib/geometry
+// (see top of file).  Import them here so local helpers can still call them.
+import { computeStarPoints } from '@/lib/geometry/starPoints'
 
 /** Generate points for an arc segment, used in flowchart shapes. */
 function arcPoints(
@@ -550,20 +530,4 @@ export const SHAPE_GROUPS: ShapeGroup[] = [
   },
 ]
 
-// ── Utility: scale custom_points for draw-to-create ──────────
-
-export function scaleCustomPoints(preset: ShapePreset, newWidth: number, newHeight: number): string | undefined {
-  if (!preset.scalablePoints || !preset.overrides?.custom_points) return undefined
-  try {
-    const originalPts: number[] = JSON.parse(preset.overrides.custom_points)
-    const scaleX = newWidth / preset.defaultWidth
-    const scaleY = newHeight / preset.defaultHeight
-    const scaled = originalPts.map((v, i) => {
-      const rounded = i % 2 === 0 ? v * scaleX : v * scaleY
-      return Math.round(rounded * 100) / 100
-    })
-    return JSON.stringify(scaled)
-  } catch {
-    return preset.overrides.custom_points
-  }
-}
+// scaleCustomPoints is re-exported from @/lib/geometry/customPoints (see top of file).

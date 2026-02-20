@@ -701,7 +701,6 @@ export function Canvas() {
         zoomIn={zoomIn}
         zoomOut={zoomOut}
         resetZoom={resetZoom}
-        uiDarkMode={uiDarkMode}
         contextMenu={contextMenu}
         setContextMenu={setContextMenu}
         recentColors={recentColors}

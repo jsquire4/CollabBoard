@@ -195,7 +195,7 @@ export function FloatingPropertyPanel({ stagePos, stageScale }: FloatingProperty
         className="sr-only"
         aria-hidden="true"
         value={swatchColor}
-        onChange={e => onColorChange(e.target.value)}
+        onChange={e => onColorChange?.(e.target.value)}
       />
       <button
         className={NORMAL_BTN}
@@ -217,7 +217,7 @@ export function FloatingPropertyPanel({ stagePos, stageScale }: FloatingProperty
         className="sr-only"
         aria-hidden="true"
         value={selectedStrokeColor ?? '#1B3A6B'}
-        onChange={e => onStrokeStyleChange({ stroke_color: e.target.value })}
+        onChange={e => onStrokeStyleChange?.({ stroke_color: e.target.value })}
       />
       <button
         className={NORMAL_BTN}

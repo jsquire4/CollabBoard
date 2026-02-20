@@ -46,7 +46,6 @@ interface CanvasOverlaysProps {
   zoomIn: () => void
   zoomOut: () => void
   resetZoom: () => void
-  uiDarkMode: boolean
 
   // Context menu
   contextMenu: ContextMenuState | null
@@ -59,7 +58,7 @@ export function CanvasOverlays({
   editingId, editingField, editText, setEditText, textareaRef, textareaStyle,
   handleFinishEdit, onUpdateText, onUpdateTitle, objects,
   connectorHint, stageScale, stagePos, connectorDrawingRefs,
-  zoomIn, zoomOut, resetZoom, uiDarkMode,
+  zoomIn, zoomOut, resetZoom,
   contextMenu, setContextMenu, recentColors,
   onCellKeyDown,
 }: CanvasOverlaysProps) {

@@ -2,17 +2,17 @@ import Link from 'next/link'
 
 export function Footer() {
   return (
-    <footer className="border-t border-slate-200/80 bg-slate-100/80 px-6 py-12 shadow-[0_-4px_24px_-4px_rgba(0,0,0,0.04)] backdrop-blur-sm">
+    <footer className="border-t border-parchment-border bg-parchment-dark px-6 py-12 shadow-[0_-4px_24px_-4px_rgba(0,0,0,0.04)]">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 sm:flex-row">
-        <p className="text-sm text-slate-500">
-          © {new Date().getFullYear()} CollabBoard. Built for real-time collaboration.
+        <p className="text-sm text-charcoal/50">
+          © {new Date().getFullYear()} Theorem. The intelligent strategy canvas.
         </p>
         <div className="flex gap-8 text-sm">
-          <Link href="/login" className="text-slate-500 transition hover:text-indigo-600">
+          <Link href="/login" className="text-charcoal/50 transition hover:text-navy">
             Sign in
           </Link>
-          <Link href="/boards" className="text-slate-500 transition hover:text-indigo-600">
-            My Boards
+          <Link href="/boards" className="text-charcoal/50 transition hover:text-navy">
+            Open Theorem
           </Link>
         </div>
       </div>

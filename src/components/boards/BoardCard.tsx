@@ -12,10 +12,10 @@ const ROLE_LABELS: Record<string, string> = {
 }
 
 const ROLE_STYLES: Record<string, string> = {
-  owner: 'bg-indigo-100 text-indigo-700',
-  manager: 'bg-blue-100 text-blue-700',
+  owner: 'bg-navy/10 text-navy',
+  manager: 'bg-brg/10 text-brg',
   editor: 'bg-emerald-100 text-emerald-700',
-  viewer: 'bg-slate-100 text-slate-600',
+  viewer: 'bg-parchment-dark text-charcoal/60',
 }
 
 function formatLastUpdated(isoDate: string): string {
@@ -44,7 +44,6 @@ interface BoardCardProps {
   onDelete: (boardId: string) => void
   onLeave: (boardId: string) => void
   onNavigate: (boardId: string) => void
-  dark?: boolean
 }
 
 const STATUS_LABELS: Record<'active' | 'idle' | 'offline', string> = {
@@ -71,12 +70,10 @@ function MemberList({
   summary,
   onlineUsers,
   excludeOwnerId,
-  dark = false,
 }: {
   summary?: BoardCardSummary
   onlineUsers: BoardPresenceUser[]
   excludeOwnerId?: string
-  dark?: boolean
 }) {
   if (!summary) return null
 
@@ -92,9 +89,9 @@ function MemberList({
 
   return (
     <div className="mt-2">
-      <p className={`mb-1 text-xs font-medium ${dark ? 'text-indigo-400' : 'text-indigo-600'}`}>Collaborators</p>
+      <p className="mb-1 text-xs font-medium text-navy">Collaborators</p>
       {filtered.length === 0 ? (
-        <p className={`text-xs ${dark ? 'text-slate-500' : 'text-slate-400'}`}>No collaborators yet</p>
+        <p className="text-xs text-charcoal/40">No collaborators yet</p>
       ) : (
       <ul className="space-y-1">
         {toShow.map((m) => {
@@ -105,15 +102,15 @@ function MemberList({
           const label = m.is_anonymous ? 'Anonymous' : m.display_name || 'Unknown'
           const statusLabel = STATUS_LABELS[status]
           return (
-            <li key={m.user_id} className={`flex items-center gap-2 text-xs ${dark ? 'text-slate-400' : 'text-slate-600'}`}>
+            <li key={m.user_id} className="flex items-center gap-2 text-xs text-charcoal/70">
               <span className="min-w-0 flex-1 truncate">{label}</span>
-              <span className={`w-14 shrink-0 text-right ${dark ? 'text-slate-500' : 'text-slate-500'}`}>{statusLabel}</span>
+              <span className="w-14 shrink-0 text-right text-charcoal/50">{statusLabel}</span>
               <StatusDot status={status} />
             </li>
           )
         })}
         {showOthers && (
-          <li className="flex items-center gap-2 text-xs text-slate-500">
+          <li className="flex items-center gap-2 text-xs text-charcoal/40">
             <span className="min-w-0 flex-1 truncate">+ {total - 4} others</span>
             <span className="w-14 shrink-0" />
           </li>
@@ -136,9 +133,7 @@ export function BoardCard({
   onDelete,
   onLeave,
   onNavigate,
-  dark = false,
 }: BoardCardProps) {
-  const dk = dark
   const isOwner = board.role === 'owner'
   const cardRef = useRef<HTMLDivElement>(null)
   const [isVisible, setIsVisible] = useState(false)
@@ -165,11 +160,7 @@ export function BoardCard({
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') onNavigate(board.id)
       }}
-      className={`group flex min-h-[280px] cursor-pointer flex-col rounded-xl border p-5 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-        dk
-          ? 'border-slate-700 bg-slate-900 hover:border-indigo-500 hover:shadow-md focus:ring-offset-slate-950'
-          : 'border-slate-200 bg-white hover:border-indigo-200 hover:shadow-md'
-      }`}
+      className="group flex min-h-[280px] cursor-pointer flex-col rounded-xl border border-parchment-border bg-parchment-dark p-5 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-navy focus:ring-offset-2 hover:border-navy/30 hover:shadow-md"
     >
       {/* Title row: board name + role badge (right aligned) */}
       <div className="flex items-start justify-between gap-3">
@@ -186,11 +177,11 @@ export function BoardCard({
               }}
               onBlur={() => onRename(board.id)}
               onClick={(e) => e.stopPropagation()}
-              className={`flex-1 rounded border border-indigo-500 px-2 py-1 text-base font-semibold outline-none focus:ring-2 focus:ring-indigo-500/20 ${dk ? 'bg-slate-800 text-white' : ''}`}
+              className="flex-1 rounded border border-navy px-2 py-1 text-base font-semibold outline-none focus:ring-2 focus:ring-navy/20"
             />
           ) : (
             <h3
-              className={`min-w-0 flex-1 truncate text-base font-semibold ${dk ? 'text-white' : 'text-slate-900'}`}
+              className="min-w-0 flex-1 truncate text-base font-semibold text-charcoal"
               onDoubleClick={(e) => {
                 if (!isOwner) return
                 e.stopPropagation()
@@ -215,18 +206,17 @@ export function BoardCard({
           summary={board.summary}
           onlineUsers={onlineUsers}
           excludeOwnerId={isOwner ? board.created_by : undefined}
-          dark={dk}
         />
         {/* Separator + current viewers — fixed at bottom of collaborators area */}
-        <div className={`mt-auto border-t pt-3 ${dk ? 'border-slate-700' : 'border-slate-100'}`}>
-          <p className={`text-xs ${dk ? 'text-slate-400' : 'text-slate-500'}`}>
+        <div className="mt-auto border-t border-parchment-border pt-3">
+          <p className="text-xs text-charcoal/50">
             {onlineCount} viewing now
           </p>
         </div>
       </div>
 
       <div className="mt-auto flex items-center justify-between pt-2">
-        <p className={`text-xs ${dk ? 'text-slate-500' : 'text-slate-400'}`} suppressHydrationWarning>
+        <p className="text-xs text-charcoal/40" suppressHydrationWarning>
           Last updated {formatLastUpdated(board.updated_at)}
         </p>
         {isOwner ? (
@@ -237,7 +227,7 @@ export function BoardCard({
                 e.stopPropagation()
                 onDuplicate(board.id, board.name)
               }}
-              className={`rounded p-1.5 transition ${dk ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-200' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'}`}
+              className="rounded p-1.5 text-charcoal/40 transition hover:bg-parchment hover:text-charcoal"
               title="Duplicate board"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -250,7 +240,7 @@ export function BoardCard({
                 e.stopPropagation()
                 onDelete(board.id)
               }}
-              className={`rounded p-1.5 transition ${dk ? 'text-slate-400 hover:bg-red-950 hover:text-red-400' : 'text-slate-500 hover:bg-red-50 hover:text-red-600'}`}
+              className="rounded p-1.5 text-charcoal/40 transition hover:bg-red-50 hover:text-red-600"
               title="Delete board"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -265,7 +255,7 @@ export function BoardCard({
               e.stopPropagation()
               onLeave(board.id)
             }}
-            className={`rounded border px-2 py-1 text-xs font-medium transition ${dk ? 'border-red-400 text-red-400 hover:bg-red-400 hover:text-white' : 'border-red-500 text-red-500 hover:bg-red-500 hover:text-white'}`}
+            className="rounded border border-charcoal/20 px-2 py-1 text-xs font-medium text-charcoal/50 transition hover:border-charcoal/40 hover:text-charcoal"
             title="Leave board"
           >
             Leave

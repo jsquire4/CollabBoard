@@ -38,10 +38,6 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }))
 
-vi.mock('@/hooks/useDarkMode', () => ({
-  useDarkModeValue: () => false,
-}))
-
 vi.mock('@/hooks/useBoardPresenceCount', () => ({
   useBoardPresenceCount: () => ({ count: 0, onlineUsers: [] }),
 }))

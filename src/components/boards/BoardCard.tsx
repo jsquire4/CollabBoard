@@ -226,7 +226,7 @@ export function BoardCard({
       </div>
 
       <div className="mt-auto flex items-center justify-between pt-2">
-        <p className={`text-xs ${dk ? 'text-slate-500' : 'text-slate-400'}`}>
+        <p className={`text-xs ${dk ? 'text-slate-500' : 'text-slate-400'}`} suppressHydrationWarning>
           Last updated {formatLastUpdated(board.updated_at)}
         </p>
         {isOwner ? (

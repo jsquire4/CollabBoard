@@ -67,6 +67,7 @@ export function useRichTextEditing({
     extensions: TIPTAP_EXTENSIONS,
     content: '',
     editable: enabled,
+    immediatelyRender: false,
     // Don't auto-focus — we do it manually after positioning
     autofocus: false,
     onUpdate: ({ editor: ed }) => {

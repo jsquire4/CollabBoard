@@ -94,7 +94,11 @@ export function usePresence(
   // (initial + reconnections). channel.track() is idempotent so safe to call repeatedly.
   const trackPresence = useCallback(() => {
     if (!channel) return
-    if ((channel as unknown as { state: string }).state !== 'joined') return
+    const channelState = (channel as unknown as { state: string }).state
+    if (channelState !== 'joined') {
+      console.warn(`[Realtime] trackPresence skipped: channel state is '${channelState}'`)
+      return
+    }
 
     const color = getColorForUser(userId)
     const payload: OnlineUser = {

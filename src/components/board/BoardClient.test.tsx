@@ -39,8 +39,10 @@ vi.mock('@/lib/supabase/client', () => ({
     channel: vi.fn(() => mockChannel),
     removeChannel: vi.fn(),
     auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'test-token' } } }),
       onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
     },
+    realtime: { disconnect: vi.fn(), setAuth: vi.fn() },
     from: vi.fn(() => mockFromChain()),
     functions: { invoke: vi.fn().mockResolvedValue({ error: null }) },
   })),

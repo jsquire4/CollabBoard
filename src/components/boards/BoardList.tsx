@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { BoardWithRole } from '@/types/sharing'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -22,7 +21,6 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
-  const router = useRouter()
   const supabaseRef = useRef(createClient())
   const supabase = supabaseRef.current
 
@@ -46,7 +44,7 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
     setIsSubmitting(false)
     setNewName('')
     setShowNameInput(false)
-    router.push(`/board/${data.id}`)
+    window.location.href = `/board/${data.id}`
   }
 
   const handleRename = async (id: string) => {
@@ -145,7 +143,7 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
               onDuplicate={handleDuplicateBoard}
               onDelete={handleDelete}
               onLeave={handleLeaveBoard}
-              onNavigate={(id) => router.push(`/board/${id}`)}
+              onNavigate={(id) => { window.location.href = `/board/${id}` }}
             />
           ))}
         </div>
@@ -171,7 +169,7 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
                 onDuplicate={handleDuplicateBoard}
                 onDelete={handleDelete}
                 onLeave={handleLeaveBoard}
-                onNavigate={(id) => router.push(`/board/${id}`)}
+                onNavigate={(id) => { window.location.href = `/board/${id}` }}
               />
             ))}
           </div>

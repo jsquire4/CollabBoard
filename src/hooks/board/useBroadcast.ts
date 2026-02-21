@@ -96,7 +96,11 @@ export function useBroadcast({ channel, userId, setObjects, fieldClocksRef, hlcR
   // ── Send to channel (with chunking) ──
   const broadcastChanges = useCallback((changes: BoardChange[]) => {
     if (!channel) return
-    if ((channel as unknown as { state: string }).state !== 'joined') return
+    const channelState = (channel as unknown as { state: string }).state
+    if (channelState !== 'joined') {
+      console.warn(`[Realtime] Broadcast dropped: channel state is '${channelState}', not 'joined' (${changes.length} change(s))`)
+      return
+    }
 
     const payload = { changes, sender_id: userId }
     const serialized = JSON.stringify(payload)

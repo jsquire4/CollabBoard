@@ -1,11 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 export default function JoinPage() {
-  const router = useRouter()
   const params = useParams<{ token: string }>()
   const token = params.token
   const [error, setError] = useState<string | null>(null)
@@ -36,11 +35,13 @@ export default function JoinPage() {
         return
       }
 
-      router.replace(`/board/${boardId}`)
+      // Full page navigation (not router.replace) to ensure the board page
+      // gets a clean Realtime WebSocket — SPA transitions break it.
+      window.location.href = `/board/${boardId}`
     }
 
     joinBoard()
-  }, [token, router])
+  }, [token])
 
   if (error) {
     return (

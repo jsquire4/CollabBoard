@@ -13,12 +13,11 @@ import { createTools, createToolContext } from '@/lib/agent/tools'
 import { getUserDisplayName } from '@/lib/userUtils'
 import { runAgentLoop, SSE_HEADERS } from '@/lib/agent/sse'
 import { capHistory } from '@/lib/agent/summarize'
+import { UUID_RE } from '@/lib/api/uuidRe'
 
 export const maxDuration = 60
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(
   request: NextRequest,

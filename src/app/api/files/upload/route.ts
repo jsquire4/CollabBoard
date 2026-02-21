@@ -7,6 +7,7 @@ import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { v4 as uuidv4 } from 'uuid'
+import { UUID_RE } from '@/lib/api/uuidRe'
 
 const MAX_SIZE_BYTES = 50 * 1024 * 1024 // 50MB
 
@@ -21,8 +22,6 @@ const ALLOWED_MIMES = new Set([
   'text/markdown',
   'text/csv',
 ])
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function extFromMime(mime: string): string {
   const map: Record<string, string> = {

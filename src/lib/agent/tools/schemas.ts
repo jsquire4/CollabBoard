@@ -1,6 +1,6 @@
 /**
  * Tool schemas: Zod (for runtime validation) + JSON (for OpenAI API).
- * Both must be maintained manually — Zod 4 dropped instanceof-based introspection.
+ * The JSON schemas are derived from Zod via z.toJSONSchema() — single source of truth.
  */
 
 import { z } from 'zod'
@@ -95,113 +95,34 @@ export const getFrameObjectsSchema = z.object({
 
 export const emptySchema = z.object({})
 
-// ── OpenAI JSON schemas ───────────────────────────────────────────────────────
+// ── OpenAI JSON schemas (derived from Zod — single source of truth) ───────────
 
-export const TOOL_SCHEMAS: Record<string, Record<string, unknown>> = {
-  createStickyNote: {
-    type: 'object',
-    properties: {
-      text: { type: 'string' },
-      color: { type: 'string', description: 'Hex color, e.g. #FFEB3B' },
-      x: { type: 'number' },
-      y: { type: 'number' },
-      title: { type: 'string' },
-    },
-  },
-  createShape: {
-    type: 'object',
-    required: ['type'],
-    properties: {
-      type: { type: 'string', enum: ['rectangle', 'circle', 'triangle', 'chevron', 'parallelogram', 'ngon'] },
-      x: { type: 'number' }, y: { type: 'number' },
-      width: { type: 'number' }, height: { type: 'number' },
-      color: { type: 'string' }, text: { type: 'string' },
-      sides: { type: 'number', description: 'Number of sides for ngon type' },
-    },
-  },
-  createFrame: {
-    type: 'object',
-    properties: {
-      title: { type: 'string' },
-      x: { type: 'number' }, y: { type: 'number' },
-      width: { type: 'number' }, height: { type: 'number' },
-      color: { type: 'string' },
-    },
-  },
-  createTable: {
-    type: 'object',
-    properties: {
-      columns: { type: 'number' }, rows: { type: 'number' },
-      x: { type: 'number' }, y: { type: 'number' },
-      title: { type: 'string' },
-    },
-  },
-  createConnector: {
-    type: 'object',
-    required: ['startObjectId', 'endObjectId'],
-    properties: {
-      type: { type: 'string', enum: ['line', 'arrow'] },
-      startObjectId: { type: 'string' }, endObjectId: { type: 'string' },
-      startAnchor: { type: 'string', enum: ['top', 'right', 'bottom', 'left', 'center'] },
-      endAnchor: { type: 'string', enum: ['top', 'right', 'bottom', 'left', 'center'] },
-      color: { type: 'string' },
-    },
-  },
-  moveObject: {
-    type: 'object',
-    required: ['id', 'x', 'y'],
-    properties: {
-      id: { type: 'string' },
-      x: { type: 'number', minimum: -50000, maximum: 50000 },
-      y: { type: 'number', minimum: -50000, maximum: 50000 },
-    },
-  },
-  resizeObject: {
-    type: 'object',
-    required: ['id', 'width', 'height'],
-    properties: {
-      id: { type: 'string' },
-      width: { type: 'number', exclusiveMinimum: 0 },
-      height: { type: 'number', exclusiveMinimum: 0 },
-    },
-  },
-  updateText: {
-    type: 'object',
-    required: ['id'],
-    properties: {
-      id: { type: 'string' }, text: { type: 'string' }, title: { type: 'string' },
-    },
-  },
-  changeColor: {
-    type: 'object',
-    required: ['id', 'color'],
-    properties: {
-      id: { type: 'string' },
-      color: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$', description: 'Hex color, e.g. #FF5733' },
-    },
-  },
-  deleteObject: {
-    type: 'object',
-    required: ['id'],
-    properties: { id: { type: 'string' } },
-  },
-  describeImage: {
-    type: 'object',
-    required: ['objectId'],
-    properties: { objectId: { type: 'string' } },
-  },
-  readFileContent: {
-    type: 'object',
-    required: ['objectId'],
-    properties: { objectId: { type: 'string' } },
-  },
-  getFrameObjects: {
-    type: 'object',
-    required: ['frameId'],
-    properties: { frameId: { type: 'string' } },
-  },
-  getBoardState: {
-    type: 'object',
-    properties: {},
-  },
-}
+/**
+ * Per-tool JSON schemas for the OpenAI Chat Completions `tools` parameter.
+ * Generated from the Zod schemas above using z.toJSONSchema() — Zod 4 native.
+ * The $schema field is stripped since OpenAI does not require it.
+ */
+export const TOOL_SCHEMAS: Record<string, Record<string, unknown>> = Object.fromEntries(
+  (
+    [
+      ['createStickyNote', createStickyNoteSchema],
+      ['createShape', createShapeSchema],
+      ['createFrame', createFrameSchema],
+      ['createTable', createTableSchema],
+      ['createConnector', createConnectorSchema],
+      ['moveObject', moveObjectSchema],
+      ['resizeObject', resizeObjectSchema],
+      ['updateText', updateTextSchema],
+      ['changeColor', changeColorSchema],
+      ['deleteObject', deleteObjectSchema],
+      ['describeImage', describeImageSchema],
+      ['readFileContent', readFileContentSchema],
+      ['getFrameObjects', getFrameObjectsSchema],
+      ['getBoardState', emptySchema],
+    ] as const
+  ).map(([name, schema]) => {
+    const jsonSchema = z.toJSONSchema(schema) as Record<string, unknown>
+    delete jsonSchema['$schema']
+    return [name, jsonSchema]
+  }),
+)

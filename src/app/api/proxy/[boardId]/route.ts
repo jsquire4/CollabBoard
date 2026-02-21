@@ -15,10 +15,9 @@ import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import * as dnsPromises from 'dns/promises'
+import { UUID_RE } from '@/lib/api/uuidRe'
 
 export const maxDuration = 30
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** Headers forwarded from client requests that should never be forwarded upstream */
 const STRIPPED_REQUEST_HEADERS = new Set([

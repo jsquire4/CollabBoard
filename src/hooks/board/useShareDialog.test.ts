@@ -1,7 +1,7 @@
 /**
  * Tests for useShareDialog — sharing logic: members, invites, links, role changes, ownership transfer.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import type { BoardMember, BoardInvite, BoardShareLink } from '@/types/sharing'
 
@@ -41,31 +41,23 @@ import { useShareDialog } from './useShareDialog'
 
 const BOARD_ID = '11111111-1111-1111-1111-111111111111'
 
-function mockChain(...fns: Array<() => unknown>) {
-  let chain: Record<string, unknown> = {}
-  fns.forEach((fn, i) => {
-    const key = i === 0 ? 'then' : `then_${i}`
-    chain = { [key]: fn }
-  })
-  return chain
-}
-
 describe('useShareDialog', () => {
+  afterEach(() => {
+
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     mockAuthGetUser.mockResolvedValue({ data: { user: { id: 'current-user' } } })
     mockClipboardWrite.mockResolvedValue(undefined)
 
     // Default: loadData success
-    mockRpc.mockImplementation((name: string, args?: Record<string, unknown>) => {
+    mockRpc.mockImplementation((name: string) => {
       if (name === 'get_board_member_details') {
         return Promise.resolve({
           data: [{ id: 'm1', user_id: 'u1', role: 'owner', email: 'owner@test.com', display_name: 'Owner', can_use_agents: true }],
           error: null,
         })
-      }
-      if (name === 'lookup_user_by_email') {
-        return Promise.resolve({ data: null, error: null })
       }
       return Promise.resolve({ data: null, error: null })
     })
@@ -133,38 +125,13 @@ describe('useShareDialog', () => {
     expect(result.current.inviteStatus).toBe('Error: Please enter a valid email address')
   })
 
-  it('handleInvite: adds existing user when lookup returns userId', async () => {
-    mockRpc.mockImplementation((name: string) => {
-      if (name === 'get_board_member_details') {
-        return Promise.resolve({ data: [], error: null })
-      }
-      if (name === 'lookup_user_by_email') {
-        return Promise.resolve({ data: 'existing-user-id', error: null })
-      }
-      return Promise.resolve({ data: null, error: null })
+  it('handleInvite: shows "Added" status when API returns outcome=added', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({ outcome: 'added' }),
     })
-
-    const mockUpsert = Promise.resolve({ error: null })
-    mockFrom.mockImplementation((table: string) => {
-      if (table === 'board_members') {
-        return {
-          upsert: vi.fn(() => ({ onConflict: vi.fn(() => mockUpsert) })),
-        }
-      }
-      if (table === 'board_invites') {
-        return {
-          select: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ data: [], error: null })) })),
-        }
-      }
-      if (table === 'board_share_links') {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          limit: vi.fn(() => Promise.resolve({ data: [], error: null })),
-        }
-      }
-      return {}
-    })
+    vi.stubGlobal('fetch', mockFetch)
 
     const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -176,31 +143,21 @@ describe('useShareDialog', () => {
       await result.current.handleInvite()
     })
 
-    expect(mockRpc).toHaveBeenCalledWith('lookup_user_by_email', {
-      p_board_id: BOARD_ID,
-      p_email: 'user@example.com',
-    })
-    expect(mockFrom).toHaveBeenCalledWith('board_members')
+    expect(mockFetch).toHaveBeenCalledWith('/api/invites', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ boardId: BOARD_ID, email: 'user@example.com', role: 'editor' }),
+    }))
     expect(result.current.inviteStatus).toContain('Added')
+    expect(result.current.inviteEmail).toBe('')
   })
 
-  it('handleInvite: creates invite when user not found', async () => {
-    mockFrom.mockImplementation((table: string) => {
-      if (table === 'board_invites') {
-        return {
-          select: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ data: [], error: null })) })),
-          upsert: vi.fn(() => ({ onConflict: vi.fn(() => Promise.resolve({ error: null })) })),
-        }
-      }
-      if (table === 'board_share_links') {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          limit: vi.fn(() => Promise.resolve({ data: [], error: null })),
-        }
-      }
-      return {}
+  it('handleInvite: shows "Invited" status when API returns outcome=invited', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({ outcome: 'invited', inviteId: 'inv-123' }),
     })
+    vi.stubGlobal('fetch', mockFetch)
 
     const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -212,8 +169,105 @@ describe('useShareDialog', () => {
       await result.current.handleInvite()
     })
 
-    expect(mockFrom).toHaveBeenCalledWith('board_invites')
     expect(result.current.inviteStatus).toContain('Invited')
+    expect(result.current.inviteEmail).toBe('')
+  })
+
+  it('handleInvite: shows validation error on 400 response', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: 'Invalid or missing email' }),
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() => result.current.setInviteEmail('valid@email.com'))
+
+    await act(async () => {
+      await result.current.handleInvite()
+    })
+
+    expect(result.current.inviteStatus).toContain('Error')
+
+  })
+
+  it('handleInvite: shows permission error on 403 response', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ error: 'Forbidden' }),
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() => result.current.setInviteEmail('valid@email.com'))
+
+    await act(async () => {
+      await result.current.handleInvite()
+    })
+
+    expect(result.current.inviteStatus).toContain('permission')
+
+  })
+
+  it('handleInvite: shows generic error on 500 response', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 'Internal error' }),
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() => result.current.setInviteEmail('valid@email.com'))
+
+    await act(async () => {
+      await result.current.handleInvite()
+    })
+
+    expect(result.current.inviteStatus).toContain('Failed')
+
+  })
+
+  it('handleInvite: shows error when fetch throws', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')))
+
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() => result.current.setInviteEmail('valid@email.com'))
+
+    await act(async () => {
+      await result.current.handleInvite()
+    })
+
+    expect(result.current.inviteStatus).toContain('Failed')
+
+  })
+
+  it('handleInvite: does not call fetch when email fails client-side regex', async () => {
+    const mockFetch = vi.fn()
+    vi.stubGlobal('fetch', mockFetch)
+
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() => result.current.setInviteEmail('not-an-email'))
+
+    await act(async () => {
+      await result.current.handleInvite()
+    })
+
+    expect(mockFetch).not.toHaveBeenCalled()
+    expect(result.current.inviteStatus).toBe('Error: Please enter a valid email address')
+
   })
 
   it('handleRoleChange: sets transferTarget when newRole is owner', async () => {

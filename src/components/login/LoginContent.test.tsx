@@ -200,4 +200,73 @@ describe('LoginContent', () => {
     expect(screen.getByText('User already registered')).toBeInTheDocument()
     expect(mockPush).not.toHaveBeenCalled()
   })
+
+  // ── returnTo redirect tests ──────────────────────────────────────────────
+
+  describe('returnTo redirect', () => {
+    it('redirects to returnTo path after successful signInWithPassword', async () => {
+      mockSearchParams = new URLSearchParams({ returnTo: '/invite/accept?id=abc' })
+      const user = userEvent.setup()
+      render(<LoginContent />)
+      await user.type(screen.getByLabelText(/email/i), 'test@example.com')
+      await user.type(screen.getByLabelText(/password/i), 'password123')
+      await user.click(screen.getByRole('button', { name: /^sign in$/i }))
+      expect(mockPush).toHaveBeenCalledWith('/invite/accept?id=abc')
+    })
+
+    it('redirects to /boards when returnTo is absent', async () => {
+      mockSearchParams = new URLSearchParams()
+      const user = userEvent.setup()
+      render(<LoginContent />)
+      await user.type(screen.getByLabelText(/email/i), 'test@example.com')
+      await user.type(screen.getByLabelText(/password/i), 'password123')
+      await user.click(screen.getByRole('button', { name: /^sign in$/i }))
+      expect(mockPush).toHaveBeenCalledWith('/boards')
+    })
+
+    it('redirects to /boards when returnTo is an absolute URL (open redirect guard)', async () => {
+      mockSearchParams = new URLSearchParams({ returnTo: 'https://evil.com/steal' })
+      const user = userEvent.setup()
+      render(<LoginContent />)
+      await user.type(screen.getByLabelText(/email/i), 'test@example.com')
+      await user.type(screen.getByLabelText(/password/i), 'password123')
+      await user.click(screen.getByRole('button', { name: /^sign in$/i }))
+      expect(mockPush).toHaveBeenCalledWith('/boards')
+    })
+
+    it('redirects to /boards when returnTo starts with // (protocol-relative guard)', async () => {
+      mockSearchParams = new URLSearchParams({ returnTo: '//evil.com' })
+      const user = userEvent.setup()
+      render(<LoginContent />)
+      await user.type(screen.getByLabelText(/email/i), 'test@example.com')
+      await user.type(screen.getByLabelText(/password/i), 'password123')
+      await user.click(screen.getByRole('button', { name: /^sign in$/i }))
+      expect(mockPush).toHaveBeenCalledWith('/boards')
+    })
+
+    it('redirects to returnTo after successful signUp', async () => {
+      mockSearchParams = new URLSearchParams({ returnTo: '/invite/accept?id=xyz' })
+      const user = userEvent.setup()
+      render(<LoginContent />)
+      await user.click(screen.getByRole('button', { name: /sign up/i }))
+      await user.type(screen.getByLabelText(/email/i), 'new@example.com')
+      await user.type(screen.getByLabelText(/password/i), 'password123')
+      await user.click(screen.getByRole('button', { name: /create account/i }))
+      expect(mockPush).toHaveBeenCalledWith('/invite/accept?id=xyz')
+    })
+
+    it('passes returnTo through to Google OAuth redirectTo as next param', async () => {
+      mockSearchParams = new URLSearchParams({ returnTo: '/invite/accept?id=abc' })
+      const user = userEvent.setup()
+      render(<LoginContent />)
+      await user.click(screen.getByRole('button', { name: /sign in with google/i }))
+      expect(mockSignInWithOAuth).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.objectContaining({
+            redirectTo: expect.stringContaining(encodeURIComponent('/invite/accept?id=abc')),
+          }),
+        })
+      )
+    })
+  })
 })

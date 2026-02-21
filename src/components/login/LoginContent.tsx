@@ -17,6 +17,11 @@ export function LoginContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const authError = searchParams.get('error')
+  const rawReturnTo = searchParams.get('returnTo')
+  // Prevent open redirect: only allow relative paths, not protocol-relative URLs
+  const returnTo = rawReturnTo && rawReturnTo.startsWith('/') && !rawReturnTo.startsWith('//')
+    ? rawReturnTo
+    : '/boards'
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -28,7 +33,7 @@ export function LoginContent() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnTo)}`,
       },
     })
   }
@@ -52,7 +57,7 @@ export function LoginContent() {
           return
         }
       }
-      router.push('/boards')
+      router.push(returnTo)
     } finally {
       setIsLoading(false)
     }

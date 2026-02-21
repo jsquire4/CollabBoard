@@ -97,51 +97,34 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
       return
     }
 
-    const { data: userId, error: lookupError } = await supabase.rpc('lookup_user_by_email', { p_board_id: boardId, p_email: email })
-    if (lookupError) {
-      toast.error('Failed to look up user')
-      return
-    }
+    try {
+      const res = await fetch('/api/invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ boardId, email, role: inviteRole }),
+      })
 
-    if (userId) {
-      const { error } = await supabase
-        .from('board_members')
-        .upsert({
-          board_id: boardId,
-          user_id: userId,
-          role: inviteRole,
-          can_use_agents: inviteRole !== 'viewer',
-        }, { onConflict: 'board_id,user_id' })
+      const data = await res.json()
 
-      if (error) {
-        setInviteStatus('Failed to send invite. Please try again.')
-      } else {
-        setInviteStatus(`Added ${email} as ${inviteRole}`)
+      if (res.status === 201) {
+        if (data.outcome === 'added') {
+          setInviteStatus(`Added ${email} as ${inviteRole}`)
+        } else if (data.outcome === 'invited') {
+          setInviteStatus(`Invited ${email} (pending signup)`)
+        } else {
+          setInviteStatus(`Invite processed for ${email}`)
+        }
         setInviteEmail('')
         loadData()
-      }
-    } else {
-      const currentUser = (await supabase.auth.getUser()).data.user
-      if (!currentUser) {
-        setInviteStatus('Error: Session expired. Please refresh and try again.')
-        return
-      }
-      const { error } = await supabase
-        .from('board_invites')
-        .upsert({
-          board_id: boardId,
-          email,
-          role: inviteRole,
-          invited_by: currentUser.id,
-        }, { onConflict: 'board_id,email' })
-
-      if (error) {
-        setInviteStatus('Failed to send invite. Please try again.')
+      } else if (res.status === 400) {
+        setInviteStatus(`Error: ${data.error || 'Invalid request'}`)
+      } else if (res.status === 403) {
+        setInviteStatus('Error: You do not have permission to invite members')
       } else {
-        setInviteStatus(`Invited ${email} (pending signup)`)
-        setInviteEmail('')
-        loadData()
+        setInviteStatus('Failed to send invite. Please try again.')
       }
+    } catch {
+      setInviteStatus('Failed to send invite. Please try again.')
     }
   }
 

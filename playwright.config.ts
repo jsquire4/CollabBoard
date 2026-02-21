@@ -24,7 +24,7 @@ export default defineConfig({
     {
       name: 'functional',
       use: { ...devices['Desktop Chrome'], storageState: '.auth/user.json' },
-      testMatch: /board-functional\.spec\.ts/,
+      testMatch: /board-functional\.spec\.ts|invite-flow\.spec\.ts/,
     },
     {
       name: 'performance',

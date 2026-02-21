@@ -41,6 +41,7 @@ export interface BoardMutationsContextValue {
 
   // Style
   onColorChange: (color: string) => void
+  onTextColorChange: (color: string) => void
   onStrokeStyleChange: (updates: { stroke_color?: string | null; stroke_width?: number; stroke_dash?: string }) => void
   onOpacityChange: (opacity: number) => void
   onMarkerChange: (updates: { marker_start?: MarkerType; marker_end?: MarkerType }) => void

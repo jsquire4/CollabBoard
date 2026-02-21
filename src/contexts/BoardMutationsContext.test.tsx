@@ -77,6 +77,8 @@ function makeMutationsValue(overrides?: Record<string, unknown>) {
     onDeleteColumnAt: noop,
     snapIndicator: null,
     vertexEditId: null,
+    onTextColorChange: noop,
+    onCommentOpen: noop,
     ...overrides,
   }
 }

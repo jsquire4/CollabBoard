@@ -54,6 +54,7 @@ const defaultMutationsValue: BoardMutationsContextValue = {
   onCut: vi.fn(),
   onPaste: noop,
   onColorChange: noop,
+  onTextColorChange: noop,
   onStrokeStyleChange: noop,
   onOpacityChange: noop,
   onMarkerChange: noop,

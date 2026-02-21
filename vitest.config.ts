@@ -39,6 +39,7 @@ export default defineConfig({
         'src/components/board/VectorShape.tsx',
         'src/components/board/FrameShape.tsx',
         'src/components/board/TableShape.tsx',
+        'src/components/board/ObjectIndicators.tsx',
         // Phase 1 agent/slide stub components — no testable pure logic yet
         'src/components/board/AgentShape.tsx',
         'src/components/board/AgentChatPanel.tsx',

@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react'
 import type { Editor } from '@tiptap/react'
+import { ColorPicker } from './ColorPicker'
 
 interface RichTextToolbarProps {
   editor: Editor | null
@@ -51,12 +52,15 @@ interface ActiveState {
   h1: boolean
   h2: boolean
   h3: boolean
+  textAlign: 'left' | 'center' | 'right'
+  textColor: string | null
 }
 
 const EMPTY_ACTIVE: ActiveState = {
   bold: false, italic: false, underline: false, strike: false,
   highlight: false, bulletList: false, orderedList: false, taskList: false,
   h1: false, h2: false, h3: false,
+  textAlign: 'left', textColor: null,
 }
 
 function readActiveState(editor: Editor | null): ActiveState {
@@ -73,6 +77,9 @@ function readActiveState(editor: Editor | null): ActiveState {
     h1: editor.isActive('heading', { level: 1 }),
     h2: editor.isActive('heading', { level: 2 }),
     h3: editor.isActive('heading', { level: 3 }),
+    textAlign: editor.isActive({ textAlign: 'center' }) ? 'center'
+             : editor.isActive({ textAlign: 'right' }) ? 'right' : 'left',
+    textColor: (editor.getAttributes('textStyle').color as string | undefined) ?? null,
   }
 }
 
@@ -197,6 +204,43 @@ export function RichTextToolbar({ editor, dark }: RichTextToolbarProps) {
         shortLabel="H3"
         isActive={active.h3}
         onClick={() => run(e => e.chain().focus().toggleHeading({ level: 3 }).run())}
+        dark={dark}
+      />
+
+      <div className={`my-1 h-px w-8 ${dark ? 'bg-white/10' : 'bg-parchment-border'}`} />
+
+      {/* Text color */}
+      <div
+        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation() }}
+      >
+        <ColorPicker
+          compact
+          label="Text color"
+          selectedColor={active.textColor ?? '#1C1C1E'}
+          onColorChange={(color) => run(e => e.chain().focus().setColor(color).run())}
+        />
+      </div>
+
+      {/* Text alignment */}
+      <ToolbarButton
+        label="Align left"
+        shortLabel="≡"
+        isActive={active.textAlign === 'left'}
+        onClick={() => run(e => e.chain().focus().setTextAlign('left').run())}
+        dark={dark}
+      />
+      <ToolbarButton
+        label="Align center"
+        shortLabel="≡"
+        isActive={active.textAlign === 'center'}
+        onClick={() => run(e => e.chain().focus().setTextAlign('center').run())}
+        dark={dark}
+      />
+      <ToolbarButton
+        label="Align right"
+        shortLabel="≡"
+        isActive={active.textAlign === 'right'}
+        onClick={() => run(e => e.chain().focus().setTextAlign('right').run())}
         dark={dark}
       />
     </div>

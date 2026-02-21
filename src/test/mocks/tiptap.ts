@@ -19,6 +19,7 @@ export function createMockEditor() {
       toggleStrike: vi.fn(),
       toggleHighlight: vi.fn(),
       setColor: vi.fn(),
+      setTextAlign: vi.fn(),
       toggleBulletList: vi.fn(),
       toggleOrderedList: vi.fn(),
       toggleTaskList: vi.fn(),
@@ -35,6 +36,7 @@ export function createMockEditor() {
       return proxy
     }),
     isActive: vi.fn(() => false),
+    getAttributes: vi.fn(() => ({})),
     isDestroyed: false,
     on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
       if (!listeners.has(event)) listeners.set(event, new Set())

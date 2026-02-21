@@ -1,4 +1,5 @@
 import React from 'react'
+import { vi } from 'vitest'
 import { BoardProvider, BoardContextValue } from '@/contexts/BoardContext'
 import { BoardMutationsProvider, BoardMutationsContextValue } from '@/contexts/BoardMutationsContext'
 import { BoardToolProvider, BoardToolContextValue } from '@/contexts/BoardToolContext'
@@ -27,6 +28,7 @@ const defaultBoardValue: BoardContextValue = {
   gridColor: '#b4becd',
   subdivisionColor: '#b4becd',
   uiDarkMode: false,
+  commentCounts: new Map(),
 }
 
 function noop() {}
@@ -49,8 +51,10 @@ const defaultMutationsValue: BoardMutationsContextValue = {
   onDelete: noop,
   onDuplicate: noop,
   onCopy: noop,
+  onCut: vi.fn(),
   onPaste: noop,
   onColorChange: noop,
+  onTextColorChange: noop,
   onStrokeStyleChange: noop,
   onOpacityChange: noop,
   onMarkerChange: noop,
@@ -75,8 +79,8 @@ const defaultMutationsValue: BoardMutationsContextValue = {
   onCursorUpdate: noop,
   onEditingChange: noop,
   anySelectedLocked: false,
-  onLock: noop,
-  onUnlock: noop,
+  onLock: vi.fn(),
+  onUnlock: vi.fn(),
   canLock: false,
   canUnlock: false,
   onEditVertices: noop,
@@ -103,6 +107,7 @@ const defaultMutationsValue: BoardMutationsContextValue = {
   onDeleteColumnAt: noop,
   snapIndicator: null,
   vertexEditId: null,
+  onCommentOpen: vi.fn(),
 }
 
 const defaultToolValue: BoardToolContextValue = {

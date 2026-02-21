@@ -26,6 +26,7 @@ import { renderShape, ShapeCallbacks, ShapeState } from './renderShape'
 import { computeAutoRoute } from './autoRoute'
 import { RemoteSelectionHighlights } from './RemoteSelectionHighlights'
 import { LockIconOverlay } from './LockIconOverlay'
+import { ObjectIndicators } from './ObjectIndicators'
 import { CanvasOverlays } from './CanvasOverlays'
 import { RichTextStaticLayer } from './RichTextStaticLayer'
 import { RICH_TEXT_ENABLED } from '@/lib/richText'
@@ -126,13 +127,15 @@ export function Canvas() {
     onAddRowAt, onDeleteRowAt, onAddColumnAt, onDeleteColumnAt,
     onAgentClick,
     onApiConfigChange,
+    onCut,
+    onCommentOpen,
   } = useBoardMutations()
   // ── Read shared state from context ──────────────────────────────
   const {
     objects, sortedObjects, selectedIds, activeGroupId, activeTool,
     getDescendants,
     boardId, canEdit,
-    onlineUsers, remoteSelections, isObjectLocked,
+    onlineUsers, remoteSelections, isObjectLocked, commentCounts,
     gridSize, gridSubdivisions, gridVisible,
     snapToGrid: snapToGridEnabled,
     gridStyle, canvasColor, gridColor, subdivisionColor,
@@ -285,6 +288,8 @@ export function Canvas() {
   }, [richTextEditing.editor, onEditorReady])
 
   // Keyboard shortcuts (delegated to extracted hook)
+  const firstSelectedId = selectedIds.size > 0 ? selectedIds.values().next().value as string : null
+
   useKeyboardShortcuts({
     editingId, canEdit, selectedIds, activeGroupId, activeTool,
     vertexEditId, anySelectedLocked,
@@ -292,6 +297,7 @@ export function Canvas() {
     onClearSelection, onExitGroup, onCancelTool, onUndo, onRedo,
     onExitVertexEdit,
     onBringToFront, onBringForward, onSendBackward, onSendToBack,
+    onCut, onLock, onUnlock, onCommentOpen, firstSelectedId,
     onCancelDraw: () => {
       isDrawing.current = false
       drawStart.current = null
@@ -604,6 +610,13 @@ export function Canvas() {
           {/* Lock icon overlays for locked shapes */}
           <LockIconOverlay visibleObjects={visibleObjects} isObjectLocked={isObjectLocked} />
 
+          {/* Comment count badges */}
+          <ObjectIndicators
+            visibleObjects={visibleObjects}
+            commentCounts={commentCounts}
+            isObjectLocked={isObjectLocked}
+          />
+
           {/* Marquee selection rectangle */}
           {marquee && (
             <KonvaRect
@@ -772,7 +785,6 @@ export function Canvas() {
         resetZoom={resetZoom}
         contextMenu={contextMenu}
         setContextMenu={setContextMenu}
-        recentColors={recentColors}
         onCellKeyDown={handleCellKeyDown}
         boardId={boardId}
         onApiConfigChange={onApiConfigChange}

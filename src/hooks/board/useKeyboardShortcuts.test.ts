@@ -292,6 +292,114 @@ describe('resolveKeyboardAction (pure function)', () => {
       )).toBeNull()
     })
   })
+
+  describe('Ctrl+X (cut)', () => {
+    it('returns cut with selection', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'x', ctrlKey: true }),
+        makeState()
+      )).toBe('cut')
+    })
+
+    it('returns null without selection', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'x', ctrlKey: true }),
+        makeState({ hasSelection: false })
+      )).toBeNull()
+    })
+
+    it('returns null when selection is locked', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'x', ctrlKey: true }),
+        makeState({ anySelectedLocked: true })
+      )).toBeNull()
+    })
+
+    it('returns null when canEdit is false', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'x', ctrlKey: true }),
+        makeState({ canEdit: false })
+      )).toBeNull()
+    })
+  })
+
+  describe('Ctrl+L (lock/unlock)', () => {
+    it('returns lock when selection is unlocked', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'l', ctrlKey: true }),
+        makeState({ anySelectedLocked: false })
+      )).toBe('lock')
+    })
+
+    it('returns unlock when selection is locked', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'l', ctrlKey: true }),
+        makeState({ anySelectedLocked: true })
+      )).toBe('unlock')
+    })
+
+    it('returns null when no selection', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'l', ctrlKey: true }),
+        makeState({ hasSelection: false })
+      )).toBeNull()
+    })
+
+    it('returns null when canEdit is false', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'l', ctrlKey: true }),
+        makeState({ canEdit: false })
+      )).toBeNull()
+    })
+  })
+
+  describe('Ctrl+K (comment)', () => {
+    it('returns comment with selection', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'k', ctrlKey: true }),
+        makeState()
+      )).toBe('comment')
+    })
+
+    it('returns comment even when selection is locked (no lock check for comments)', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'k', ctrlKey: true }),
+        makeState({ anySelectedLocked: true })
+      )).toBe('comment')
+    })
+
+    it('returns null without selection', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'k', ctrlKey: true }),
+        makeState({ hasSelection: false })
+      )).toBeNull()
+    })
+  })
+
+  describe('Ctrl+Y (redo — secondary binding)', () => {
+    it('returns redo for Ctrl+Y', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'y', ctrlKey: true }),
+        makeState()
+      )).toBe('redo')
+    })
+
+    it('returns null when canEdit is false', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'y', ctrlKey: true }),
+        makeState({ canEdit: false })
+      )).toBeNull()
+    })
+  })
+
+  describe('Ctrl+Shift+Z still returns redo (regression)', () => {
+    it('Ctrl+Shift+Z returns redo', () => {
+      expect(resolveKeyboardAction(
+        makeEvent({ key: 'z', ctrlKey: true, shiftKey: true }),
+        makeState()
+      )).toBe('redo')
+    })
+  })
 })
 
 describe('useKeyboardShortcuts (hook integration)', () => {
@@ -518,6 +626,92 @@ describe('useKeyboardShortcuts (hook integration)', () => {
       dispatchKeyDown({ key: 'Escape' })
       expect(deps.onClearSelection).toHaveBeenCalledTimes(1)
       expect(deps.onEscapeContextMenu).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('Ctrl+X (cut)', () => {
+    it('calls onCut when Ctrl+X is pressed', () => {
+      const onCut = vi.fn()
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts({ ...deps, onCut }))
+      dispatchKeyDown({ key: 'x', ctrlKey: true })
+      expect(onCut).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not separately call onCopy or onDelete when Ctrl+X fires', () => {
+      const onCut = vi.fn()
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts({ ...deps, onCut }))
+      dispatchKeyDown({ key: 'x', ctrlKey: true })
+      expect(deps.onCopy).not.toHaveBeenCalled()
+      expect(deps.onDelete).not.toHaveBeenCalled()
+    })
+
+    it('does not call onCut when selection is locked', () => {
+      const onCut = vi.fn()
+      const deps = makeDeps({ anySelectedLocked: true })
+      renderHook(() => useKeyboardShortcuts({ ...deps, onCut }))
+      dispatchKeyDown({ key: 'x', ctrlKey: true })
+      expect(onCut).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Ctrl+L (lock/unlock)', () => {
+    it('calls onLock when Ctrl+L pressed with unlocked selection', () => {
+      const onLock = vi.fn()
+      const onUnlock = vi.fn()
+      const deps = makeDeps({ anySelectedLocked: false })
+      renderHook(() => useKeyboardShortcuts({ ...deps, onLock, onUnlock }))
+      dispatchKeyDown({ key: 'l', ctrlKey: true })
+      expect(onLock).toHaveBeenCalledTimes(1)
+      expect(onUnlock).not.toHaveBeenCalled()
+    })
+
+    it('calls onUnlock when Ctrl+L pressed with locked selection', () => {
+      const onLock = vi.fn()
+      const onUnlock = vi.fn()
+      const deps = makeDeps({ anySelectedLocked: true })
+      renderHook(() => useKeyboardShortcuts({ ...deps, onLock, onUnlock }))
+      dispatchKeyDown({ key: 'l', ctrlKey: true })
+      expect(onUnlock).toHaveBeenCalledTimes(1)
+      expect(onLock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Ctrl+K (comment)', () => {
+    it('calls onCommentOpen with firstSelectedId when Ctrl+K pressed', () => {
+      const onCommentOpen = vi.fn()
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts({ ...deps, onCommentOpen, firstSelectedId: 'r1' }))
+      dispatchKeyDown({ key: 'k', ctrlKey: true })
+      expect(onCommentOpen).toHaveBeenCalledTimes(1)
+      expect(onCommentOpen).toHaveBeenCalledWith('r1')
+    })
+
+    it('calls onCommentOpen even when selection is locked', () => {
+      const onCommentOpen = vi.fn()
+      const deps = makeDeps({ anySelectedLocked: true })
+      renderHook(() => useKeyboardShortcuts({ ...deps, onCommentOpen, firstSelectedId: 'r1' }))
+      dispatchKeyDown({ key: 'k', ctrlKey: true })
+      expect(onCommentOpen).toHaveBeenCalledTimes(1)
+      expect(onCommentOpen).toHaveBeenCalledWith('r1')
+    })
+
+    it('does not call onCommentOpen when firstSelectedId is null', () => {
+      const onCommentOpen = vi.fn()
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts({ ...deps, onCommentOpen, firstSelectedId: null }))
+      dispatchKeyDown({ key: 'k', ctrlKey: true })
+      expect(onCommentOpen).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Ctrl+Y (redo — secondary binding)', () => {
+    it('calls onRedo when Ctrl+Y is pressed', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+      dispatchKeyDown({ key: 'y', ctrlKey: true })
+      expect(deps.onRedo).toHaveBeenCalledTimes(1)
     })
   })
 

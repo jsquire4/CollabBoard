@@ -27,6 +27,7 @@ function makeContextValue(overrides?: Partial<BoardContextValue>): BoardContextV
     gridColor: '#b4becd',
     subdivisionColor: '#b4becd',
     uiDarkMode: false,
+    commentCounts: new Map(),
     ...overrides,
   }
 }

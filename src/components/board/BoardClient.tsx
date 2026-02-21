@@ -15,7 +15,6 @@ import { useZOrderActions } from '@/hooks/board/useZOrderActions'
 import { useGroupActions } from '@/hooks/board/useGroupActions'
 import { useClipboardActions } from '@/hooks/board/useClipboardActions'
 import { useTableActions } from '@/hooks/board/useTableActions'
-import { parseTableData } from '@/lib/table/tableUtils'
 import { useConnectorActions } from '@/hooks/board/useConnectorActions'
 import { useConnectionManager } from '@/hooks/board/useConnectionManager'
 import { useGridSettings } from '@/hooks/board/useGridSettings'
@@ -49,6 +48,7 @@ import { FileLibraryPanel } from './FileLibraryPanel'
 import { FilmstripPanel } from './FilmstripPanel'
 import { CommentThread } from './CommentThread'
 import { FileDropZone } from './FileDropZone'
+import { PropertiesPanel } from './PropertiesPanel'
 
 // Konva is client-only — must disable SSR
 const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canvas })), {
@@ -248,8 +248,9 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     handleDelete,
     handleDuplicate,
     handleCopy,
+    handleCut,
     handlePaste,
-  } = useClipboardActions({ objects, selectedIds, canEdit, deleteSelected, duplicateSelected, duplicateObject, getDescendants, undoStack, markActivity })
+  } = useClipboardActions({ objects, selectedIds, canEdit, addObject, deleteSelected, duplicateSelected, duplicateObject, getDescendants, undoStack, markActivity })
 
   const {
     handleAddRow,
@@ -262,7 +263,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     handleDeleteColumnAt,
     handleTableDataChange,
     handleCellTextUpdate,
-    handleTableHeaderStyleChange,
   } = useTableActions({ objects, selectedIds, canEdit, updateObject, undoStack })
 
   const {
@@ -507,25 +507,15 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     }
   }, [selectedIds, objects])
 
-  const selectedTableHeaderInfo = useMemo(() => {
-    if (selectedIds.size !== 1) return null
-    const [id] = selectedIds
-    const obj = objects.get(id)
-    if (!obj || obj.type !== 'table') return null
-    const data = parseTableData(obj.table_data)
-    if (!data) return null
-    return {
-      headerBg: data.header_bg ?? '#F3F4F6',
-      headerTextColor: data.header_text_color ?? '#374151',
-    }
-  }, [selectedIds, objects])
-
   // Slide frames — sorted by slide_index, used by FilmstripPanel
   const slideFrames = useMemo(() =>
     [...objects.values()]
       .filter(o => o.type === 'frame' && o.is_slide)
       .sort((a, b) => (a.slide_index ?? 0) - (b.slide_index ?? 0))
   , [objects])
+
+  // Stable empty map — placeholder until comment counts subscription is wired
+  const emptyCommentCounts = useMemo(() => new Map<string, number>(), [])
 
   // ── Board context (read-only shared state for child components) ──
   const boardContextValue: BoardContextValue = useMemo(() => ({
@@ -538,6 +528,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     isObjectLocked,
     gridSize, gridSubdivisions, gridVisible, snapToGrid, gridStyle,
     canvasColor, gridColor, subdivisionColor, uiDarkMode,
+    commentCounts: emptyCommentCounts,
   }), [
     objects, selectedIds, activeGroupId, sortedObjects, remoteSelections,
     getChildren, getDescendants,
@@ -547,6 +538,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     isObjectLocked,
     gridSize, gridSubdivisions, gridVisible, snapToGrid, gridStyle,
     canvasColor, gridColor, subdivisionColor, uiDarkMode,
+    emptyCommentCounts,
   ])
 
   // ── Mutations context (all callbacks for Canvas + child components) ──
@@ -616,8 +608,10 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     onDelete: handleDelete,
     onDuplicate: handleDuplicate,
     onCopy: handleCopy,
+    onCut: handleCut,
     onPaste: handlePaste,
     onColorChange: handleColorChange,
+    onTextColorChange: (color: string) => handleTextStyleChange({ text_color: color }),
     onBringToFront: handleBringToFront,
     onBringForward: handleBringForward,
     onSendBackward: handleSendBackward,
@@ -680,8 +674,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     handleDragStart, handleDragEnd, handleDragMove,
     handleUpdateText, handleUpdateTitle, handleUpdateRichText, setRichTextEditor,
     handleTransformEnd,
-    handleDelete, handleDuplicate, handleCopy, handlePaste,
-    handleColorChange, handleBringToFront, handleBringForward, handleSendBackward, handleSendToBack,
+    handleDelete, handleDuplicate, handleCopy, handleCut, handlePaste,
+    handleColorChange, handleTextStyleChange, handleBringToFront, handleBringForward, handleSendBackward, handleSendToBack,
     handleGroup, handleUngroup, canGroup, canUngroup,
     handleStrokeStyleChange, handleOpacityChange, handleMarkerChange,
     performUndo, performRedo,
@@ -774,6 +768,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
             </CanvasErrorBoundary>
           </div>
         </FileDropZone>
+        {/* Properties panel — fixed right sidebar, slides in when objects are selected */}
+        <PropertiesPanel />
       </div>
       {shareOpen && (
         <ShareDialog

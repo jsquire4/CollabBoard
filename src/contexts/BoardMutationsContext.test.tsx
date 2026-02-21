@@ -22,6 +22,7 @@ function makeMutationsValue(overrides?: Record<string, unknown>) {
     onDelete: noop,
     onDuplicate: noop,
     onCopy: noop,
+    onCut: noop,
     onPaste: noop,
     onColorChange: noop,
     onStrokeStyleChange: noop,
@@ -76,6 +77,8 @@ function makeMutationsValue(overrides?: Record<string, unknown>) {
     onDeleteColumnAt: noop,
     snapIndicator: null,
     vertexEditId: null,
+    onTextColorChange: noop,
+    onCommentOpen: noop,
     ...overrides,
   }
 }

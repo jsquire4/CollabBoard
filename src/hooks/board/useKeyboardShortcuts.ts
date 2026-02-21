@@ -27,6 +27,11 @@ interface UseKeyboardShortcutsDeps {
   /** Called when Escape cancels a draw-in-progress */
   onCancelDraw?: () => void
   onEscapeContextMenu?: () => void
+  onCut?: () => void
+  onLock?: () => void
+  onUnlock?: () => void
+  onCommentOpen?: (id: string) => void
+  firstSelectedId?: string | null
 }
 
 /**
@@ -58,6 +63,18 @@ export function resolveKeyboardAction(
   }
   if (mod && key === 'c' && state.hasSelection) {
     return 'copy'
+  }
+  if (state.canEdit && mod && key === 'x' && state.hasSelection && !state.anySelectedLocked) {
+    return 'cut'
+  }
+  if (state.canEdit && mod && key === 'l' && state.hasSelection) {
+    return state.anySelectedLocked ? 'unlock' : 'lock'
+  }
+  if (mod && key === 'k' && state.hasSelection) {
+    return 'comment'
+  }
+  if (state.canEdit && mod && !e.shiftKey && key === 'y') {
+    return 'redo'
   }
   if (state.canEdit && mod && key === 'v') {
     return 'paste'
@@ -104,6 +121,7 @@ export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
     onClearSelection, onExitGroup, onCancelTool, onUndo, onRedo,
     onExitVertexEdit, onBringToFront, onBringForward, onSendBackward, onSendToBack,
     onCancelDraw, onEscapeContextMenu,
+    onCut, onLock, onUnlock, onCommentOpen, firstSelectedId,
   } = deps
 
   useEffect(() => {
@@ -134,7 +152,11 @@ export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
         case 'delete': onDelete(); break
         case 'duplicate': onDuplicate(); break
         case 'copy': onCopy?.(); break
+        case 'cut': onCut?.(); break
         case 'paste': onPaste?.(); break
+        case 'lock': onLock?.(); break
+        case 'unlock': onUnlock?.(); break
+        case 'comment': firstSelectedId && onCommentOpen?.(firstSelectedId); break
         case 'group': onGroup(); break
         case 'ungroup': onUngroup(); break
         case 'undo': onUndo?.(); break
@@ -158,5 +180,5 @@ export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editingId, selectedIds, activeGroupId, activeTool, onDelete, onDuplicate, onCopy, onPaste, onGroup, onUngroup, onClearSelection, onExitGroup, onCancelTool, canEdit, onUndo, onRedo, anySelectedLocked, vertexEditId, onExitVertexEdit, onBringToFront, onBringForward, onSendBackward, onSendToBack, onCancelDraw, onEscapeContextMenu])
+  }, [editingId, selectedIds, activeGroupId, activeTool, onDelete, onDuplicate, onCopy, onPaste, onGroup, onUngroup, onClearSelection, onExitGroup, onCancelTool, canEdit, onUndo, onRedo, anySelectedLocked, vertexEditId, onExitVertexEdit, onBringToFront, onBringForward, onSendBackward, onSendToBack, onCancelDraw, onEscapeContextMenu, onCut, onLock, onUnlock, onCommentOpen, firstSelectedId])
 }

@@ -5,6 +5,7 @@ import { Highlight } from '@tiptap/extension-highlight'
 import { TaskList } from '@tiptap/extension-task-list'
 import { TaskItem } from '@tiptap/extension-task-item'
 import { Underline } from '@tiptap/extension-underline'
+import { TextAlign } from '@tiptap/extension-text-align'
 import type { Extensions } from '@tiptap/react'
 
 /**
@@ -22,4 +23,8 @@ export const TIPTAP_EXTENSIONS: Extensions = [
   TaskList,
   TaskItem.configure({ nested: true }),
   Underline,
+  TextAlign.configure({
+    types: ['heading', 'paragraph'],
+    alignments: ['left', 'center', 'right'],
+  }),
 ]

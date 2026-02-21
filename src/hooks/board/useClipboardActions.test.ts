@@ -8,6 +8,7 @@ function makeDeps(overrides?: Record<string, unknown>) {
     objects: new Map() as Map<string, ReturnType<typeof makeRectangle>>,
     selectedIds: new Set<string>(),
     canEdit: true,
+    addObject: vi.fn(() => null),
     deleteSelected: vi.fn(),
     duplicateSelected: vi.fn(() => []),
     duplicateObject: vi.fn(() => null),

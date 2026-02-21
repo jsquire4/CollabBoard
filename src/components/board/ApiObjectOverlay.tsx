@@ -61,16 +61,18 @@ export function ApiObjectOverlay({ object, boardId, onConfigChange }: ApiObjectO
   const [responseStatus, setResponseStatus] = useState<number | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const headersTextRef = useRef(headersText)
+  headersTextRef.current = headersText
 
   // Sync from external formula changes (e.g. undo, remote updates)
   useEffect(() => {
     const parsed = parseFormula(formula)
     setConfig(parsed)
-    setHeadersText(
-      Object.entries(parsed.headers)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join('\n'),
-    )
+    const text = Object.entries(parsed.headers)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join('\n')
+    setHeadersText(text)
+    headersTextRef.current = text
   }, [formula])
 
   const saveConfig = useCallback((newConfig: ApiConfig, newHeadersText?: string) => {
@@ -78,11 +80,11 @@ export function ApiObjectOverlay({ object, boardId, onConfigChange }: ApiObjectO
     debounceRef.current = setTimeout(() => {
       const finalConfig: ApiConfig = {
         ...newConfig,
-        headers: parseHeaders(newHeadersText ?? headersText),
+        headers: parseHeaders(newHeadersText ?? headersTextRef.current),
       }
       onConfigChange(id, JSON.stringify(finalConfig))
     }, 300)
-  }, [id, onConfigChange, headersText])
+  }, [id, onConfigChange])
 
   const handleMethodChange = useCallback((method: string) => {
     const next = { ...config, method }

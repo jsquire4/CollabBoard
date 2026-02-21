@@ -585,24 +585,17 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     e.preventDefault()
     if (!canEdit) return
 
-    // Handle collabboard file library drags
+    // Handle collabboard file library drags only.
+    // Native file drops are handled by FileDropZone — the getData guard below
+    // ensures we only act on library drags (native drops have no collabboard data).
     const data = e.dataTransfer.getData('application/collabboard-file')
     if (data) {
       try {
         const { fileId, fileName, mimeType } = JSON.parse(data)
         addObject('context_object', 200, 200, { file_id: fileId, file_name: fileName, mime_type: mimeType })
       } catch { /* ignore malformed drag data */ }
-      return
     }
-
-    // Handle native desktop file drops
-    if (e.dataTransfer.files.length > 0) {
-      // Place files at 200,200 as a reasonable default position
-      for (const file of Array.from(e.dataTransfer.files)) {
-        void uploadFile(file, 200, 200)
-      }
-    }
-  }, [addObject, canEdit, uploadFile])
+  }, [addObject, canEdit])
 
   const mutationsValue: BoardMutationsContextValue = useMemo(() => ({
     onDrawShape: handleDrawShape,

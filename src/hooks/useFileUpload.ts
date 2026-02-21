@@ -62,7 +62,8 @@ export function useFileUpload({ boardId, canEdit, supabase, addObject, removeObj
         return null
       }
 
-      // For images, read native dimensions
+      // For images, read native dimensions and cap to reasonable canvas size
+      const MAX_IMG_DIM = 800
       let imgWidth: number | undefined
       let imgHeight: number | undefined
       if (file.type.startsWith('image/')) {
@@ -75,8 +76,10 @@ export function useFileUpload({ boardId, canEdit, supabase, addObject, removeObj
             img.onerror = reject
             img.src = blobUrl!
           })
-          imgWidth = dims.w
-          imgHeight = dims.h
+          // Scale down to fit within MAX_IMG_DIM while preserving aspect ratio
+          const scale = Math.min(1, MAX_IMG_DIM / Math.max(dims.w, dims.h))
+          imgWidth = Math.round(dims.w * scale)
+          imgHeight = Math.round(dims.h * scale)
         } catch { /* fall through to defaults */ } finally {
           if (blobUrl) URL.revokeObjectURL(blobUrl)
         }

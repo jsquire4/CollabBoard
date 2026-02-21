@@ -54,7 +54,7 @@ export function FileDropZone({ onDrop, disabled, children }: FileDropZoneProps) 
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-      className="relative"
+      className="relative flex-1 flex flex-col"
     >
       {children}
       {isDragOver && (

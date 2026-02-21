@@ -4,6 +4,7 @@
  * Requires authentication and board membership.
  */
 
+import { normalize } from 'node:path/posix'
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -16,25 +17,26 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const path = request.nextUrl.searchParams.get('path')
-  if (!path) {
+  const rawPath = request.nextUrl.searchParams.get('path')
+  if (!rawPath) {
     return Response.json({ error: 'path query parameter is required' }, { status: 400 })
   }
 
-  // Path validation — reject traversal attempts and invalid characters
-  if (path.includes('..') || path.startsWith('/')) {
+  // Path validation — normalize to catch traversal attempts (e.g. "a/../b", encoded dots)
+  const safePath = normalize(rawPath)
+  if (safePath !== rawPath || safePath.startsWith('/') || safePath.startsWith('.')) {
     return Response.json({ error: 'Invalid path' }, { status: 400 })
   }
 
   // Extract boardId from storage path (format: "boardId/objectId/filename")
-  const segments = path.split('/')
+  const segments = safePath.split('/')
   const boardId = segments[0]
   if (!boardId || !UUID_RE.test(boardId)) {
     return Response.json({ error: 'Invalid path' }, { status: 400 })
   }
 
-  // Verify the path starts with the extracted boardId (prevent IDOR via crafted paths)
-  if (!path.startsWith(`${boardId}/`)) {
+  // Verify the normalized path starts with the validated boardId prefix
+  if (!safePath.startsWith(`${boardId}/`)) {
     return Response.json({ error: 'Invalid path' }, { status: 400 })
   }
 
@@ -54,7 +56,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await admin
     .storage
     .from('board-assets')
-    .createSignedUrl(path, 3600) // 1 hour TTL
+    .createSignedUrl(safePath, 3600) // 1 hour TTL
 
   if (error || !data?.signedUrl) {
     console.error('[api/files/signed-url] Error:', error)

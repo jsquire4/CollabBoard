@@ -47,17 +47,14 @@ function useLoadImage(src: string | null) {
   return { image, failed }
 }
 
-function useTextContent(storagePath?: string | null, mimeType?: string | null) {
+function useTextContent(signedUrl: string | null) {
   const [content, setContent] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!storagePath || !mimeType?.startsWith('text/')) return
+    if (!signedUrl) return
     let cancelled = false
-    fetch(`/api/files/signed-url?path=${encodeURIComponent(storagePath)}`)
-      .then(r => r.json())
-      .then(async (data: { signedUrl?: string }) => {
-        if (cancelled || !data.signedUrl) return
-        const res = await fetch(data.signedUrl)
+    fetch(signedUrl)
+      .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const text = await res.text()
         if (!cancelled) {
@@ -66,7 +63,7 @@ function useTextContent(storagePath?: string | null, mimeType?: string | null) {
       })
       .catch(() => { /* ignore */ })
     return () => { cancelled = true }
-  }, [storagePath, mimeType])
+  }, [signedUrl])
 
   return content
 }
@@ -91,12 +88,14 @@ export const FileShape = memo(function FileShape({
   const isImage = mime_type?.startsWith('image/')
   const isText = mime_type?.startsWith('text/')
 
+  // Signed URL (shared for both image and text rendering)
+  const signedUrl = useSignedUrl(isImage || isText ? storage_path : null)
+
   // Image loading
-  const signedUrl = useSignedUrl(isImage ? storage_path : null)
-  const { image, failed: imageFailed } = useLoadImage(signedUrl)
+  const { image, failed: imageFailed } = useLoadImage(isImage ? signedUrl : null)
 
   // Text content loading
-  const textContent = useTextContent(isText ? storage_path : null, mime_type)
+  const textContent = useTextContent(isText ? signedUrl : null)
 
   const displayName = file_name || 'Untitled file'
   const label = mimeTypeLabel(mime_type)

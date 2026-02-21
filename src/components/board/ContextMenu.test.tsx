@@ -1,256 +1,154 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, act, fireEvent } from '@testing-library/react'
 import { ContextMenu } from './ContextMenu'
 import { createBoardContextWrapper } from '@/test/renderWithBoardContext'
 import { makeRectangle, makeArrow, makeTable } from '@/test/boardObjectFactory'
 
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+function renderMenu(
+  objectId: string,
+  objects: Map<string, unknown>,
+  mutationsOverrides = {},
+  boardOverrides = {}
+) {
+  const onClose = vi.fn()
+  const Wrapper = createBoardContextWrapper({
+    boardValue: { objects, isObjectLocked: () => false, activeGroupId: null, ...boardOverrides },
+    mutationsValue: {
+      onDelete: vi.fn(),
+      onDuplicate: vi.fn(),
+      onCopy: vi.fn(),
+      onCut: vi.fn(),
+      onPaste: vi.fn(),
+      onGroup: vi.fn(),
+      onUngroup: vi.fn(),
+      canGroup: false,
+      canUngroup: false,
+      canLock: false,
+      canUnlock: false,
+      canEditVertices: false,
+      ...mutationsOverrides,
+    },
+  })
+  render(
+    <Wrapper>
+      <ContextMenu position={{ x: 100, y: 100 }} objectId={objectId} onClose={onClose} />
+    </Wrapper>
+  )
+  return { onClose }
+}
+
+function hoverOpen(buttonName: RegExp) {
+  const btn = screen.getByRole('button', { name: buttonName })
+  // hover on the wrapper div that contains the circle button
+  const wrapper = btn.closest('[data-submenu-id]') ?? btn.parentElement!
+  fireEvent.mouseEnter(wrapper)
+  act(() => { vi.runAllTimers() })
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────
+
 describe('ContextMenu', () => {
-  it('renders Duplicate and Delete for unlocked rectangle', () => {
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+
+  // ── Top-level buttons always visible ──────────────────────────────────
+
+  it('renders Copy/Paste and Delete circle buttons for unlocked rectangle', () => {
     const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
-    const onClose = vi.fn()
-    const onDelete = vi.fn()
-    const onDuplicate = vi.fn()
-    const Wrapper = createBoardContextWrapper({
-      boardValue: {
-        objects,
-        isObjectLocked: () => false,
-        activeGroupId: null,
-      },
-      mutationsValue: {
-        onDelete,
-        onDuplicate,
-        canGroup: false,
-        canUngroup: false,
-        canLock: false,
-        canUnlock: false,
-        canEditVertices: false,
-      },
-    })
-
-    render(
-      <Wrapper>
-        <ContextMenu
-          position={{ x: 100, y: 100 }}
-          objectId="obj-1"
-          onClose={onClose}
-        />
-      </Wrapper>
-    )
-
-    expect(screen.getByRole('button', { name: /duplicate/i })).toBeInTheDocument()
+    renderMenu('obj-1', objects)
+    expect(screen.getByRole('button', { name: /copy/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument()
   })
 
-  it('calls onDuplicate and onClose when Duplicate is clicked', async () => {
+  it('shows Lock button when canLock and object is not locked', () => {
     const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
-    const onClose = vi.fn()
-    const onDuplicate = vi.fn()
-    const Wrapper = createBoardContextWrapper({
-      boardValue: { objects, isObjectLocked: () => false, activeGroupId: null },
-      mutationsValue: {
-        onDuplicate,
-        onDelete: vi.fn(),
-        canGroup: false,
-        canUngroup: false,
-        canLock: false,
-        canUnlock: false,
-        canEditVertices: false,
-      },
-    })
-
-    render(
-      <Wrapper>
-        <ContextMenu
-          position={{ x: 100, y: 100 }}
-          objectId="obj-1"
-          onClose={onClose}
-        />
-      </Wrapper>
-    )
-
-    await userEvent.click(screen.getByRole('button', { name: /duplicate/i }))
-    expect(onDuplicate).toHaveBeenCalledTimes(1)
-    expect(onClose).toHaveBeenCalledTimes(1)
+    renderMenu('obj-1', objects, { canLock: true })
+    expect(screen.getByRole('button', { name: /^lock/i })).toBeInTheDocument()
   })
 
-  it('calls onDelete and onClose when Delete is clicked', async () => {
+  it('shows Unlock button when canUnlock and object is locked', () => {
     const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
-    const onClose = vi.fn()
+    renderMenu('obj-1', objects, { canUnlock: true }, { isObjectLocked: () => true })
+    expect(screen.getByRole('button', { name: /unlock/i })).toBeInTheDocument()
+  })
+
+  it('calls onDelete and onClose when Delete is clicked', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
     const onDelete = vi.fn()
-    const Wrapper = createBoardContextWrapper({
-      boardValue: { objects, isObjectLocked: () => false, activeGroupId: null },
-      mutationsValue: {
-        onDelete,
-        onDuplicate: vi.fn(),
-        canGroup: false,
-        canUngroup: false,
-        canLock: false,
-        canUnlock: false,
-        canEditVertices: false,
-      },
-    })
-
-    render(
-      <Wrapper>
-        <ContextMenu
-          position={{ x: 100, y: 100 }}
-          objectId="obj-1"
-          onClose={onClose}
-        />
-      </Wrapper>
-    )
-
-    await userEvent.click(screen.getByRole('button', { name: /delete/i }))
+    const { onClose } = renderMenu('obj-1', objects, { onDelete })
+    fireEvent.click(screen.getByRole('button', { name: /delete/i }))
     expect(onDelete).toHaveBeenCalledTimes(1)
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('shows Lock when canLock and not locked', () => {
-    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
-    const Wrapper = createBoardContextWrapper({
-      boardValue: { objects, isObjectLocked: () => false, activeGroupId: null },
-      mutationsValue: {
-        onDelete: vi.fn(),
-        onDuplicate: vi.fn(),
-        canGroup: false,
-        canUngroup: false,
-        canLock: true,
-        canUnlock: false,
-        canEditVertices: false,
-      },
-    })
+  // ── Copy/Paste sub-menu ───────────────────────────────────────────────
 
-    render(
-      <Wrapper>
-        <ContextMenu
-          position={{ x: 100, y: 100 }}
-          objectId="obj-1"
-          onClose={vi.fn()}
-        />
-      </Wrapper>
-    )
-    expect(screen.getByRole('button', { name: /lock/i })).toBeInTheDocument()
+  it('expands Copy/Paste sub-menu on hover and shows Duplicate', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    renderMenu('obj-1', objects)
+    hoverOpen(/copy/i)
+    expect(screen.getByRole('button', { name: /duplicate/i })).toBeInTheDocument()
   })
 
-  it('shows Unlock when canUnlock and locked', () => {
+  it('calls onDuplicate and onClose when Duplicate sub-button is clicked', () => {
     const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
-    const Wrapper = createBoardContextWrapper({
-      boardValue: { objects, isObjectLocked: () => true, activeGroupId: null },
-      mutationsValue: {
-        onDelete: vi.fn(),
-        onDuplicate: vi.fn(),
-        canGroup: false,
-        canUngroup: false,
-        canLock: false,
-        canUnlock: true,
-        canEditVertices: false,
-      },
-    })
-
-    render(
-      <Wrapper>
-        <ContextMenu
-          position={{ x: 100, y: 100 }}
-          objectId="obj-1"
-          onClose={vi.fn()}
-        />
-      </Wrapper>
-    )
-    expect(screen.getByRole('button', { name: /unlock/i })).toBeInTheDocument()
+    const onDuplicate = vi.fn()
+    const { onClose } = renderMenu('obj-1', objects, { onDuplicate })
+    hoverOpen(/copy/i)
+    fireEvent.click(screen.getByRole('button', { name: /duplicate/i }))
+    expect(onDuplicate).toHaveBeenCalledTimes(1)
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('shows table operations for table type', () => {
+  // ── Arrange sub-menu ──────────────────────────────────────────────────
+
+  it('shows Arrange button when canGroup or canUngroup', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    renderMenu('obj-1', objects, { canGroup: true, canUngroup: true })
+    expect(screen.getByRole('button', { name: /arrange/i })).toBeInTheDocument()
+  })
+
+  it('expands Arrange sub-menu showing Group and Ungroup on hover', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    renderMenu('obj-1', objects, { canGroup: true, canUngroup: true })
+    hoverOpen(/arrange/i)
+    expect(screen.getByRole('button', { name: /^group/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^ungroup/i })).toBeInTheDocument()
+  })
+
+  // ── Edit sub-menu (table operations) ──────────────────────────────────
+
+  it('shows Edit button for table type', () => {
     const tableObj = makeTable({ id: 'obj-1' })
     const objects = new Map([['obj-1', tableObj]])
-    const Wrapper = createBoardContextWrapper({
-      boardValue: { objects, isObjectLocked: () => false, activeGroupId: null },
-      mutationsValue: {
-        onDelete: vi.fn(),
-        onDuplicate: vi.fn(),
-        onAddRow: vi.fn(),
-        onDeleteRow: vi.fn(),
-        onAddColumn: vi.fn(),
-        onDeleteColumn: vi.fn(),
-        canGroup: false,
-        canUngroup: false,
-        canLock: false,
-        canUnlock: false,
-        canEditVertices: false,
-      },
-    })
+    renderMenu('obj-1', objects)
+    expect(screen.getByRole('button', { name: /edit/i })).toBeInTheDocument()
+  })
 
-    render(
-      <Wrapper>
-        <ContextMenu
-          position={{ x: 100, y: 100 }}
-          objectId="obj-1"
-          onClose={vi.fn()}
-        />
-      </Wrapper>
-    )
+  it('expands Edit sub-menu showing table operations on hover', () => {
+    const tableObj = makeTable({ id: 'obj-1' })
+    const objects = new Map([['obj-1', tableObj]])
+    renderMenu('obj-1', objects, {
+      onAddRow: vi.fn(),
+      onDeleteRow: vi.fn(),
+      onAddColumn: vi.fn(),
+      onDeleteColumn: vi.fn(),
+    })
+    hoverOpen(/edit/i)
     expect(screen.getByRole('button', { name: /add row/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /delete row/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /add column/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /delete column/i })).toBeInTheDocument()
   })
 
-  it('shows marker options for line/arrow types', () => {
+  // ── Markers moved to PropertiesPanel — not in context menu ────────────
+
+  it('does not show marker options (markers live in PropertiesPanel now)', () => {
     const objects = new Map([['obj-1', makeArrow({ id: 'obj-1' })]])
-    const Wrapper = createBoardContextWrapper({
-      boardValue: { objects, isObjectLocked: () => false, activeGroupId: null },
-      mutationsValue: {
-        onDelete: vi.fn(),
-        onDuplicate: vi.fn(),
-        onMarkerChange: vi.fn(),
-        canGroup: false,
-        canUngroup: false,
-        canLock: false,
-        canUnlock: false,
-        canEditVertices: false,
-      },
-    })
-
-    render(
-      <Wrapper>
-        <ContextMenu
-          position={{ x: 100, y: 100 }}
-          objectId="obj-1"
-          onClose={vi.fn()}
-        />
-      </Wrapper>
-    )
-    expect(screen.getByText('Start marker')).toBeInTheDocument()
-    expect(screen.getByText('End marker')).toBeInTheDocument()
-  })
-
-  it('shows Group and Ungroup when canGroup or canUngroup', () => {
-    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
-    const Wrapper = createBoardContextWrapper({
-      boardValue: { objects, isObjectLocked: () => false, activeGroupId: null },
-      mutationsValue: {
-        onDelete: vi.fn(),
-        onDuplicate: vi.fn(),
-        onGroup: vi.fn(),
-        onUngroup: vi.fn(),
-        canGroup: true,
-        canUngroup: true,
-        canLock: false,
-        canUnlock: false,
-        canEditVertices: false,
-      },
-    })
-
-    render(
-      <Wrapper>
-        <ContextMenu
-          position={{ x: 100, y: 100 }}
-          objectId="obj-1"
-          onClose={vi.fn()}
-        />
-      </Wrapper>
-    )
-    expect(screen.getByRole('button', { name: /^Group/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^Ungroup/ })).toBeInTheDocument()
+    renderMenu('obj-1', objects)
+    expect(screen.queryByText('Start marker')).not.toBeInTheDocument()
+    expect(screen.queryByText('End marker')).not.toBeInTheDocument()
   })
 })

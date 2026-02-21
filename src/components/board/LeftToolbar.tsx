@@ -56,8 +56,6 @@ const SHAPES_IDS = [
   'circle',
   ...['equilateral', 'right_triangle', 'isosceles'],
   ...['rectangle', 'square', 'parallelogram', 'rhombus', 'trapezoid'],
-]
-const SYMBOLS_IDS = [
   ...SYMBOL_PRESETS.map(p => p.id),
   ...FLOWCHART_PRESETS.map(p => p.id),
 ]
@@ -89,195 +87,153 @@ export function LeftToolbar({
   }, [onPresetSelect, closeFlyout])
 
   return (
-    <aside className="flex w-[52px] shrink-0 flex-col items-center gap-0.5 border-r py-2 overflow-y-auto border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#111827]">
+    <aside className="flex w-[60px] shrink-0 flex-col items-center gap-0.5 border-r py-2 overflow-y-auto border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#111827]">
       {canEdit && (
         <>
-          {isEditingText ? (
-            <div onMouseDown={e => e.preventDefault()}>
-              <div className="mb-1 w-full px-1.5">
-                <div className="text-[9px] font-semibold uppercase tracking-widest text-center text-charcoal/70 dark:text-parchment/60">
-                  Text
+          {/* Shape tools — fades out when editing text */}
+          <div
+            style={{
+              opacity: isEditingText ? 0 : 1,
+              pointerEvents: isEditingText ? 'none' : 'auto',
+              transition: 'opacity 150ms ease',
+              position: isEditingText ? 'absolute' : 'relative',
+            }}
+          >
+            {/* ── Agents ── */}
+            <ToolGroupButton
+              id="agents"
+              label="Agents"
+              iconPath="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+              isOpen={openGroupId === 'agents'}
+              isActive={!!activePreset && AGENTS_IDS.includes(activePreset.id)}
+              onToggle={() => setOpenGroupId(prev => prev === 'agents' ? null : 'agents')}
+              onClose={closeFlyout}
+            >
+              <div style={SUBMENU_MIN_WIDTH}>
+                <FlyoutHeader text="Agents" />
+                <div className="grid grid-cols-3 gap-1 mb-2">
+                  {AGENT_PRESETS.map(preset => (
+                    <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
+                  ))}
+                </div>
+                <FlyoutHeader text="Data" />
+                <div className="grid grid-cols-3 gap-1">
+                  {DATA_PRESETS.map(preset => (
+                    <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
+                  ))}
                 </div>
               </div>
-              {RICH_TEXT_ENABLED && richTextEditor ? (
-                <RichTextToolbar editor={richTextEditor} dark={uiDarkMode} />
-              ) : (
-                <FontSelector
-                  fontFamily={selectedFontFamily}
-                  fontSize={selectedFontSize}
-                  fontStyle={selectedFontStyle}
-                  textAlign={selectedTextAlign}
-                  textVerticalAlign={selectedTextVerticalAlign}
-                  textColor={selectedTextColor}
-                  showTextLayout={true}
-                  onFontChange={onFontChange}
-                  onTextStyleChange={onTextStyleChange}
-                  compact
-                />
-              )}
+            </ToolGroupButton>
+
+            {/* ── Basics ── */}
+            <ToolGroupButton
+              id="basics"
+              label="Basics"
+              iconPath="M4 4h16v13.17L14.17 22H4V4z M14 17v5 M14 22h6"
+              isOpen={openGroupId === 'basics'}
+              isActive={!!activePreset && BASICS_IDS.includes(activePreset.id)}
+              onToggle={() => setOpenGroupId(prev => prev === 'basics' ? null : 'basics')}
+              onClose={closeFlyout}
+            >
+              <FlyoutHeader text="Basics" />
+              <div className="grid grid-cols-3 gap-1" style={SUBMENU_MIN_WIDTH_MD}>
+                {STANDALONE_PRESETS.filter(p => p.id === 'sticky_note' || p.id === 'text_box').map(preset => (
+                  <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
+                ))}
+                <FlyoutPresetButton preset={FRAME_PRESET} activePreset={activePreset} onSelect={handlePresetSelect} />
+                <FlyoutPresetButton preset={TABLE_PRESET} activePreset={activePreset} onSelect={handlePresetSelect} />
+                <FlyoutPlaceholder label="Connector" iconPath="M4 20h2a4 4 0 0 0 4-4v-8a4 4 0 0 1 4-4h2 M18 4l2 4-2 4" />
+                <FlyoutPlaceholder label="Web Frame" iconPath="M3 3h18v18H3z M3 9h18 M9 9v12" />
+                <FlyoutPlaceholder label="File" iconPath="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M9 13h6 M9 17h4" />
+              </div>
+            </ToolGroupButton>
+
+            {/* ── Lines ── */}
+            <ToolGroupButton
+              id="lines"
+              label="Lines"
+              iconPath="M5 12h14"
+              isOpen={openGroupId === 'lines'}
+              isActive={!!activePreset && LINES_IDS.includes(activePreset.id)}
+              onToggle={() => setOpenGroupId(prev => prev === 'lines' ? null : 'lines')}
+              onClose={closeFlyout}
+            >
+              <FlyoutHeader text="Lines" />
+              <div className="grid grid-cols-2 gap-1" style={SUBMENU_MIN_WIDTH_SM}>
+                {LINE_PRESETS.map(preset => (
+                  <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
+                ))}
+                {LINE_PLACEHOLDER_PRESETS.map(p => (
+                  <FlyoutPlaceholder key={p.label} label={p.label} iconPath={p.iconPath} />
+                ))}
+              </div>
+            </ToolGroupButton>
+
+            {/* ── Shapes (merged: shapes + ngon + symbols) ── */}
+            <MergedShapesGroupButton
+              isOpen={openGroupId === 'shapes'}
+              activePreset={activePreset}
+              isActive={!!activePreset && (SHAPES_IDS.includes(activePreset.id) || !!activePreset.id.startsWith('ngon_'))}
+              sides={ngonSides}
+              onSidesChange={setNgonSides}
+              onToggle={() => setOpenGroupId(prev => prev === 'shapes' ? null : 'shapes')}
+              onPresetSelect={handlePresetSelect}
+              onClose={closeFlyout}
+            />
+
+            {/* ── Content ── */}
+            <ToolGroupButton
+              id="content"
+              label="Content"
+              iconPath="M4 6h16M4 10h16M4 14h16M4 18h16"
+              isOpen={openGroupId === 'content'}
+              isActive={!!activePreset && CONTENT_IDS.includes(activePreset.id)}
+              onToggle={() => setOpenGroupId(prev => prev === 'content' ? null : 'content')}
+              onClose={closeFlyout}
+            >
+              <div style={SUBMENU_MIN_WIDTH}>
+                <FlyoutHeader text="Content" />
+                <div className="grid grid-cols-3 gap-1">
+                  {CONTENT_PRESETS.map(preset => (
+                    <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
+                  ))}
+                </div>
+              </div>
+            </ToolGroupButton>
+          </div>
+
+          {/* Text editing tools — fades in when editing text */}
+          <div
+            onMouseDown={e => e.preventDefault()}
+            style={{
+              opacity: isEditingText ? 1 : 0,
+              pointerEvents: isEditingText ? 'auto' : 'none',
+              transition: 'opacity 150ms ease',
+              position: isEditingText ? 'relative' : 'absolute',
+            }}
+          >
+            <div className="mb-1 w-full px-1.5">
+              <div className="text-[9px] font-semibold uppercase tracking-widest text-center text-charcoal/70 dark:text-parchment/60">
+                Text
+              </div>
             </div>
-          ) : (
-            <>
-              {/* ── Agents ── */}
-              <ToolGroupButton
-                id="agents"
-                label="Agents"
-                iconPath="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                isOpen={openGroupId === 'agents'}
-                isActive={!!activePreset && AGENTS_IDS.includes(activePreset.id)}
-                onToggle={() => setOpenGroupId(prev => prev === 'agents' ? null : 'agents')}
-                onClose={closeFlyout}
-              >
-                <div style={SUBMENU_MIN_WIDTH}>
-                  <FlyoutHeader text="Agents" />
-                  <div className="grid grid-cols-3 gap-1 mb-2">
-                    {AGENT_PRESETS.map(preset => (
-                      <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
-                    ))}
-                  </div>
-                  <FlyoutHeader text="Data" />
-                  <div className="grid grid-cols-3 gap-1">
-                    {DATA_PRESETS.map(preset => (
-                      <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
-                    ))}
-                  </div>
-                </div>
-              </ToolGroupButton>
-
-              {/* ── Basics ── */}
-              <ToolGroupButton
-                id="basics"
-                label="Basics"
-                iconPath="M4 4h16v13.17L14.17 22H4V4z M14 17v5 M14 22h6"
-                isOpen={openGroupId === 'basics'}
-                isActive={!!activePreset && BASICS_IDS.includes(activePreset.id)}
-                onToggle={() => setOpenGroupId(prev => prev === 'basics' ? null : 'basics')}
-                onClose={closeFlyout}
-              >
-                <FlyoutHeader text="Basics" />
-                <div className="grid grid-cols-3 gap-1" style={SUBMENU_MIN_WIDTH_MD}>
-                  {STANDALONE_PRESETS.filter(p => p.id === 'sticky_note' || p.id === 'text_box').map(preset => (
-                    <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
-                  ))}
-                  <FlyoutPresetButton preset={FRAME_PRESET} activePreset={activePreset} onSelect={handlePresetSelect} />
-                  <FlyoutPresetButton preset={TABLE_PRESET} activePreset={activePreset} onSelect={handlePresetSelect} />
-                  <FlyoutPlaceholder label="Connector" iconPath="M4 20h2a4 4 0 0 0 4-4v-8a4 4 0 0 1 4-4h2 M18 4l2 4-2 4" />
-                  <FlyoutPlaceholder label="Web Frame" iconPath="M3 3h18v18H3z M3 9h18 M9 9v12" />
-                  <FlyoutPlaceholder label="File" iconPath="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M9 13h6 M9 17h4" />
-                </div>
-              </ToolGroupButton>
-
-              {/* ── Lines ── */}
-              <ToolGroupButton
-                id="lines"
-                label="Lines"
-                iconPath="M5 12h14"
-                isOpen={openGroupId === 'lines'}
-                isActive={!!activePreset && LINES_IDS.includes(activePreset.id)}
-                onToggle={() => setOpenGroupId(prev => prev === 'lines' ? null : 'lines')}
-                onClose={closeFlyout}
-              >
-                <FlyoutHeader text="Lines" />
-                <div className="grid grid-cols-2 gap-1" style={SUBMENU_MIN_WIDTH_SM}>
-                  {LINE_PRESETS.map(preset => (
-                    <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
-                  ))}
-                  {LINE_PLACEHOLDER_PRESETS.map(p => (
-                    <FlyoutPlaceholder key={p.label} label={p.label} iconPath={p.iconPath} />
-                  ))}
-                </div>
-              </ToolGroupButton>
-
-              {/* ── Shapes ── */}
-              <ToolGroupButton
-                id="shapes"
-                label="Shapes"
-                iconPath="M3 3h18v18H3z"
-                isOpen={openGroupId === 'shapes'}
-                isActive={!!activePreset && SHAPES_IDS.includes(activePreset.id)}
-                onToggle={() => setOpenGroupId(prev => prev === 'shapes' ? null : 'shapes')}
-                onClose={closeFlyout}
-              >
-                <div style={SUBMENU_MIN_WIDTH_LG}>
-                  <FlyoutHeader text="Circle" />
-                  <div className="grid grid-cols-3 gap-1 mb-2">
-                    {STANDALONE_PRESETS.filter(p => p.id === 'circle').map(preset => (
-                      <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
-                    ))}
-                  </div>
-                  <FlyoutHeader text="Triangles" />
-                  <div className="grid grid-cols-3 gap-1 mb-2">
-                    {TRIANGLE_PRESETS.map(preset => (
-                      <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
-                    ))}
-                  </div>
-                  <FlyoutHeader text="Quadrilaterals" />
-                  <div className="grid grid-cols-3 gap-1">
-                    {QUAD_PRESETS.map(preset => (
-                      <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
-                    ))}
-                  </div>
-                </div>
-              </ToolGroupButton>
-
-              {/* ── N-gon ── */}
-              <NgonGroupButton
-                isOpen={openGroupId === 'ngon'}
-                activePreset={activePreset}
-                sides={ngonSides}
-                onSidesChange={setNgonSides}
-                onToggle={() => setOpenGroupId(prev => prev === 'ngon' ? null : 'ngon')}
-                onPresetSelect={handlePresetSelect}
-                onClose={closeFlyout}
+            {RICH_TEXT_ENABLED && richTextEditor ? (
+              <RichTextToolbar editor={richTextEditor} dark={uiDarkMode} />
+            ) : (
+              <FontSelector
+                fontFamily={selectedFontFamily}
+                fontSize={selectedFontSize}
+                fontStyle={selectedFontStyle}
+                textAlign={selectedTextAlign}
+                textVerticalAlign={selectedTextVerticalAlign}
+                textColor={selectedTextColor}
+                showTextLayout={true}
+                onFontChange={onFontChange}
+                onTextStyleChange={onTextStyleChange}
+                compact
               />
-
-              {/* ── Symbols ── */}
-              <ToolGroupButton
-                id="symbols"
-                label="Symbols"
-                iconPath="M12 2l2.9 6.3 6.9.8-5 5.1 1.2 6.9L12 17.8 6 21.1l1.2-6.9-5-5.1 6.9-.8z"
-                isOpen={openGroupId === 'symbols'}
-                isActive={!!activePreset && SYMBOLS_IDS.includes(activePreset.id)}
-                onToggle={() => setOpenGroupId(prev => prev === 'symbols' ? null : 'symbols')}
-                onClose={closeFlyout}
-              >
-                <div style={SUBMENU_MIN_WIDTH}>
-                  <FlyoutHeader text="Stars & Shapes" />
-                  <div className="grid grid-cols-3 gap-1 mb-2">
-                    {SYMBOL_PRESETS.map(preset => (
-                      <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
-                    ))}
-                  </div>
-                  <FlyoutHeader text="Flowchart" />
-                  <div className="grid grid-cols-3 gap-1">
-                    {FLOWCHART_PRESETS.map(preset => (
-                      <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
-                    ))}
-                  </div>
-                </div>
-              </ToolGroupButton>
-
-              {/* ── Content ── */}
-              <ToolGroupButton
-                id="content"
-                label="Content"
-                iconPath="M4 6h16M4 10h16M4 14h16M4 18h16"
-                isOpen={openGroupId === 'content'}
-                isActive={!!activePreset && CONTENT_IDS.includes(activePreset.id)}
-                onToggle={() => setOpenGroupId(prev => prev === 'content' ? null : 'content')}
-                onClose={closeFlyout}
-              >
-                <div style={SUBMENU_MIN_WIDTH}>
-                  <FlyoutHeader text="Content" />
-                  <div className="grid grid-cols-3 gap-1">
-                    {CONTENT_PRESETS.map(preset => (
-                      <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
-                    ))}
-                  </div>
-                </div>
-              </ToolGroupButton>
-            </>
-          )}
+            )}
+          </div>
         </>
       )}
 
@@ -327,20 +283,19 @@ function ToolGroupButton({
         ref={btnRef}
         type="button"
         onClick={onToggle}
-        className={`relative flex h-8 w-8 flex-col items-center justify-center rounded-lg transition ${
+        className={`relative flex h-11 w-11 flex-col items-center justify-center rounded-full transition ${
           isActive || isOpen
-            ? 'bg-navy/10 text-navy dark:bg-navy/30 dark:text-parchment'
-            : 'text-charcoal/70 hover:bg-parchment-dark dark:text-parchment/60 dark:hover:bg-white/10'
+            ? 'bg-navy text-parchment shadow-md shadow-leather/30 ring-2 ring-leather/40 dark:bg-navy dark:text-parchment'
+            : 'text-charcoal/70 hover:bg-charcoal/10 hover:text-charcoal dark:text-parchment/60 dark:hover:bg-navy/40'
         }`}
         title={label}
       >
         <PresetIcon iconPath={iconPath} />
-        <span className="absolute right-0.5 bottom-0.5 text-[7px] leading-none text-charcoal/40 dark:text-parchment/40">&#9656;</span>
       </button>
       {isOpen && (
         <div
           ref={panelRef}
-          className="fixed z-[200] rounded-xl border p-2 shadow-lg ring-1 ring-black/10 border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#1E293B] dark:ring-white/10"
+          className="fixed z-[200] rounded-xl border p-2 shadow-lg ring-1 ring-black/10 border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#1E293B] dark:ring-white/10 animate-[flyout-in]"
           style={{ top: panelPos.top, left: panelPos.left }}
         >
           {children}
@@ -398,11 +353,12 @@ function FlyoutPlaceholder({ label, iconPath }: { label: string; iconPath: strin
   )
 }
 
-/* ── N-gon group with slider ── */
+/* ── Merged Shapes group (shapes + ngon + symbols) ── */
 
-function NgonGroupButton({ isOpen, activePreset, sides, onSidesChange, onToggle, onPresetSelect, onClose }: {
+function MergedShapesGroupButton({ isOpen, activePreset, isActive, sides, onSidesChange, onToggle, onPresetSelect, onClose }: {
   isOpen: boolean
   activePreset: ShapePreset | null
+  isActive: boolean
   sides: number
   onSidesChange: (s: number) => void
   onToggle: () => void
@@ -411,8 +367,6 @@ function NgonGroupButton({ isOpen, activePreset, sides, onSidesChange, onToggle,
 }) {
   const { containerRef, btnRef, panelRef, panelPos } = useFlyoutPosition(isOpen)
   useClickOutside([containerRef, panelRef], isOpen, onClose)
-
-  const isNgonActive = activePreset?.id.startsWith('ngon_')
 
   const handleCreate = useCallback(() => {
     const preset: ShapePreset = {
@@ -433,45 +387,76 @@ function NgonGroupButton({ isOpen, activePreset, sides, onSidesChange, onToggle,
         ref={btnRef}
         type="button"
         onClick={onToggle}
-        className={`relative flex h-8 w-8 flex-col items-center justify-center rounded-lg transition ${
-          isNgonActive || isOpen
-            ? 'bg-navy/10 text-navy dark:bg-navy/30 dark:text-parchment'
-            : 'text-charcoal/70 hover:bg-parchment-dark dark:text-parchment/60 dark:hover:bg-white/10'
+        className={`relative flex h-11 w-11 flex-col items-center justify-center rounded-full transition ${
+          isActive || isOpen
+            ? 'bg-navy text-parchment shadow-md shadow-leather/30 ring-2 ring-leather/40 dark:bg-navy dark:text-parchment'
+            : 'text-charcoal/70 hover:bg-charcoal/10 hover:text-charcoal dark:text-parchment/60 dark:hover:bg-navy/40'
         }`}
-        title="N-gon"
+        title="Shapes"
       >
-        <PresetIcon iconPath="M12 2L20.5 6.5 22 15.5 16 22H8L2 15.5 3.5 6.5Z" />
-        <span className="absolute right-0.5 bottom-0.5 text-[7px] leading-none text-charcoal/40 dark:text-parchment/40">&#9656;</span>
+        <PresetIcon iconPath="M3 3h18v18H3z" />
       </button>
       {isOpen && (
         <div
           ref={panelRef}
-          className="fixed z-[200] w-48 rounded-xl border p-3 shadow-lg ring-1 ring-black/10 border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#1E293B] dark:ring-white/10"
+          className="fixed z-[200] rounded-xl border p-2 shadow-lg ring-1 ring-black/10 border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#1E293B] dark:ring-white/10 animate-[flyout-in]"
           style={{ top: panelPos.top, left: panelPos.left }}
         >
-          <div className="text-[10px] font-semibold uppercase tracking-widest mb-2 text-charcoal/70 dark:text-parchment/60">
-            Regular Polygon
+          <div style={SUBMENU_MIN_WIDTH_LG}>
+            <FlyoutHeader text="Circle" />
+            <div className="grid grid-cols-3 gap-1 mb-2">
+              {STANDALONE_PRESETS.filter(p => p.id === 'circle').map(preset => (
+                <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={onPresetSelect} />
+              ))}
+            </div>
+            <FlyoutHeader text="Triangles" />
+            <div className="grid grid-cols-3 gap-1 mb-2">
+              {TRIANGLE_PRESETS.map(preset => (
+                <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={onPresetSelect} />
+              ))}
+            </div>
+            <FlyoutHeader text="Quadrilaterals" />
+            <div className="grid grid-cols-3 gap-1 mb-2">
+              {QUAD_PRESETS.map(preset => (
+                <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={onPresetSelect} />
+              ))}
+            </div>
+            <FlyoutHeader text="Stars & Shapes" />
+            <div className="grid grid-cols-3 gap-1 mb-2">
+              {SYMBOL_PRESETS.map(preset => (
+                <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={onPresetSelect} />
+              ))}
+            </div>
+            <FlyoutHeader text="Flowchart" />
+            <div className="grid grid-cols-3 gap-1 mb-2">
+              {FLOWCHART_PRESETS.map(preset => (
+                <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={onPresetSelect} />
+              ))}
+            </div>
+            <FlyoutHeader text="Regular Polygon" />
+            <div className="px-1">
+              <div className="text-xs font-medium mb-2 text-charcoal/70 dark:text-parchment">Sides: {sides}</div>
+              <input
+                type="range"
+                min={3}
+                max={100}
+                value={sides}
+                onChange={e => onSidesChange(Math.min(100, Math.max(3, Number(e.target.value) || 3)))}
+                className="w-full accent-navy"
+              />
+              <div className="flex justify-between text-[10px] text-charcoal/50 dark:text-parchment/60 mt-1">
+                <span>3</span>
+                <span>100</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleCreate}
+                className="mt-2 w-full rounded-lg bg-navy px-3 py-1.5 text-xs font-medium text-parchment hover:bg-navy/90 transition"
+              >
+                Create {sides}-gon
+              </button>
+            </div>
           </div>
-          <div className="text-xs font-medium mb-2 text-charcoal/70 dark:text-parchment">Sides: {sides}</div>
-          <input
-            type="range"
-            min={3}
-            max={100}
-            value={sides}
-            onChange={e => onSidesChange(Math.min(100, Math.max(3, Number(e.target.value) || 3)))}
-            className="w-full accent-navy"
-          />
-          <div className="flex justify-between text-[10px] text-charcoal/50 dark:text-parchment/60 mt-1">
-            <span>3</span>
-            <span>100</span>
-          </div>
-          <button
-            type="button"
-            onClick={handleCreate}
-            className="mt-2 w-full rounded-lg bg-navy px-3 py-1.5 text-xs font-medium text-parchment hover:bg-navy/90 transition"
-          >
-            Create {sides}-gon
-          </button>
         </div>
       )}
     </div>

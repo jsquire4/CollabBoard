@@ -128,6 +128,8 @@ export interface BoardMutationsContextValue {
   // Vertex edit
   vertexEditId: string | null
   onAgentClick?: (id: string) => void
+  onCommentOpen?: (objectId: string, position: { x: number; y: number }) => void
+  onApiObjectOpen?: (objectId: string) => void
 }
 
 const BoardMutationsContext = createContext<BoardMutationsContextValue | null>(null)

@@ -6,22 +6,7 @@ import { ZoomControls } from './ZoomControls'
 import { getTextCharLimit, STICKY_TITLE_CHAR_LIMIT } from '@/hooks/board/useTextEditing'
 import { RICH_TEXT_ENABLED } from '@/lib/richText'
 import type { ContextMenuState } from '@/hooks/board/useContextMenu'
-
-interface ConnectorHintData {
-  shapeId: string
-  anchor: { id: string; x: number; y: number }
-}
-
-interface ConnectorDrawingRefs {
-  drawSnapStartRef: React.MutableRefObject<{ shapeId: string; anchorId: string; x: number; y: number } | null>
-  connectorHintDrawingRef: React.MutableRefObject<boolean>
-  drawIsLineRef: React.MutableRefObject<boolean>
-  isDrawing: React.MutableRefObject<boolean>
-  drawStart: React.MutableRefObject<{ x: number; y: number } | null>
-  setDrawPreview: (p: { x: number; y: number; width: number; height: number } | null) => void
-  setLinePreview: (p: { x1: number; y1: number; x2: number; y2: number } | null) => void
-  setConnectorHint: (h: ConnectorHintData | null) => void
-}
+import { useDrawInteraction, ConnectorHintData, ConnectorDrawingRefs } from '@/hooks/board/useDrawInteraction'
 
 interface CanvasOverlaysProps {
   // Textarea editing
@@ -62,6 +47,8 @@ export function CanvasOverlays({
   contextMenu, setContextMenu, recentColors,
   onCellKeyDown,
 }: CanvasOverlaysProps) {
+  const { handleConnectorHintMouseDown } = useDrawInteraction({ connectorHint, connectorDrawingRefs })
+
   return (
     <>
       {/* Textarea overlay for editing text (skip for rich text body editing — handled by TipTapEditorOverlay) */}
@@ -102,10 +89,6 @@ export function CanvasOverlays({
       {connectorHint && (() => {
         const hintScreenX = connectorHint.anchor.x * stageScale + stagePos.x
         const hintScreenY = connectorHint.anchor.y * stageScale + stagePos.y
-        const {
-          drawSnapStartRef, connectorHintDrawingRef, drawIsLineRef,
-          isDrawing, drawStart, setDrawPreview, setLinePreview, setConnectorHint,
-        } = connectorDrawingRefs
         return (
         <button
           type="button"
@@ -115,34 +98,7 @@ export function CanvasOverlays({
             top: hintScreenY - 12,
           }}
           title="Draw connector"
-          onMouseDown={(ev) => {
-            ev.stopPropagation()
-            // Pre-store anchor and activate connector drawing
-            drawSnapStartRef.current = {
-              shapeId: connectorHint.shapeId,
-              anchorId: connectorHint.anchor.id,
-              x: connectorHint.anchor.x,
-              y: connectorHint.anchor.y,
-            }
-            connectorHintDrawingRef.current = true
-            drawIsLineRef.current = true
-            setConnectorHint(null)
-            drawStart.current = { x: connectorHint.anchor.x, y: connectorHint.anchor.y }
-            isDrawing.current = true
-            setDrawPreview({ x: connectorHint.anchor.x, y: connectorHint.anchor.y, width: 0, height: 0 })
-            const cleanup = () => {
-              // If Konva's mouseUp already handled it, these are no-ops
-              isDrawing.current = false
-              drawStart.current = null
-              drawSnapStartRef.current = null
-              connectorHintDrawingRef.current = false
-              drawIsLineRef.current = false
-              setDrawPreview(null)
-              setLinePreview(null)
-              window.removeEventListener('mouseup', cleanup)
-            }
-            window.addEventListener('mouseup', cleanup, { once: true })
-          }}
+          onMouseDown={handleConnectorHintMouseDown}
         >
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />

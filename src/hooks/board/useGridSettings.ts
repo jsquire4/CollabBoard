@@ -5,28 +5,22 @@ import { createClient } from '@/lib/supabase/client'
 import { fireAndRetry } from '@/lib/retryWithRollback'
 import { logger } from '@/lib/logger'
 import { toast } from 'sonner'
+import { BoardSettingsUpdate } from '@/components/board/gridConstants'
+
+type GridStyle = 'lines' | 'dots' | 'both'
 
 interface GridSettingsState {
   gridSize: number
   gridSubdivisions: number
   gridVisible: boolean
   snapToGrid: boolean
-  gridStyle: string
+  gridStyle: GridStyle
   canvasColor: string
   gridColor: string
   subdivisionColor: string
 }
 
-type GridSettingsUpdates = {
-  grid_size?: number
-  grid_subdivisions?: number
-  grid_visible?: boolean
-  snap_to_grid?: boolean
-  grid_style?: string
-  canvas_color?: string
-  grid_color?: string
-  subdivision_color?: string
-}
+type GridSettingsUpdates = BoardSettingsUpdate
 
 function gridSettingsReducer(state: GridSettingsState, updates: GridSettingsUpdates): GridSettingsState {
   return {
@@ -47,7 +41,7 @@ interface UseGridSettingsParams {
   initialGridSubdivisions: number
   initialGridVisible: boolean
   initialSnapToGrid: boolean
-  initialGridStyle: string
+  initialGridStyle: GridStyle
   initialCanvasColor: string
   initialGridColor: string
   initialSubdivisionColor: string
@@ -58,7 +52,7 @@ export function useGridSettings(params: UseGridSettingsParams): {
   gridSubdivisions: number
   gridVisible: boolean
   snapToGrid: boolean
-  gridStyle: string
+  gridStyle: GridStyle
   canvasColor: string
   gridColor: string
   subdivisionColor: string

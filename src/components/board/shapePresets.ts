@@ -1,6 +1,26 @@
 import type { BoardObjectType, BoardObject } from '@/types/board'
 export { computeStarPoints } from '@/lib/geometry/starPoints'
 export { scaleCustomPoints } from '@/lib/geometry/customPoints'
+// Geometry functions live in @/lib/geometry/shapePoints — re-export for
+// consumers who import them via shapePresets, and import locally for use
+// in the preset data arrays below.
+export {
+  arcPoints,
+  documentPoints,
+  databasePoints,
+  cloudPoints,
+  terminatorPoints,
+  delayPoints,
+  blockArrowPoints,
+} from '@/lib/geometry/shapePoints'
+import {
+  documentPoints,
+  databasePoints,
+  cloudPoints,
+  terminatorPoints,
+  delayPoints,
+  blockArrowPoints,
+} from '@/lib/geometry/shapePoints'
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -38,21 +58,6 @@ interface ShapeGroup {
 // computeStarPoints and scaleCustomPoints are re-exported from @/lib/geometry
 // (see top of file).  Import them here so local helpers can still call them.
 import { computeStarPoints } from '@/lib/geometry/starPoints'
-
-/** Generate points for an arc segment, used in flowchart shapes. */
-function arcPoints(
-  cx: number, cy: number,
-  rx: number, ry: number,
-  startAngle: number, endAngle: number,
-  segments: number
-): number[] {
-  const pts: number[] = []
-  for (let i = 0; i <= segments; i++) {
-    const t = startAngle + (endAngle - startAngle) * (i / segments)
-    pts.push(cx + rx * Math.cos(t), cy + ry * Math.sin(t))
-  }
-  return pts
-}
 
 /** Serialize points as JSON string for custom_points field */
 function pts(arr: number[]): string {
@@ -169,21 +174,6 @@ function starPreset(n: number, label: string, iconPath: string): ShapePreset {
   }
 }
 
-function blockArrowPoints(dir: 'right' | 'left' | 'up' | 'down', w: number, h: number): number[] {
-  // Shaft is 40% of cross-dimension, arrowhead is 60%
-  const shaft = 0.3
-  const headStart = 0.55
-  switch (dir) {
-    case 'right':
-      return [0, h * shaft, w * headStart, h * shaft, w * headStart, 0, w, h / 2, w * headStart, h, w * headStart, h * (1 - shaft), 0, h * (1 - shaft)]
-    case 'left':
-      return [w, h * shaft, w * (1 - headStart), h * shaft, w * (1 - headStart), 0, 0, h / 2, w * (1 - headStart), h, w * (1 - headStart), h * (1 - shaft), w, h * (1 - shaft)]
-    case 'up':
-      return [w * shaft, h, w * shaft, h * (1 - headStart), 0, h * (1 - headStart), w / 2, 0, w, h * (1 - headStart), w * (1 - shaft), h * (1 - headStart), w * (1 - shaft), h]
-    case 'down':
-      return [w * shaft, 0, w * shaft, h * headStart, 0, h * headStart, w / 2, h, w, h * headStart, w * (1 - shaft), h * headStart, w * (1 - shaft), 0]
-  }
-}
 
 export const SYMBOL_PRESETS: ShapePreset[] = [
   starPreset(4, '4-Point Star', 'M12 1l3.5 7.5L12 12 8.5 8.5zM12 12l3.5 3.5L12 23 8.5 15.5z M1 12l7.5-3.5L12 12l-3.5 3.5z M12 12l3.5-3.5L23 12l-7.5 3.5z'),
@@ -273,78 +263,8 @@ export const SYMBOL_PRESETS: ShapePreset[] = [
 ]
 
 // ── Flowchart ────────────────────────────────────────────────
-
-function documentPoints(w: number, h: number): number[] {
-  // Rectangle with wavy bottom
-  const pts: number[] = [0, 0, w, 0, w, h * 0.8]
-  // Bottom wave (right to left)
-  const segments = 12
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments
-    const x = w * (1 - t)
-    const wave = Math.sin(t * Math.PI * 2) * h * 0.08
-    pts.push(x, h * 0.85 + wave)
-  }
-  return pts
-}
-
-function databasePoints(w: number, h: number): number[] {
-  // Cylinder: top ellipse + sides + bottom ellipse
-  const pts: number[] = []
-  const ellipseH = h * 0.15
-  const segs = 12
-  // Top ellipse (left to right)
-  for (let i = 0; i <= segs; i++) {
-    const t = Math.PI + (Math.PI * i) / segs
-    pts.push(w / 2 + (w / 2) * Math.cos(t), ellipseH + ellipseH * Math.sin(t))
-  }
-  // Right side down
-  pts.push(w, h - ellipseH)
-  // Bottom ellipse (right to left)
-  for (let i = 0; i <= segs; i++) {
-    const t = (Math.PI * i) / segs
-    pts.push(w / 2 + (w / 2) * Math.cos(t), h - ellipseH + ellipseH * Math.sin(t))
-  }
-  // Left side up
-  pts.push(0, ellipseH)
-  return pts
-}
-
-function cloudPoints(w: number, h: number): number[] {
-  // Bumpy cloud outline using overlapping arcs
-  const pts: number[] = []
-  const bumps = [
-    { cx: w * 0.25, cy: h * 0.55, rx: w * 0.25, ry: h * 0.35, start: Math.PI * 0.9, end: Math.PI * 2.1 },
-    { cx: w * 0.50, cy: h * 0.30, rx: w * 0.28, ry: h * 0.30, start: Math.PI * 1.2, end: Math.PI * 2.4 },
-    { cx: w * 0.75, cy: h * 0.45, rx: w * 0.25, ry: h * 0.32, start: Math.PI * 1.5, end: Math.PI * 2.7 },
-    { cx: w * 0.65, cy: h * 0.72, rx: w * 0.22, ry: h * 0.28, start: 0, end: Math.PI * 0.8 },
-    { cx: w * 0.35, cy: h * 0.75, rx: w * 0.24, ry: h * 0.25, start: Math.PI * 0.1, end: Math.PI * 1.0 },
-  ]
-  for (const b of bumps) {
-    pts.push(...arcPoints(b.cx, b.cy, b.rx, b.ry, b.start, b.end, 8))
-  }
-  return pts
-}
-
-function terminatorPoints(w: number, h: number): number[] {
-  // Pill / stadium shape
-  const r = h / 2
-  const pts: number[] = []
-  // Left semicircle
-  pts.push(...arcPoints(r, h / 2, r, h / 2, Math.PI / 2, Math.PI * 1.5, 10))
-  // Right semicircle
-  pts.push(...arcPoints(w - r, h / 2, r, h / 2, -Math.PI / 2, Math.PI / 2, 10))
-  return pts
-}
-
-function delayPoints(w: number, h: number): number[] {
-  // D-shape: flat left, rounded right
-  const pts: number[] = [0, 0, w * 0.6, 0]
-  // Right arc
-  pts.push(...arcPoints(w * 0.6, h / 2, w * 0.4, h / 2, -Math.PI / 2, Math.PI / 2, 12))
-  pts.push(w * 0.6, h, 0, h)
-  return pts
-}
+// documentPoints, databasePoints, cloudPoints, terminatorPoints, delayPoints
+// are imported from @/lib/geometry/shapePoints (see top of file).
 
 export const FLOWCHART_PRESETS: ShapePreset[] = [
   {
@@ -540,7 +460,7 @@ export const AGENT_PRESETS: ShapePreset[] = [
     overrides: { color: '#F0EBE3', agent_state: 'idle' } },
   { id: 'agent_output', label: 'Output', dbType: 'agent_output', defaultWidth: 240, defaultHeight: 160,
     iconPath: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-    overrides: { color: '#EAF4EE' } },
+    overrides: { color: '#EEF5F1' } },
   { id: 'context_object', label: 'Context', dbType: 'context_object', defaultWidth: 180, defaultHeight: 100,
     iconPath: 'M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z',
     overrides: { color: '#FAF8F4' } },

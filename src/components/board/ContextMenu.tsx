@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { MarkerIcon, MARKER_TYPES, MARKER_LABELS } from './lineMarkers'
 import { useBoardMutations } from '@/contexts/BoardMutationsContext'
 import { useBoardContext } from '@/contexts/BoardContext'
+import { STROKE_PRESETS, STROKE_COLOR_SWATCHES } from './styleConstants'
 
 interface ContextMenuProps {
   position: { x: number; y: number }
@@ -41,23 +42,11 @@ function MenuItem({
   )
 }
 
-const STROKE_PRESETS = [
-  { stroke_width: 1, stroke_dash: '[]', label: 'Thin' },
-  { stroke_width: 2, stroke_dash: '[]', label: 'Medium' },
-  { stroke_width: 4, stroke_dash: '[]', label: 'Thick' },
-  { stroke_width: 2, stroke_dash: '[8,4]', label: 'Dashed' },
-  { stroke_width: 2, stroke_dash: '[2,2]', label: 'Dotted' },
-]
-
 const OPACITY_PRESETS = [
   { value: 0.25, label: '25%' },
   { value: 0.5, label: '50%' },
   { value: 0.75, label: '75%' },
   { value: 1, label: '100%' },
-]
-
-const STROKE_COLOR_SWATCHES = [
-  '#000000', '#374151', '#EF4444', '#3B82F6', '#22C55E', '#EAB308',
 ]
 
 export function ContextMenu({
@@ -93,6 +82,8 @@ export function ContextMenu({
     onDeleteColumn,
     colors,
     selectedColor,
+    onCommentOpen,
+    onApiObjectOpen,
   } = useBoardMutations()
 
   const { objects, isObjectLocked, activeGroupId } = useBoardContext()
@@ -100,10 +91,11 @@ export function ContextMenu({
   const ctxObj = objects.get(objectId)
   const isLine = ctxObj?.type === 'line' || ctxObj?.type === 'arrow'
   const isTable = ctxObj?.type === 'table'
+  const isDataConnector = ctxObj?.type === 'data_connector'
+  const isApiObject = ctxObj?.type === 'api_object'
   const isLocked = isObjectLocked(objectId)
   const currentColor = selectedColor ?? ctxObj?.color
   const currentStrokeWidth = ctxObj?.stroke_width
-  const currentStrokeDash = ctxObj?.stroke_dash
   const currentStrokeColor = ctxObj?.stroke_color
   const currentOpacity = ctxObj?.opacity ?? 1
   const currentMarkerStart = ctxObj?.marker_start ?? (ctxObj?.type === 'arrow' ? 'arrow' : 'none')
@@ -135,10 +127,13 @@ export function ContextMenu({
         onClose()
       }
     }
-    requestAnimationFrame(() => {
+    const rafId = requestAnimationFrame(() => {
       window.addEventListener('mousedown', handleClickOutside)
     })
-    return () => window.removeEventListener('mousedown', handleClickOutside)
+    return () => {
+      cancelAnimationFrame(rafId)
+      window.removeEventListener('mousedown', handleClickOutside)
+    }
   }, [onClose])
 
   // Clamp position so menu stays within viewport
@@ -161,7 +156,7 @@ export function ContextMenu({
   return (
     <div
       ref={menuRef}
-      className="min-w-[224px] max-h-[80vh] overflow-y-auto rounded-xl border border-parchment-border bg-parchment p-1.5 shadow-lg ring-1 ring-black/10 dark:bg-[#1E293B] dark:border-white/10 dark:ring-white/10"
+      className="min-w-[224px] max-h-[80vh] overflow-y-auto rounded-xl border border-parchment-border bg-parchment p-1.5 shadow-lg ring-1 ring-black/10 dark:bg-[#1E293B] dark:border-white/10 dark:ring-white/10 animate-[panel-in]"
       style={{
         position: 'fixed',
         top: pos.y,
@@ -302,11 +297,11 @@ export function ContextMenu({
                   key={p.label}
                   type="button"
                   onClick={() => {
-                    onStrokeStyleChange({ stroke_width: p.stroke_width, stroke_dash: p.stroke_dash })
+                    onStrokeStyleChange({ stroke_width: p.stroke_width })
                     onClose()
                   }}
                   className={`rounded px-2 py-1 text-xs font-medium transition ${
-                    currentStrokeWidth === p.stroke_width && (currentStrokeDash ?? '[]') === p.stroke_dash
+                    currentStrokeWidth === p.stroke_width
                       ? 'bg-navy/10 text-navy dark:bg-navy/25 dark:text-parchment'
                       : 'bg-parchment-dark text-charcoal hover:bg-parchment-border dark:bg-white/10 dark:text-parchment/80 dark:hover:bg-white/20'
                   }`}
@@ -470,6 +465,22 @@ export function ContextMenu({
         )}
       </div>
       </>
+      )}
+      {/* Comments + API */}
+      {!isLocked && !isLine && !isDataConnector && (
+        <>
+          <hr className="my-1 border-parchment-border opacity-60 dark:border-white/10" />
+          <MenuItem
+            onClick={() => { onCommentOpen?.(objectId, pos); onClose() }}
+            label="Add comment"
+          />
+        </>
+      )}
+      {!isLocked && isApiObject && (
+        <MenuItem
+          onClick={() => { onApiObjectOpen?.(objectId); onClose() }}
+          label="Configure API"
+        />
       )}
     </div>
   )

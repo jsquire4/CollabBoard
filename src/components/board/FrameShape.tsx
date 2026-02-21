@@ -94,7 +94,7 @@ export const FrameShape = memo(function FrameShape({
   const shadow = getShadowProps(object)
 
   // Frame uses its own border logic: dashed border when not selected, solid selection border
-  const borderStroke = isSelected ? '#1B3A6B' : (object.stroke_color || 'rgba(148,163,184,0.5)')
+  const borderStroke = isSelected ? '#1B3A6B' : (object.stroke_color || 'rgba(232,227,218,0.65)')
   const borderWidth = isSelected ? 2 : (object.stroke_color ? (object.stroke_width ?? 1) : 1)
   const borderDash = isSelected ? undefined : (object.stroke_color ? undefined : [8, 4])
 
@@ -124,7 +124,7 @@ export const FrameShape = memo(function FrameShape({
       <Rect
         width={object.width}
         height={object.height}
-        fill={object.color || 'rgba(241,245,249,0.8)'}
+        fill={object.color || 'rgba(250,248,244,0.85)'}
         cornerRadius={8}
         stroke={borderStroke}
         strokeWidth={borderWidth}
@@ -135,7 +135,7 @@ export const FrameShape = memo(function FrameShape({
       <Rect
         width={object.width}
         height={titleHeight}
-        fill="rgba(148,163,184,0.12)"
+        fill="rgba(232,227,218,0.18)"
         cornerRadius={[8, 8, 0, 0]}
       />
       {/* Title text — hidden during editing to avoid duplication with textarea overlay */}
@@ -149,7 +149,7 @@ export const FrameShape = memo(function FrameShape({
           fontSize={titleFontSize}
           fontFamily="sans-serif"
           fontStyle="bold"
-          fill={object.text_color ?? '#475569'}
+          fill={object.text_color ?? 'rgba(28,28,30,0.55)'}
           wrap="word"
           ellipsis={true}
           lineHeight={titleLineHeight}

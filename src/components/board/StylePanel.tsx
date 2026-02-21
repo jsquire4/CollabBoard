@@ -2,20 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
-
-const STROKE_COLOR_SWATCHES = [
-  '#000000', '#374151', '#6B7280', '#EF4444', '#F97316', '#EAB308',
-  '#22C55E', '#3B82F6', '#8B5CF6', '#EC4899', '#14B8A6', '#FFFFFF',
-]
-
-const STROKE_PRESETS = [
-  { width: 1, label: '1' },
-  { width: 2, label: '2' },
-  { width: 3, label: '3' },
-  { width: 4, label: '4' },
-  { width: 6, label: '6' },
-  { width: 8, label: '8' },
-]
+import { STROKE_PRESETS, STROKE_COLOR_SWATCHES } from './styleConstants'
 
 const DASH_PRESETS = [
   { dash: '[]', label: 'Solid' },
@@ -64,7 +51,7 @@ export function StylePanel({
   const btnRef = useRef<HTMLButtonElement>(null)
   const [popoverPos, setPopoverPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
 
-  useClickOutside(popoverRef, showPopover, () => setShowPopover(false))
+  useClickOutside([popoverRef, btnRef], showPopover && !!compact, () => setShowPopover(false))
 
   useEffect(() => {
     if (!compact || !showPopover || !btnRef.current) return
@@ -127,11 +114,11 @@ export function StylePanel({
             <div className="flex flex-wrap gap-1 mb-2">
               {STROKE_PRESETS.map((p) => (
                 <button
-                  key={p.width}
+                  key={p.label}
                   type="button"
-                  onClick={() => onStrokeStyleChange({ stroke_width: p.width })}
+                  onClick={() => onStrokeStyleChange({ stroke_width: p.stroke_width })}
                   className={`rounded px-2 py-0.5 text-xs font-medium transition ${
-                    strokeWidth === p.width ? presetActive : presetInactive
+                    strokeWidth === p.stroke_width ? presetActive : presetInactive
                   }`}
                 >
                   {p.label}
@@ -228,11 +215,11 @@ export function StylePanel({
 
   if (compact) {
     return (
-      <div ref={popoverRef}>
+      <div>
         <button
           ref={btnRef}
           type="button"
-          onClick={() => setShowPopover(!showPopover)}
+          onClick={() => setShowPopover(prev => !prev)}
           aria-label="Style options"
           aria-expanded={showPopover}
           aria-haspopup="dialog"
@@ -245,6 +232,7 @@ export function StylePanel({
         </button>
         {showPopover && (
           <div
+            ref={popoverRef}
             role="dialog"
             aria-label="Style options"
             className="fixed z-[200] rounded-xl border shadow-lg ring-1 ring-black/10 dark:ring-white/10 border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#1E293B]"

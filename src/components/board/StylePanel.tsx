@@ -2,20 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
-
-const STROKE_COLOR_SWATCHES = [
-  '#000000', '#374151', '#6B7280', '#EF4444', '#F97316', '#EAB308',
-  '#22C55E', '#3B82F6', '#8B5CF6', '#EC4899', '#14B8A6', '#FFFFFF',
-]
-
-const STROKE_PRESETS = [
-  { width: 1, label: '1' },
-  { width: 2, label: '2' },
-  { width: 3, label: '3' },
-  { width: 4, label: '4' },
-  { width: 6, label: '6' },
-  { width: 8, label: '8' },
-]
+import { STROKE_PRESETS, STROKE_COLOR_SWATCHES } from './styleConstants'
 
 const DASH_PRESETS = [
   { dash: '[]', label: 'Solid' },
@@ -127,11 +114,11 @@ export function StylePanel({
             <div className="flex flex-wrap gap-1 mb-2">
               {STROKE_PRESETS.map((p) => (
                 <button
-                  key={p.width}
+                  key={p.label}
                   type="button"
-                  onClick={() => onStrokeStyleChange({ stroke_width: p.width })}
+                  onClick={() => onStrokeStyleChange({ stroke_width: p.stroke_width, stroke_dash: p.stroke_dash })}
                   className={`rounded px-2 py-0.5 text-xs font-medium transition ${
-                    strokeWidth === p.width ? presetActive : presetInactive
+                    strokeWidth === p.stroke_width && (strokeDash ?? '[]') === p.stroke_dash ? presetActive : presetInactive
                   }`}
                 >
                   {p.label}

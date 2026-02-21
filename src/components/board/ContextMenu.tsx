@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { MarkerIcon, MARKER_TYPES, MARKER_LABELS } from './lineMarkers'
 import { useBoardMutations } from '@/contexts/BoardMutationsContext'
 import { useBoardContext } from '@/contexts/BoardContext'
+import { STROKE_PRESETS, STROKE_COLOR_SWATCHES } from './styleConstants'
 
 interface ContextMenuProps {
   position: { x: number; y: number }
@@ -41,23 +42,11 @@ function MenuItem({
   )
 }
 
-const STROKE_PRESETS = [
-  { stroke_width: 1, stroke_dash: '[]', label: 'Thin' },
-  { stroke_width: 2, stroke_dash: '[]', label: 'Medium' },
-  { stroke_width: 4, stroke_dash: '[]', label: 'Thick' },
-  { stroke_width: 2, stroke_dash: '[8,4]', label: 'Dashed' },
-  { stroke_width: 2, stroke_dash: '[2,2]', label: 'Dotted' },
-]
-
 const OPACITY_PRESETS = [
   { value: 0.25, label: '25%' },
   { value: 0.5, label: '50%' },
   { value: 0.75, label: '75%' },
   { value: 1, label: '100%' },
-]
-
-const STROKE_COLOR_SWATCHES = [
-  '#000000', '#374151', '#EF4444', '#3B82F6', '#22C55E', '#EAB308',
 ]
 
 export function ContextMenu({

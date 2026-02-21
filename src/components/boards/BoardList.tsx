@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { BoardCard } from './BoardCard'
 import { NewBoardCard } from './NewBoardCard'
+import { duplicateBoard } from '@/lib/supabase/boardDuplication'
 
 interface BoardListProps {
   initialMyBoards: BoardWithRole[]
@@ -23,9 +24,6 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
   const router = useRouter()
   const supabaseRef = useRef(createClient())
   const supabase = supabaseRef.current
-
-  const [activeTab, setActiveTab] = useState<'boards' | 'files'>('boards')
-
 
   const handleCreate = async () => {
     const name = newName.trim() || 'Untitled Board'
@@ -101,66 +99,13 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-
-      let copyName = `${boardName} - Copy`
-      let counter = 2
-      const allBoards = [...myBoards, ...sharedBoards]
-      while (allBoards.some(b => b.name === copyName)) {
-        copyName = `${boardName} - Copy (${counter})`
-        counter++
-      }
-
-      const { data: newBoard, error: boardError } = await supabase
-        .from('boards')
-        .insert({ name: copyName, created_by: user.id })
-        .select()
-        .single()
-
-      if (boardError || !newBoard) {
+      const allNames = [...myBoards, ...sharedBoards].map(b => b.name)
+      const result = await duplicateBoard(supabase, boardId, boardName, allNames, user.id)
+      if (!result) {
         toast.error('Failed to duplicate board')
         return
       }
-
-      const { data: sourceObjects } = await supabase
-        .from('board_objects')
-        .select('*')
-        .eq('board_id', boardId)
-        .is('deleted_at', null)
-
-      if (sourceObjects && sourceObjects.length > 0) {
-        // Build old ID → new ID mapping so FK refs point to the new board's objects
-        const idMap = new Map<string, string>()
-        for (const obj of sourceObjects) {
-          idMap.set(obj.id, crypto.randomUUID())
-        }
-        const remap = (oldId: string | null | undefined) => oldId ? (idMap.get(oldId) ?? null) : null
-
-        const copies = sourceObjects.map(({ id, created_at, updated_at, board_id, ...rest }) => ({
-          ...rest,
-          id: idMap.get(id),
-          board_id: newBoard.id,
-          created_by: user.id,
-          parent_id: remap(rest.parent_id),
-          connect_start_id: remap(rest.connect_start_id),
-          connect_end_id: remap(rest.connect_end_id),
-        }))
-        const CHUNK_SIZE = 300
-        for (let i = 0; i < copies.length; i += CHUNK_SIZE) {
-          const { error: chunkError } = await supabase.from('board_objects').insert(copies.slice(i, i + CHUNK_SIZE))
-          if (chunkError) {
-            toast.error('Failed to duplicate board objects')
-            try {
-              await supabase.from('board_objects').delete().eq('board_id', newBoard.id)
-              await supabase.from('boards').delete().eq('id', newBoard.id)
-            } catch {
-              // Cleanup failed — orphaned board may remain
-            }
-            return
-          }
-        }
-      }
-
-      setMyBoards(prev => [{ ...newBoard, role: 'owner' as const }, ...prev])
+      setMyBoards(prev => [{ ...result, role: 'owner' as const }, ...prev])
     } catch {
       toast.error('Failed to duplicate board')
     }
@@ -168,106 +113,63 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
 
   return (
     <div className="space-y-8">
-      {/* Tab bar */}
-      <div className="flex gap-1 border-b border-parchment-border">
-        <button
-          onClick={() => setActiveTab('boards')}
-          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-            activeTab === 'boards'
-              ? 'border-navy text-navy'
-              : 'border-transparent text-charcoal/50 hover:text-charcoal'
-          }`}
-        >
-
+      <section>
+        <h2 className="mb-4 text-2xl font-bold tracking-tight sm:text-3xl text-charcoal">
           My Boards
-        </button>
-        <button
-          onClick={() => setActiveTab('files')}
-          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-            activeTab === 'files'
-              ? 'border-navy text-navy'
-              : 'border-transparent text-charcoal/50 hover:text-charcoal'
-          }`}
-        >
-          My Files
-        </button>
-      </div>
-
-      {/* My Files empty state */}
-      {activeTab === 'files' && (
-        <div className="flex flex-col items-center justify-center py-24 gap-3">
-          <svg className="w-12 h-12 text-parchment-border" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          <p className="text-base font-medium text-charcoal">No files yet.</p>
-          <p className="text-sm text-charcoal/50">
-            Upload files from a board to see them here.
-          </p>
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <NewBoardCard
+            isCreating={showNameInput}
+            newName={newName}
+            onNameChange={setNewName}
+            onCreate={handleCreate}
+            onCancel={() => { setShowNameInput(false); setNewName('') }}
+            onClick={() => setShowNameInput(true)}
+          />
+          {myBoards.map((board) => (
+            <BoardCard
+              key={board.id}
+              board={board}
+              editingId={editingId}
+              editName={editName}
+              onEditNameChange={setEditName}
+              onRename={handleRename}
+              onEditingCancel={() => setEditingId(null)}
+              onDoubleClickTitle={(b) => { setEditingId(b.id); setEditName(b.name) }}
+              onDuplicate={handleDuplicateBoard}
+              onDelete={handleDelete}
+              onLeave={handleLeaveBoard}
+              onNavigate={(id) => router.push(`/board/${id}`)}
+            />
+          ))}
         </div>
-      )}
+      </section>
 
-      {activeTab === 'boards' && (
-        <>
-          <section>
-            <h2 className="mb-4 text-2xl font-bold tracking-tight sm:text-3xl text-charcoal">
-              My Boards
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <NewBoardCard
-                isCreating={showNameInput}
-                newName={newName}
-                onNameChange={setNewName}
-                onCreate={handleCreate}
-                onCancel={() => { setShowNameInput(false); setNewName('') }}
-                onClick={() => setShowNameInput(true)}
+      {sharedBoards.length > 0 && (
+        <section className="mt-16 border-t border-parchment-border pt-12">
+          <h2 className="mb-4 text-2xl font-bold tracking-tight text-charcoal sm:text-3xl">
+            Boards Shared with Me
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+            {sharedBoards.map((board) => (
+              <BoardCard
+                key={board.id}
+                board={board}
+                editingId={editingId}
+                editName={editName}
+                onEditNameChange={setEditName}
+                onRename={handleRename}
+                onEditingCancel={() => setEditingId(null)}
+                onDoubleClickTitle={(b) => { setEditingId(b.id); setEditName(b.name) }}
+                onDuplicate={handleDuplicateBoard}
+                onDelete={handleDelete}
+                onLeave={handleLeaveBoard}
+                onNavigate={(id) => router.push(`/board/${id}`)}
               />
-              {myBoards.map((board) => (
-                <BoardCard
-                  key={board.id}
-                  board={board}
-                  editingId={editingId}
-                  editName={editName}
-                  onEditNameChange={setEditName}
-                  onRename={handleRename}
-                  onEditingCancel={() => setEditingId(null)}
-                  onDoubleClickTitle={(b) => { setEditingId(b.id); setEditName(b.name) }}
-                  onDuplicate={handleDuplicateBoard}
-                  onDelete={handleDelete}
-                  onLeave={handleLeaveBoard}
-                  onNavigate={(id) => router.push(`/board/${id}`)}
-                />
-              ))}
-            </div>
-          </section>
-
-          {sharedBoards.length > 0 && (
-            <section className="mt-16 border-t border-parchment-border pt-12">
-              <h2 className="mb-4 text-2xl font-bold tracking-tight text-charcoal sm:text-3xl">
-                Boards Shared with Me
-              </h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-
-                {sharedBoards.map((board) => (
-                  <BoardCard
-                    key={board.id}
-                    board={board}
-                    editingId={editingId}
-                    editName={editName}
-                    onEditNameChange={setEditName}
-                    onRename={handleRename}
-                    onEditingCancel={() => setEditingId(null)}
-                    onDoubleClickTitle={(b) => { setEditingId(b.id); setEditName(b.name) }}
-                    onDuplicate={handleDuplicateBoard}
-                    onDelete={handleDelete}
-                    onLeave={handleLeaveBoard}
-                    onNavigate={(id) => router.push(`/board/${id}`)}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-        </>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   )

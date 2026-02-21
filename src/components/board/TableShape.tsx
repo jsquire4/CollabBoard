@@ -52,10 +52,10 @@ export const TableShape = memo(function TableShape({
   const { uiDarkMode } = useBoardContext()
 
   // Button panel colors
-  const btnBg = uiDarkMode ? '#1e293b' : '#f8fafc'
-  const btnBorder = uiDarkMode ? '#475569' : '#e2e8f0'
-  const btnSep = uiDarkMode ? '#64748b' : '#cbd5e1'
-  const btnHover = uiDarkMode ? '#334155' : '#e2e8f0'
+  const btnBg = uiDarkMode ? '#1e293b' : '#FAF8F4'
+  const btnBorder = uiDarkMode ? '#475569' : '#E8E3DA'
+  const btnSep = uiDarkMode ? '#64748b' : '#E8E3DA'
+  const btnHover = uiDarkMode ? '#334155' : '#F0EBE3'
 
   const data = useMemo(() => parseTableData(object.table_data), [object.table_data])
 
@@ -236,9 +236,9 @@ export const TableShape = memo(function TableShape({
         onContextMenu={(e) => { e.evt.preventDefault(); onContextMenu(object.id, e.evt.clientX, e.evt.clientY) }}
         opacity={object.opacity ?? 1}
       >
-        <Rect width={object.width} height={object.height} fill="#F9FAFB" stroke="#D1D5DB" strokeWidth={1} cornerRadius={4} />
+        <Rect width={object.width} height={object.height} fill="#FAF8F4" stroke="#E8E3DA" strokeWidth={1} cornerRadius={4} />
         <Text x={CELL_PAD} y={CELL_PAD} width={object.width - CELL_PAD * 2} height={object.height - CELL_PAD * 2}
-          text="Empty table" fontSize={CELL_FONT_SIZE} fill="#9CA3AF" align="center" verticalAlign="middle" listening={false} />
+          text="Empty table" fontSize={CELL_FONT_SIZE} fill="rgba(28,28,30,0.4)" align="center" verticalAlign="middle" listening={false} />
       </Group>
     )
   }

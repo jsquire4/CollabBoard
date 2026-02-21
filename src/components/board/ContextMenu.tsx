@@ -93,6 +93,8 @@ export function ContextMenu({
     onDeleteColumn,
     colors,
     selectedColor,
+    onCommentOpen,
+    onApiObjectOpen,
   } = useBoardMutations()
 
   const { objects, isObjectLocked, activeGroupId } = useBoardContext()
@@ -100,6 +102,8 @@ export function ContextMenu({
   const ctxObj = objects.get(objectId)
   const isLine = ctxObj?.type === 'line' || ctxObj?.type === 'arrow'
   const isTable = ctxObj?.type === 'table'
+  const isDataConnector = ctxObj?.type === 'data_connector'
+  const isApiObject = ctxObj?.type === 'api_object'
   const isLocked = isObjectLocked(objectId)
   const currentColor = selectedColor ?? ctxObj?.color
   const currentStrokeWidth = ctxObj?.stroke_width
@@ -161,7 +165,7 @@ export function ContextMenu({
   return (
     <div
       ref={menuRef}
-      className="min-w-[224px] max-h-[80vh] overflow-y-auto rounded-xl border border-parchment-border bg-parchment p-1.5 shadow-lg ring-1 ring-black/10 dark:bg-[#1E293B] dark:border-white/10 dark:ring-white/10"
+      className="min-w-[224px] max-h-[80vh] overflow-y-auto rounded-xl border border-parchment-border bg-parchment p-1.5 shadow-lg ring-1 ring-black/10 dark:bg-[#1E293B] dark:border-white/10 dark:ring-white/10 animate-[panel-in]"
       style={{
         position: 'fixed',
         top: pos.y,
@@ -470,6 +474,22 @@ export function ContextMenu({
         )}
       </div>
       </>
+      )}
+      {/* Comments + API */}
+      {!isLocked && !isLine && !isDataConnector && (
+        <>
+          <hr className="my-1 border-parchment-border opacity-60 dark:border-white/10" />
+          <MenuItem
+            onClick={() => { onCommentOpen?.(objectId, position); onClose() }}
+            label="Add comment"
+          />
+        </>
+      )}
+      {!isLocked && isApiObject && (
+        <MenuItem
+          onClick={() => { onApiObjectOpen?.(objectId); onClose() }}
+          label="Configure API"
+        />
       )}
     </div>
   )

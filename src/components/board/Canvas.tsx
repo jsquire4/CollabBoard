@@ -554,6 +554,15 @@ export function Canvas() {
             <Transformer
               ref={trRef}
               rotateEnabled={true}
+              anchorFill="#FAF8F4"
+              anchorStroke="#1B3A6B"
+              anchorStrokeWidth={1.5}
+              anchorSize={9}
+              anchorCornerRadius={2}
+              borderStroke="#1B3A6B"
+              borderStrokeWidth={1.5}
+              rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]}
+              rotationSnapTolerance={5}
               boundBoxFunc={(_oldBox, newBox) => {
                 if (newBox.width < 5 || newBox.height < 5) {
                   return _oldBox

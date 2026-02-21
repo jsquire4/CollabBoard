@@ -46,6 +46,9 @@ import { ChatPanel } from './ChatPanel'
 import { AgentChatPanel } from './AgentChatPanel'
 import { GlobalAgentPanel } from './GlobalAgentPanel'
 import { FileLibraryPanel } from './FileLibraryPanel'
+import { FilmstripPanel } from './FilmstripPanel'
+import { CommentThread } from './CommentThread'
+import { ApiObjectPanel } from './ApiObjectPanel'
 
 // Konva is client-only — must disable SSR
 const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canvas })), {
@@ -136,6 +139,9 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const [agentChatPanel, setAgentChatPanel] = useState<{ objectId: string; position: { x: number; y: number } } | null>(null)
   const [globalAgentOpen, setGlobalAgentOpen] = useState(false)
   const [fileLibraryOpen, setFileLibraryOpen] = useState(false)
+  const [filmstripOpen, setFilmstripOpen] = useState(false)
+  const [commentThread, setCommentThread] = useState<{ objectId: string; position: { x: number; y: number } } | null>(null)
+  const [apiObjectPanel, setApiObjectPanel] = useState<string | null>(null)
   const [isEditingText, setIsEditingText] = useState(false)
   const [activeTool, setActiveTool] = useState<BoardObjectType | null>(null)
   const [activePreset, setActivePreset] = useState<ShapePreset | null>(null)
@@ -190,6 +196,13 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const { connectionStatus } = useConnectionManager({ channel, trackPresence, reconcileOnReconnect, supabaseRef })
 
   const canEdit = userRole !== 'viewer'
+
+  const slideFrames = useMemo(
+    () => Array.from(objects.values())
+      .filter(o => o.type === 'frame' && o.slide_index != null)
+      .sort((a, b) => (a.slide_index ?? 0) - (b.slide_index ?? 0)),
+    [objects]
+  )
 
   // --- Extracted domain hooks ---
   const {
@@ -550,6 +563,14 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     setAgentChatPanel({ objectId: id, position: { x: 20, y: 80 } })
   }, [])
 
+  const handleCommentOpen = useCallback((objectId: string, position: { x: number; y: number }) => {
+    setCommentThread({ objectId, position })
+  }, [])
+
+  const handleApiObjectOpen = useCallback((objectId: string) => {
+    setApiObjectPanel(objectId)
+  }, [])
+
   const handleCanvasDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     const data = e.dataTransfer.getData('application/collabboard-file')
@@ -636,6 +657,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     onAddColumnAt: handleAddColumnAt,
     onDeleteColumnAt: handleDeleteColumnAt,
     onAgentClick: handleAgentClick,
+    onCommentOpen: handleCommentOpen,
+    onApiObjectOpen: handleApiObjectOpen,
   }), [
     handleDrawShape, handleCancelTool,
     selectObject, selectObjects, clearSelection, enterGroup, exitGroup,
@@ -661,7 +684,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     handleCellTextUpdate, handleTableDataChange,
     handleAddRow, handleDeleteRow, handleAddColumn, handleDeleteColumn,
     handleAddRowAt, handleDeleteRowAt, handleAddColumnAt, handleDeleteColumnAt,
-    handleAgentClick,
+    handleAgentClick, handleCommentOpen, handleApiObjectOpen,
   ])
 
   // ── Tool context ──
@@ -755,7 +778,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
       {/* Global Agent toggle button */}
       <button
         onClick={() => setGlobalAgentOpen(prev => !prev)}
-        className="fixed bottom-28 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-purple-600 text-white shadow-lg hover:bg-purple-700"
+        className="fixed bottom-28 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-navy text-parchment shadow-lg hover:bg-navy/80 border border-transparent dark:border-white/10"
         aria-label="Toggle global board assistant (Cmd+G)"
         title="Board Assistant (⌘G)"
       >
@@ -763,10 +786,21 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
         </svg>
       </button>
+      {/* Filmstrip toggle button */}
+      <button
+        onClick={() => setFilmstripOpen(prev => !prev)}
+        className="fixed bottom-52 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-charcoal text-parchment shadow-lg hover:bg-charcoal/80 border border-transparent dark:border-white/10"
+        aria-label="Toggle slide filmstrip"
+        title="Slide Filmstrip"
+      >
+        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+        </svg>
+      </button>
       {/* File Library toggle button */}
       <button
         onClick={() => setFileLibraryOpen(prev => !prev)}
-        className="fixed bottom-40 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-slate-600 text-white shadow-lg hover:bg-slate-700"
+        className="fixed bottom-40 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-charcoal text-parchment shadow-lg hover:bg-charcoal/80 border border-transparent dark:border-white/10"
         aria-label="Toggle file library"
         title="File Library"
       >
@@ -794,6 +828,30 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         isOpen={fileLibraryOpen}
         onClose={() => setFileLibraryOpen(false)}
       />
+      <FilmstripPanel
+        deckId={boardId}
+        boardId={boardId}
+        slideFrames={slideFrames}
+        onReorder={() => {}}
+        isOpen={filmstripOpen}
+        onClose={() => setFilmstripOpen(false)}
+      />
+      {commentThread && (
+        <CommentThread
+          objectId={commentThread.objectId}
+          boardId={boardId}
+          position={commentThread.position}
+          isOpen
+          onClose={() => setCommentThread(null)}
+        />
+      )}
+      {apiObjectPanel && (
+        <ApiObjectPanel
+          objectId={apiObjectPanel}
+          isOpen
+          onClose={() => setApiObjectPanel(null)}
+        />
+      )}
     </div>
     </BoardToolProvider>
     </BoardMutationsProvider>

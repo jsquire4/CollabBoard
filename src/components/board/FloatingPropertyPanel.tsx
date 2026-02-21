@@ -105,6 +105,40 @@ function IconDelete() {
   )
 }
 
+function IconLayerForward() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <path d="M7 10V4M4 7l3-3 3 3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function IconLayerBack() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <path d="M7 4v6M4 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function IconLockOpen() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <rect x="2" y="7" width="10" height="6" rx="1" />
+      <path d="M4 7V4.5a3 3 0 0 1 6 0" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function IconLockClosed() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <rect x="2" y="7" width="10" height="6" rx="1" />
+      <path d="M4 7V4.5a3 3 0 0 1 6 0v2.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 // ── Component ─────────────────────────────────────────────────────────
 
 const BASE_BTN =
@@ -131,12 +165,23 @@ export function FloatingPropertyPanel({ stagePos, stageScale }: FloatingProperty
     canUngroup,
     anySelectedLocked,
     onStrokeStyleChange,
+    onOpacityChange,
+    onBringForward,
+    onSendBackward,
+    onLock,
+    onUnlock,
+    canLock,
+    canUnlock,
   } = useBoardMutations()
 
   const panelRef = useRef<HTMLDivElement>(null)
   const colorInputRef = useRef<HTMLInputElement>(null)
   const strokeInputRef = useRef<HTMLInputElement>(null)
   const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(null)
+
+  const [opacityOpen, setOpacityOpen] = useState(false)
+  const opacityBtnRef = useRef<HTMLButtonElement>(null)
+  const opacityPopoverRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (selectedIds.size === 0) {
@@ -175,20 +220,41 @@ export function FloatingPropertyPanel({ stagePos, stageScale }: FloatingProperty
     setPanelPos({ top, left })
   }, [selectedIds, objects, stagePos, stageScale])
 
+  useEffect(() => {
+    if (!opacityOpen) return
+    const handleMouseDown = (e: MouseEvent) => {
+      if (
+        opacityPopoverRef.current?.contains(e.target as Node) ||
+        opacityBtnRef.current?.contains(e.target as Node)
+      ) return
+      setOpacityOpen(false)
+    }
+    document.addEventListener('mousedown', handleMouseDown)
+    return () => document.removeEventListener('mousedown', handleMouseDown)
+  }, [opacityOpen])
+
+  const panelWasVisibleRef = useRef(false)
+  useEffect(() => {
+    panelWasVisibleRef.current = panelPos !== null
+  }, [panelPos])
+
   if (selectedIds.size === 0) return null
+
+  const justAppeared = panelPos !== null && !panelWasVisibleRef.current
 
   const swatchColor = selectedColor ?? '#5B8DEF'
 
   // Derive the current stroke color from the first selected object
   const firstId = selectedIds.values().next().value
   const selectedStrokeColor = firstId ? (objects.get(firstId)?.stroke_color ?? null) : null
+  const opacity = firstId ? (objects.get(firstId)?.opacity ?? 1) : 1
 
   return (
     <div
       ref={panelRef}
       role="toolbar"
       aria-label="Selection properties"
-      className="fixed rounded-xl shadow-lg ring-1 ring-black/10 dark:ring-white/10 bg-parchment dark:bg-[#1E293B] border border-parchment-border dark:border-white/10 backdrop-blur-sm px-2 py-1.5 flex items-center gap-1 z-[150]"
+      className={`fixed rounded-xl shadow-lg ring-1 ring-black/10 dark:ring-white/10 bg-parchment dark:bg-[#1E293B] border border-parchment-border dark:border-white/10 backdrop-blur-sm px-2 py-1.5 flex items-center gap-1 z-[150]${justAppeared ? ' animate-[panel-in]' : ''}`}
       style={panelPos ? { top: panelPos.top, left: panelPos.left } : { visibility: 'hidden' }}
     >
       {/* Color swatch */}
@@ -227,10 +293,41 @@ export function FloatingPropertyPanel({ stagePos, stageScale }: FloatingProperty
         aria-label="Style"
         onClick={() => strokeInputRef.current?.click()}
         disabled={anySelectedLocked || !onStrokeStyleChange}
-        title="Stroke style"
+        title="Stroke color"
       >
         <IconStroke />
       </button>
+
+      {/* Opacity button */}
+      <div className="relative">
+        <button
+          ref={opacityBtnRef}
+          className={NORMAL_BTN + ' min-w-[36px] text-xs font-medium tabular-nums'}
+          aria-label="Opacity"
+          onClick={() => setOpacityOpen(prev => !prev)}
+          disabled={anySelectedLocked}
+          title="Opacity"
+        >
+          {Math.round(opacity * 100)}%
+        </button>
+        {opacityOpen && (
+          <div
+            ref={opacityPopoverRef}
+            className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-lg border border-parchment-border bg-parchment px-3 py-2 shadow-lg dark:border-white/10 dark:bg-[#1E293B]"
+          >
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={opacity}
+              onChange={e => onOpacityChange(parseFloat(e.target.value))}
+              className="w-28 accent-navy"
+              aria-label="Opacity slider"
+            />
+          </div>
+        )}
+      </div>
 
       <Divider />
 
@@ -240,7 +337,7 @@ export function FloatingPropertyPanel({ stagePos, stageScale }: FloatingProperty
         aria-label="Duplicate"
         onClick={onDuplicate}
         disabled={anySelectedLocked}
-        title="Duplicate"
+        title="Duplicate (⌘D)"
       >
         <IconDuplicate />
       </button>
@@ -252,7 +349,7 @@ export function FloatingPropertyPanel({ stagePos, stageScale }: FloatingProperty
           aria-label="Group"
           onClick={onGroup}
           disabled={anySelectedLocked}
-          title="Group"
+          title="Group (⌘G)"
         >
           <IconGroup />
         </button>
@@ -265,10 +362,69 @@ export function FloatingPropertyPanel({ stagePos, stageScale }: FloatingProperty
           aria-label="Ungroup"
           onClick={onUngroup}
           disabled={anySelectedLocked}
-          title="Ungroup"
+          title="Ungroup (⌘⇧G)"
         >
           <IconUngroup />
         </button>
+      )}
+
+      <Divider />
+
+      {/* Bring Forward */}
+      <button
+        className={NORMAL_BTN}
+        aria-label="Bring forward"
+        onClick={() => firstId && onBringForward(firstId)}
+        disabled={anySelectedLocked}
+        title="Bring forward (⌘])"
+      >
+        <IconLayerForward />
+      </button>
+
+      {/* Send Backward */}
+      <button
+        className={NORMAL_BTN}
+        aria-label="Send backward"
+        onClick={() => firstId && onSendBackward(firstId)}
+        disabled={anySelectedLocked}
+        title="Send backward (⌘[)"
+      >
+        <IconLayerBack />
+      </button>
+
+      {/* Lock/Unlock (conditional) */}
+      {(canLock || anySelectedLocked) && (
+        <>
+          <Divider />
+          {anySelectedLocked && canUnlock ? (
+            <button
+              className={NORMAL_BTN}
+              aria-label="Unlock"
+              onClick={onUnlock}
+              title="Unlock"
+            >
+              <IconLockClosed />
+            </button>
+          ) : anySelectedLocked && !canUnlock ? (
+            <button
+              className={NORMAL_BTN}
+              aria-label="Locked"
+              disabled
+              title="Locked (no permission to unlock)"
+            >
+              <IconLockClosed />
+            </button>
+          ) : canLock ? (
+            <button
+              className={NORMAL_BTN}
+              aria-label="Lock"
+              onClick={onLock}
+              title="Lock"
+            >
+              <IconLockOpen />
+            </button>
+          ) : null}
+        </>
       )}
 
       <Divider />
@@ -279,7 +435,7 @@ export function FloatingPropertyPanel({ stagePos, stageScale }: FloatingProperty
         aria-label="Delete"
         onClick={onDelete}
         disabled={anySelectedLocked}
-        title="Delete"
+        title="Delete (⌫)"
       >
         <IconDelete />
       </button>

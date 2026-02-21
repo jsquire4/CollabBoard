@@ -121,11 +121,20 @@ export function BoardTopBar({
           <button
             type="button"
             onClick={() => isOwner && setEditing(true)}
-            className="rounded px-2 py-1 text-sm font-semibold transition truncate max-w-64 text-charcoal hover:bg-parchment-dark dark:text-parchment dark:hover:bg-white/10"
+            className="group flex items-center gap-1 rounded px-2 py-1 text-sm font-semibold transition truncate max-w-64 text-charcoal hover:bg-parchment-dark dark:text-parchment dark:hover:bg-white/10"
             title={isOwner ? 'Click to rename' : boardName}
             style={{ cursor: isOwner ? 'pointer' : 'default' }}
           >
             {name}
+            {isOwner && (
+              <svg
+                className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                aria-hidden="true"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            )}
           </button>
         )}
         {renameError && (
@@ -218,7 +227,7 @@ export function BoardTopBar({
 /* ── Grid Settings Popover ── */
 
 const GRID_PRESETS: { name: string; canvas: string; grid: string; sub: string }[] = [
-  { name: 'Default',    canvas: '#e8ecf1', grid: '#b4becd', sub: '#b4becd' },
+  { name: 'Default',    canvas: '#FAF8F4', grid: '#E8E3DA', sub: '#F0EBE3' },
   { name: 'Light',      canvas: '#f8fafc', grid: '#cbd5e1', sub: '#e2e8f0' },
   { name: 'White',      canvas: '#ffffff', grid: '#d1d5db', sub: '#e5e7eb' },
   { name: 'Blueprint',  canvas: '#1e3a5f', grid: '#3b82f6', sub: '#2563eb' },

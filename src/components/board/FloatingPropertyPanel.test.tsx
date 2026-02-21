@@ -432,4 +432,106 @@ describe('FloatingPropertyPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: /ungroup/i }))
     expect(onUngroup).toHaveBeenCalledTimes(1)
   })
+
+  it('calls onOpacityChange when the opacity slider is changed', async () => {
+    const onOpacityChange = vi.fn()
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1', opacity: 0.75 })]])
+    const Wrapper = createBoardContextWrapper({
+      boardValue: { selectedIds: new Set(['obj-1']), objects },
+      mutationsValue: { onOpacityChange, anySelectedLocked: false },
+    })
+
+    const { container } = render(
+      <Wrapper><FloatingPropertyPanel {...DEFAULT_PROPS} /></Wrapper>
+    )
+
+    // Open the opacity popover
+    await userEvent.click(screen.getByRole('button', { name: /opacity/i }))
+
+    // Change the slider
+    const slider = container.querySelector('input[type="range"]') as HTMLInputElement
+    fireEvent.change(slider, { target: { value: '0.5' } })
+    expect(onOpacityChange).toHaveBeenCalledWith(0.5)
+  })
+
+  it('displays current opacity percentage on the opacity button', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1', opacity: 0.5 })]])
+    const Wrapper = createBoardContextWrapper({
+      boardValue: { selectedIds: new Set(['obj-1']), objects },
+      mutationsValue: { anySelectedLocked: false },
+    })
+
+    render(<Wrapper><FloatingPropertyPanel {...DEFAULT_PROPS} /></Wrapper>)
+    expect(screen.getByRole('button', { name: /opacity/i })).toHaveTextContent('50%')
+  })
+
+  it('calls onBringForward with the first selected id when Bring Forward is clicked', async () => {
+    const onBringForward = vi.fn()
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    const Wrapper = createBoardContextWrapper({
+      boardValue: { selectedIds: new Set(['obj-1']), objects },
+      mutationsValue: { onBringForward, anySelectedLocked: false },
+    })
+
+    render(<Wrapper><FloatingPropertyPanel {...DEFAULT_PROPS} /></Wrapper>)
+    await userEvent.click(screen.getByRole('button', { name: /bring forward/i }))
+    expect(onBringForward).toHaveBeenCalledWith('obj-1')
+  })
+
+  it('calls onSendBackward with the first selected id when Send Backward is clicked', async () => {
+    const onSendBackward = vi.fn()
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    const Wrapper = createBoardContextWrapper({
+      boardValue: { selectedIds: new Set(['obj-1']), objects },
+      mutationsValue: { onSendBackward, anySelectedLocked: false },
+    })
+
+    render(<Wrapper><FloatingPropertyPanel {...DEFAULT_PROPS} /></Wrapper>)
+    await userEvent.click(screen.getByRole('button', { name: /send backward/i }))
+    expect(onSendBackward).toHaveBeenCalledWith('obj-1')
+  })
+
+  it('shows Lock button when canLock is true and object is not locked, calls onLock when clicked', async () => {
+    const onLock = vi.fn()
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    const Wrapper = createBoardContextWrapper({
+      boardValue: { selectedIds: new Set(['obj-1']), objects },
+      mutationsValue: { onLock, canLock: true, canUnlock: false, anySelectedLocked: false },
+    })
+
+    render(<Wrapper><FloatingPropertyPanel {...DEFAULT_PROPS} /></Wrapper>)
+    const lockBtn = screen.getByRole('button', { name: /^lock$/i })
+    expect(lockBtn).toBeInTheDocument()
+    await userEvent.click(lockBtn)
+    expect(onLock).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows Unlock button when object is locked and canUnlock is true, calls onUnlock when clicked', async () => {
+    const onUnlock = vi.fn()
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    const Wrapper = createBoardContextWrapper({
+      boardValue: { selectedIds: new Set(['obj-1']), objects },
+      mutationsValue: { onUnlock, canLock: true, canUnlock: true, anySelectedLocked: true },
+    })
+
+    render(<Wrapper><FloatingPropertyPanel {...DEFAULT_PROPS} /></Wrapper>)
+    const unlockBtn = screen.getByRole('button', { name: /unlock/i })
+    expect(unlockBtn).toBeInTheDocument()
+    await userEvent.click(unlockBtn)
+    expect(onUnlock).toHaveBeenCalledTimes(1)
+  })
+
+  it('has keyboard shortcut hints in button title attributes', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    const Wrapper = createBoardContextWrapper({
+      boardValue: { selectedIds: new Set(['obj-1']), objects },
+      mutationsValue: { anySelectedLocked: false },
+    })
+
+    render(<Wrapper><FloatingPropertyPanel {...DEFAULT_PROPS} /></Wrapper>)
+    expect(screen.getByRole('button', { name: /duplicate/i })).toHaveAttribute('title', 'Duplicate (⌘D)')
+    expect(screen.getByRole('button', { name: /delete/i })).toHaveAttribute('title', 'Delete (⌫)')
+    expect(screen.getByRole('button', { name: /bring forward/i })).toHaveAttribute('title', 'Bring forward (⌘])')
+    expect(screen.getByRole('button', { name: /send backward/i })).toHaveAttribute('title', 'Send backward (⌘[)')
+  })
 })

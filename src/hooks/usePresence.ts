@@ -39,9 +39,11 @@ export function usePresence(
   // Register presence sync listener
   useEffect(() => {
     if (!channel) return
+    let active = true
 
     // sync fires after presenceState is updated — full reconciliation
     const syncState = () => {
+      if (!active) return
       const state = channel.presenceState<OnlineUser>()
       const deduped = new Map<string, OnlineUser>()
       for (const key of Object.keys(state)) {
@@ -57,6 +59,7 @@ export function usePresence(
     // join/leave fire BEFORE presenceState is updated, so use the
     // callback payload directly for immediate incremental updates.
     const handleJoin = ({ newPresences }: { key: string; newPresences: OnlineUser[]; currentPresences: OnlineUser[] }) => {
+      if (!active) return
       setOnlineUsers(prev => {
         const map = new Map(prev.map(u => [u.user_id, u]))
         for (const p of newPresences) {
@@ -67,6 +70,7 @@ export function usePresence(
     }
 
     const handleLeave = ({ leftPresences }: { key: string; leftPresences: OnlineUser[]; currentPresences: OnlineUser[] }) => {
+      if (!active) return
       const leftIds = new Set(leftPresences.map(p => p.user_id))
       setOnlineUsers(prev => prev.filter(u => !leftIds.has(u.user_id)))
     }
@@ -84,6 +88,7 @@ export function usePresence(
     window.addEventListener('beforeunload', handleBeforeUnload)
 
     return () => {
+      active = false
       window.removeEventListener('beforeunload', handleBeforeUnload)
     }
   }, [channel, userId])

@@ -142,7 +142,14 @@ export function FloatingPropertyPanel({ stagePos, stageScale }: FloatingProperty
       return
     }
 
-    const bbox = selectionBBox(selectedIds, objects)
+    // Only compute bbox from the selected objects, not the full Map
+    const selected: Map<string, typeof objects extends Map<string, infer V> ? V : never> = new Map()
+    for (const id of selectedIds) {
+      const obj = objects.get(id)
+      if (obj) selected.set(id, obj)
+    }
+
+    const bbox = selectionBBox(selectedIds, selected)
     if (!bbox) {
       setPanelPos(null)
       return
@@ -170,7 +177,13 @@ export function FloatingPropertyPanel({ stagePos, stageScale }: FloatingProperty
     left = Math.max(MARGIN, Math.min(left, vw - panelWidth - MARGIN))
     top = Math.max(MARGIN, Math.min(top, vh - panelHeight - MARGIN))
 
-    setPanelPos({ top, left })
+    // Only update state if position actually changed
+    setPanelPos(prev => {
+      if (prev && Math.abs(prev.top - top) < 0.5 && Math.abs(prev.left - left) < 0.5) {
+        return prev
+      }
+      return { top, left }
+    })
   }, [selectedIds, objects, stagePos, stageScale])
 
   useEffect(() => {

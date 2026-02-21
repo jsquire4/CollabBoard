@@ -250,8 +250,10 @@ export function useBroadcast({ channel, userId, setObjects, fieldClocksRef, hlcR
   // ── Listen for incoming broadcasts ──
   useEffect(() => {
     if (!channel) return
+    let active = true
 
     const handler = ({ payload }: { payload: { changes: BoardChange[]; sender_id: string } }) => {
+      if (!active) return
       if (payload.sender_id === userId) return
 
       // Advance local HLC from any remote clocks
@@ -272,6 +274,10 @@ export function useBroadcast({ channel, userId, setObjects, fieldClocksRef, hlcR
     }
 
     channel.on('broadcast', { event: 'board:sync' }, handler)
+
+    return () => {
+      active = false
+    }
   }, [channel, userId, applyIncomingBatch])
 
   // ── Cleanup timers on unmount ──

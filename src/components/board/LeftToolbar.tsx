@@ -93,7 +93,8 @@ export function LeftToolbar({
   }, [onPresetSelect, closeFlyout])
 
   return (
-    <aside className="flex w-[60px] shrink-0 flex-col items-center gap-0.5 border-r py-2 overflow-y-auto border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#111827]">
+    <div className="@container h-full">
+    <aside className="flex w-[clamp(52px,5vw,72px)] shrink-0 flex-col items-center gap-0.5 border-r py-2 overflow-y-auto border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#111827]">
       {canEdit && (
         <>
           {/* Shape tools — fades out when editing text */}
@@ -266,6 +267,7 @@ export function LeftToolbar({
         />
       )}
     </aside>
+    </div>
   )
 }
 
@@ -302,7 +304,7 @@ function ToolGroupButton({
   onClose: () => void
   children: ReactNode
 }) {
-  const { containerRef, btnRef, panelRef, panelPos } = useFlyoutPosition(isOpen)
+  const { containerRef, btnRef, panelRef, panelPos, posReady } = useFlyoutPosition(isOpen)
   useClickOutside([containerRef, panelRef], isOpen, onClose)
 
   return (
@@ -311,7 +313,7 @@ function ToolGroupButton({
         ref={btnRef}
         type="button"
         onClick={onToggle}
-        className={`relative flex h-11 w-11 flex-col items-center justify-center rounded-full transition ${
+        className={`relative flex h-[clamp(40px,4.5vw,52px)] w-[clamp(40px,4.5vw,52px)] flex-col items-center justify-center rounded-full transition ${
           isActive || isOpen
             ? 'bg-navy text-parchment shadow-md shadow-leather/30 ring-2 ring-leather/40 dark:bg-navy dark:text-parchment'
             : 'text-charcoal/70 hover:bg-charcoal/10 hover:text-charcoal dark:text-parchment/60 dark:hover:bg-navy/40'
@@ -324,7 +326,7 @@ function ToolGroupButton({
         <div
           ref={panelRef}
           className="fixed z-[200] rounded-xl border p-2 shadow-lg ring-1 ring-black/10 border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#1E293B] dark:ring-white/10 animate-[flyout-in]"
-          style={{ top: panelPos.top, left: panelPos.left }}
+          style={{ top: panelPos.top, left: panelPos.left, visibility: posReady ? 'visible' : 'hidden' }}
         >
           {children}
         </div>
@@ -393,7 +395,7 @@ function MergedShapesGroupButton({ isOpen, activePreset, isActive, sides, onSide
   onPresetSelect: (p: ShapePreset) => void
   onClose: () => void
 }) {
-  const { containerRef, btnRef, panelRef, panelPos } = useFlyoutPosition(isOpen)
+  const { containerRef, btnRef, panelRef, panelPos, posReady } = useFlyoutPosition(isOpen)
   useClickOutside([containerRef, panelRef], isOpen, onClose)
 
   const handleCreate = useCallback(() => {
@@ -415,7 +417,7 @@ function MergedShapesGroupButton({ isOpen, activePreset, isActive, sides, onSide
         ref={btnRef}
         type="button"
         onClick={onToggle}
-        className={`relative flex h-11 w-11 flex-col items-center justify-center rounded-full transition ${
+        className={`relative flex h-[clamp(40px,4.5vw,52px)] w-[clamp(40px,4.5vw,52px)] flex-col items-center justify-center rounded-full transition ${
           isActive || isOpen
             ? 'bg-navy text-parchment shadow-md shadow-leather/30 ring-2 ring-leather/40 dark:bg-navy dark:text-parchment'
             : 'text-charcoal/70 hover:bg-charcoal/10 hover:text-charcoal dark:text-parchment/60 dark:hover:bg-navy/40'
@@ -428,7 +430,7 @@ function MergedShapesGroupButton({ isOpen, activePreset, isActive, sides, onSide
         <div
           ref={panelRef}
           className="fixed z-[200] rounded-xl border p-2 shadow-lg ring-1 ring-black/10 border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#1E293B] dark:ring-white/10 animate-[flyout-in]"
-          style={{ top: panelPos.top, left: panelPos.left }}
+          style={{ top: panelPos.top, left: panelPos.left, visibility: posReady ? 'visible' : 'hidden' }}
         >
           <div style={SUBMENU_MIN_WIDTH_LG}>
             <FlyoutHeader text="Circle" />

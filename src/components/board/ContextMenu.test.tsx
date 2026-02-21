@@ -239,4 +239,72 @@ describe('ContextMenu', () => {
     expect(screen.queryByText('Start marker')).not.toBeInTheDocument()
     expect(screen.queryByText('End marker')).not.toBeInTheDocument()
   })
+
+  // ── Coordinate passthrough regression (rAF-clamp fix) ─────────────────
+  // These tests guard against the Y-offset bug where getBoundingClientRect()
+  // returned height=0 before paint, causing the clamp to zero-out position.y.
+
+  it('passes position.x through to the menu element style', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    const onClose = vi.fn()
+    const Wrapper = createBoardContextWrapper({
+      boardValue: { objects, isObjectLocked: () => false, activeGroupId: null },
+      mutationsValue: {
+        onDelete: vi.fn(), onDuplicate: vi.fn(), onCopy: vi.fn(), onCut: vi.fn(),
+        onPaste: vi.fn(), onGroup: vi.fn(), onUngroup: vi.fn(),
+        canGroup: false, canUngroup: false, canLock: false, canUnlock: false, canEditVertices: false,
+      },
+    })
+    render(
+      <Wrapper>
+        <ContextMenu position={{ x: 250, y: 100 }} objectId="obj-1" onClose={onClose} />
+      </Wrapper>
+    )
+    // Flush the rAF so the clamp effect runs with the real (mocked) getBoundingClientRect
+    act(() => { vi.runAllTimers() })
+    const menu = screen.getByRole('button', { name: /copy/i }).closest('[style]')!
+    expect(menu).toHaveStyle({ left: '250px' })
+  })
+
+  it('passes position.y through to the menu element style', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    const onClose = vi.fn()
+    const Wrapper = createBoardContextWrapper({
+      boardValue: { objects, isObjectLocked: () => false, activeGroupId: null },
+      mutationsValue: {
+        onDelete: vi.fn(), onDuplicate: vi.fn(), onCopy: vi.fn(), onCut: vi.fn(),
+        onPaste: vi.fn(), onGroup: vi.fn(), onUngroup: vi.fn(),
+        canGroup: false, canUngroup: false, canLock: false, canUnlock: false, canEditVertices: false,
+      },
+    })
+    render(
+      <Wrapper>
+        <ContextMenu position={{ x: 100, y: 350 }} objectId="obj-1" onClose={onClose} />
+      </Wrapper>
+    )
+    act(() => { vi.runAllTimers() })
+    const menu = screen.getByRole('button', { name: /copy/i }).closest('[style]')!
+    expect(menu).toHaveStyle({ top: '350px' })
+  })
+
+  it('renders menu container with both x and y coordinates in style', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    const onClose = vi.fn()
+    const Wrapper = createBoardContextWrapper({
+      boardValue: { objects, isObjectLocked: () => false, activeGroupId: null },
+      mutationsValue: {
+        onDelete: vi.fn(), onDuplicate: vi.fn(), onCopy: vi.fn(), onCut: vi.fn(),
+        onPaste: vi.fn(), onGroup: vi.fn(), onUngroup: vi.fn(),
+        canGroup: false, canUngroup: false, canLock: false, canUnlock: false, canEditVertices: false,
+      },
+    })
+    render(
+      <Wrapper>
+        <ContextMenu position={{ x: 400, y: 200 }} objectId="obj-1" onClose={onClose} />
+      </Wrapper>
+    )
+    act(() => { vi.runAllTimers() })
+    const menu = screen.getByRole('button', { name: /copy/i }).closest('[style]')!
+    expect(menu).toHaveStyle({ left: '400px', top: '200px' })
+  })
 })

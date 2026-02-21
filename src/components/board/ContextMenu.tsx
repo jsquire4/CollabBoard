@@ -275,16 +275,19 @@ export function ContextMenu({
 
   // Clamp position so menu stays within viewport
   useEffect(() => {
-    const el = menuRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const vw = window.innerWidth
-    const vh = window.innerHeight
-    let nx = position.x
-    let ny = position.y
-    if (nx + rect.width > vw) nx = Math.max(0, vw - rect.width - 8)
-    if (ny + rect.height > vh) ny = Math.max(0, vh - rect.height - 8)
-    setPos({ x: nx, y: ny })
+    const rafId = requestAnimationFrame(() => {
+      const el = menuRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      let nx = position.x
+      let ny = position.y
+      if (nx + rect.width > vw) nx = Math.max(0, vw - rect.width - 8)
+      if (ny + rect.height > vh) ny = Math.max(0, vh - rect.height - 8)
+      setPos({ x: nx, y: ny })
+    })
+    return () => cancelAnimationFrame(rafId)
   }, [position.x, position.y])
 
   // Hover timer — 150 ms delay before opening sub-menu

@@ -24,3 +24,10 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: () => false,
   }),
 })
+
+// jsdom doesn't implement ResizeObserver — provide a minimal stub for container queries
+global.ResizeObserver = global.ResizeObserver ?? class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}

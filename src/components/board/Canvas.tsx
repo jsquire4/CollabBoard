@@ -26,6 +26,7 @@ import { renderShape, ShapeCallbacks, ShapeState } from './renderShape'
 import { computeAutoRoute } from './autoRoute'
 import { RemoteSelectionHighlights } from './RemoteSelectionHighlights'
 import { LockIconOverlay } from './LockIconOverlay'
+import { ObjectIndicators } from './ObjectIndicators'
 import { CanvasOverlays } from './CanvasOverlays'
 import { RichTextStaticLayer } from './RichTextStaticLayer'
 import { RICH_TEXT_ENABLED } from '@/lib/richText'
@@ -132,7 +133,7 @@ export function Canvas() {
     objects, sortedObjects, selectedIds, activeGroupId, activeTool,
     getDescendants,
     boardId, canEdit,
-    onlineUsers, remoteSelections, isObjectLocked,
+    onlineUsers, remoteSelections, isObjectLocked, commentCounts,
     gridSize, gridSubdivisions, gridVisible,
     snapToGrid: snapToGridEnabled,
     gridStyle, canvasColor, gridColor, subdivisionColor,
@@ -603,6 +604,13 @@ export function Canvas() {
 
           {/* Lock icon overlays for locked shapes */}
           <LockIconOverlay visibleObjects={visibleObjects} isObjectLocked={isObjectLocked} />
+
+          {/* Comment count badges */}
+          <ObjectIndicators
+            visibleObjects={visibleObjects}
+            commentCounts={commentCounts}
+            isObjectLocked={isObjectLocked}
+          />
 
           {/* Marquee selection rectangle */}
           {marquee && (

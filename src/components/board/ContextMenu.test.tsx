@@ -3,12 +3,13 @@ import { render, screen, act, fireEvent } from '@testing-library/react'
 import { ContextMenu } from './ContextMenu'
 import { createBoardContextWrapper } from '@/test/renderWithBoardContext'
 import { makeRectangle, makeArrow, makeTable } from '@/test/boardObjectFactory'
+import type { BoardObject } from '@/types/board'
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function renderMenu(
   objectId: string,
-  objects: Map<string, unknown>,
+  objects: Map<string, BoardObject>,
   mutationsOverrides = {},
   boardOverrides = {}
 ) {

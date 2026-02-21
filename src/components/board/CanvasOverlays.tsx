@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import { BoardObject } from '@/types/board'
 import { ContextMenu } from './ContextMenu'
-import { FloatingPropertyPanel } from './FloatingPropertyPanel'
+import { SelectionBar } from './SelectionBar'
 import { ZoomControls } from './ZoomControls'
 import { ApiObjectOverlay } from './ApiObjectOverlay'
 import { getTextCharLimit, STICKY_TITLE_CHAR_LIMIT } from '@/hooks/board/useTextEditing'
@@ -139,8 +139,8 @@ export function CanvasOverlays({
         )
       })()}
 
-      {/* Floating property panel */}
-      <FloatingPropertyPanel stagePos={stagePos} stageScale={stageScale} />
+      {/* Selection bar (replaces FloatingPropertyPanel) */}
+      <SelectionBar stagePos={stagePos} stageScale={stageScale} />
 
       {/* Zoom controls */}
       <div className="pointer-events-auto absolute bottom-4 right-4 z-50">

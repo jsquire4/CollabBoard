@@ -17,6 +17,9 @@ export interface BoardContextValue {
   getChildren: (parentId: string) => BoardObject[]
   getDescendants: (parentId: string) => BoardObject[]
 
+  // Board identity
+  boardId: string
+
   // User & permissions
   userId: string
   userRole: BoardRole

@@ -44,10 +44,11 @@ import { BoardToolProvider, BoardToolContextValue } from '@/contexts/BoardToolCo
 import { ConnectionBanner } from '@/components/ui/ConnectionBanner'
 import { AgentChatPanel } from './AgentChatPanel'
 import { GlobalAgentPanel } from './GlobalAgentPanel'
+import { useFileUpload } from '@/hooks/useFileUpload'
 import { FileLibraryPanel } from './FileLibraryPanel'
 import { FilmstripPanel } from './FilmstripPanel'
 import { CommentThread } from './CommentThread'
-import { ApiObjectPanel } from './ApiObjectPanel'
+import { FileDropZone } from './FileDropZone'
 
 // Konva is client-only — must disable SSR
 const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canvas })), {
@@ -139,7 +140,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const [fileLibraryOpen, setFileLibraryOpen] = useState(false)
   const [filmstripOpen, setFilmstripOpen] = useState(false)
   const [commentThread, setCommentThread] = useState<{ objectId: string; position: { x: number; y: number } } | null>(null)
-  const [apiObjectPanel, setApiObjectPanel] = useState<{ objectId: string; formula?: string | null } | null>(null)
   const [slideThumbnails, setSlideThumbnails] = useState<Record<string, string>>({})
   const [isEditingText, setIsEditingText] = useState(false)
   const [activeTool, setActiveTool] = useState<BoardObjectType | null>(null)
@@ -196,7 +196,14 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
 
   const canEdit = userRole !== 'viewer'
 
-
+  // File drag-and-drop upload
+  const { uploadFile } = useFileUpload({
+    boardId,
+    canEdit,
+    supabase: supabaseRef.current,
+    addObject: addObject as (type: 'file', x: number, y: number, overrides?: Partial<BoardObject>) => BoardObject | null,
+    removeObject: deleteObject,
+  })
 
   // --- Extracted domain hooks ---
   const {
@@ -524,6 +531,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const boardContextValue: BoardContextValue = useMemo(() => ({
     objects, selectedIds, activeGroupId, sortedObjects, remoteSelections,
     getChildren, getDescendants,
+    boardId,
     userId, userRole, canEdit,
     activeTool,
     onlineUsers,
@@ -533,7 +541,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   }), [
     objects, selectedIds, activeGroupId, sortedObjects, remoteSelections,
     getChildren, getDescendants,
-    userId, userRole, canEdit,
+    boardId, userId, userRole, canEdit,
     activeTool,
     onlineUsers,
     isObjectLocked,
@@ -546,12 +554,10 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     setAgentChatPanel({ objectId: id, position: { x: 20, y: 80 } })
   }, [])
 
-  const handleApiObjectClick = useCallback((id: string) => {
+  const handleApiConfigChange = useCallback((id: string, formula: string) => {
     if (!canEdit) return
-    const obj = objects.get(id)
-    if (!obj) return
-    setApiObjectPanel({ objectId: id, formula: obj.formula })
-  }, [objects, canEdit])
+    updateObject(id, { formula })
+  }, [canEdit, updateObject])
 
   const handleCommentOpen = useCallback((id: string) => {
     setCommentThread({ objectId: id, position: { x: window.innerWidth - 320, y: 80 } })
@@ -577,14 +583,26 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
 
   const handleCanvasDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
+    if (!canEdit) return
+
+    // Handle collabboard file library drags
     const data = e.dataTransfer.getData('application/collabboard-file')
-    if (!data || !canEdit) return
-    try {
-      const { fileId, fileName, mimeType } = JSON.parse(data)
-      // Add context_object at a rough canvas position
-      addObject('context_object', 200, 200, { file_id: fileId, file_name: fileName, mime_type: mimeType })
-    } catch { /* ignore malformed drag data */ }
-  }, [addObject, canEdit])
+    if (data) {
+      try {
+        const { fileId, fileName, mimeType } = JSON.parse(data)
+        addObject('context_object', 200, 200, { file_id: fileId, file_name: fileName, mime_type: mimeType })
+      } catch { /* ignore malformed drag data */ }
+      return
+    }
+
+    // Handle native desktop file drops
+    if (e.dataTransfer.files.length > 0) {
+      // Place files at 200,200 as a reasonable default position
+      for (const file of Array.from(e.dataTransfer.files)) {
+        void uploadFile(file, 200, 200)
+      }
+    }
+  }, [addObject, canEdit, uploadFile])
 
   const mutationsValue: BoardMutationsContextValue = useMemo(() => ({
     onDrawShape: handleDrawShape,
@@ -661,7 +679,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     onAddColumnAt: handleAddColumnAt,
     onDeleteColumnAt: handleDeleteColumnAt,
     onAgentClick: handleAgentClick,
-    onApiObjectClick: handleApiObjectClick,
+    onApiConfigChange: handleApiConfigChange,
     onCommentOpen: handleCommentOpen,
   }), [
     handleDrawShape, handleCancelTool,
@@ -688,7 +706,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     handleCellTextUpdate, handleTableDataChange,
     handleAddRow, handleDeleteRow, handleAddColumn, handleDeleteColumn,
     handleAddRowAt, handleDeleteRowAt, handleAddColumnAt, handleDeleteColumnAt,
-    handleAgentClick, handleApiObjectClick, handleCommentOpen,
+    handleAgentClick, handleApiConfigChange, handleCommentOpen,
   ])
 
   // ── Tool context ──
@@ -744,15 +762,25 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           uiDarkMode={uiDarkMode}
           richTextEditor={RICH_TEXT_ENABLED ? richTextEditor : undefined}
         />
-        <div
-          className="relative flex-1 overflow-hidden"
-          onDragOver={e => e.preventDefault()}
-          onDrop={handleCanvasDrop}
+        <FileDropZone
+          onDrop={(files) => {
+            if (!canEdit) return
+            for (const file of Array.from(files)) {
+              void uploadFile(file, 200, 200)
+            }
+          }}
+          disabled={!canEdit}
         >
-          <CanvasErrorBoundary>
-            <Canvas />
-          </CanvasErrorBoundary>
-        </div>
+          <div
+            className="relative flex-1 overflow-hidden"
+            onDragOver={e => e.preventDefault()}
+            onDrop={handleCanvasDrop}
+          >
+            <CanvasErrorBoundary>
+              <Canvas />
+            </CanvasErrorBoundary>
+          </div>
+        </FileDropZone>
       </div>
       {shareOpen && (
         <ShareDialog
@@ -852,20 +880,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           position={commentThread.position}
           isOpen={true}
           onClose={() => setCommentThread(null)}
-        />
-      )}
-      {apiObjectPanel && (
-        <ApiObjectPanel
-          boardId={boardId}
-          objectId={apiObjectPanel.objectId}
-          formula={apiObjectPanel.formula}
-          isOpen={true}
-          onClose={() => setApiObjectPanel(null)}
-          onSave={(formula) => {
-            if (!canEdit) return
-            updateObject(apiObjectPanel.objectId, { formula })
-            setApiObjectPanel(null)
-          }}
         />
       )}
     </div>

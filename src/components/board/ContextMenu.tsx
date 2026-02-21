@@ -84,7 +84,6 @@ export function ContextMenu({
     colors,
     selectedColor,
     onCommentOpen,
-    onApiObjectClick,
   } = useBoardMutations()
 
   const { objects, isObjectLocked, activeGroupId } = useBoardContext()
@@ -93,7 +92,6 @@ export function ContextMenu({
   const isLine = isVectorType(ctxObj?.type ?? '')
   const isTable = ctxObj?.type === 'table'
   const isDataConnector = ctxObj?.type === 'data_connector'
-  const isApiObject = ctxObj?.type === 'api_object'
   const isLocked = isObjectLocked(objectId)
   const currentColor = selectedColor ?? ctxObj?.color
   const currentStrokeWidth = ctxObj?.stroke_width
@@ -476,12 +474,6 @@ export function ContextMenu({
             label="Add comment"
           />
         </>
-      )}
-      {!isLocked && isApiObject && (
-        <MenuItem
-          onClick={() => { onApiObjectClick?.(objectId); onClose() }}
-          label="Configure API"
-        />
       )}
     </div>
   )

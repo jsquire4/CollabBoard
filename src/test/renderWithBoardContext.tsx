@@ -11,6 +11,7 @@ const defaultBoardValue: BoardContextValue = {
   remoteSelections: new Map(),
   getChildren: () => [],
   getDescendants: () => [],
+  boardId: 'test-board',
   userId: 'test-user',
   userRole: 'editor',
   canEdit: true,

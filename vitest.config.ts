@@ -45,7 +45,6 @@ export default defineConfig({
         'src/components/board/FilmstripPanel.tsx',
         'src/components/board/FileLibraryPanel.tsx',
         'src/components/board/CommentThread.tsx',
-        'src/components/board/ApiObjectPanel.tsx',
       ],
     },
   },

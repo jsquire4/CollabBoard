@@ -246,21 +246,8 @@ shapeRegistry.set('checklist', {
   }),
 })
 
-// ── API Object ──────────────────────────────────────────────
-shapeRegistry.set('api_object', {
-  strategy: 'rect',
-  defaultWidth: 180,
-  defaultHeight: 100,
-  defaultColor: '#F0EBE3',
-  defaultOverrides: { text: '' },
-  konvaProps: (obj) => ({ cornerRadius: obj.corner_radius ?? 6 }),
-  getTextInset: (w, h, padding) => ({
-    x: padding,
-    y: padding,
-    width: w - 2 * padding,
-    height: h - 2 * padding,
-  }),
-})
+// api_object is handled by ApiObjectShape (custom component with HTML overlay),
+// not the registry. See renderShape/index.tsx.
 
 // ── Context Object ──────────────────────────────────────────
 shapeRegistry.set('context_object', {

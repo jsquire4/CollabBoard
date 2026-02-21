@@ -128,7 +128,7 @@ export interface BoardMutationsContextValue {
   // Vertex edit
   vertexEditId: string | null
   onAgentClick?: (id: string) => void
-  onApiObjectClick?: (id: string) => void
+  onApiConfigChange?: (id: string, formula: string) => void
   onCommentOpen?: (id: string) => void
 }
 

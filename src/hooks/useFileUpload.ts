@@ -7,8 +7,10 @@ import { BoardObject } from '@/types/board'
 import { toast } from 'sonner'
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
+// Must match server allowlist in /api/files/upload/route.ts.
+// SVG excluded: browsers execute embedded scripts in SVG served from storage URLs (XSS risk).
 const ALLOWED_MIMES = new Set([
-  'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml',
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp',
   'application/pdf',
   'text/plain', 'text/markdown', 'text/csv',
 ])
@@ -24,7 +26,7 @@ interface UseFileUploadDeps {
 export function useFileUpload({ boardId, canEdit, supabase, addObject, removeObject }: UseFileUploadDeps) {
   const [isUploading, setIsUploading] = useState(false)
 
-  const uploadFile = useCallback(async (file: File) => {
+  const uploadFile = useCallback(async (file: File, x?: number, y?: number) => {
     if (!canEdit) {
       toast.error('You do not have permission to upload files')
       return null
@@ -60,14 +62,35 @@ export function useFileUpload({ boardId, canEdit, supabase, addObject, removeObj
         return null
       }
 
+      // For images, read native dimensions
+      let imgWidth: number | undefined
+      let imgHeight: number | undefined
+      if (file.type.startsWith('image/')) {
+        let blobUrl: string | undefined
+        try {
+          blobUrl = URL.createObjectURL(file)
+          const dims = await new Promise<{ w: number; h: number }>((resolve, reject) => {
+            const img = new Image()
+            img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight })
+            img.onerror = reject
+            img.src = blobUrl!
+          })
+          imgWidth = dims.w
+          imgHeight = dims.h
+        } catch { /* fall through to defaults */ } finally {
+          if (blobUrl) URL.revokeObjectURL(blobUrl)
+        }
+      }
+
       // Create a file-type board object
-      const obj = addObject('file' as 'file', 0, 0, {
+      const obj = addObject('file' as 'file', x ?? 0, y ?? 0, {
         id: objectId,
         storage_path: storagePath,
         file_name: file.name,
         mime_type: file.type,
         file_size: file.size,
         text: file.name,
+        ...(imgWidth && imgHeight ? { width: imgWidth, height: imgHeight } : {}),
       })
 
       toast.success(`File uploaded: ${file.name}`)

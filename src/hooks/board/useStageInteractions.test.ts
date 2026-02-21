@@ -15,6 +15,7 @@ function makeContextValue(overrides?: Partial<BoardContextValue>): BoardContextV
     remoteSelections: new Map(),
     getChildren: () => [],
     getDescendants: () => [],
+    boardId: 'board-1',
     userId: 'user-1',
     userRole: 'editor',
     canEdit: true,

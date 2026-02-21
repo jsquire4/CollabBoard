@@ -8,6 +8,8 @@ import { VectorShape } from '../VectorShape'
 import { TableShape } from '../TableShape'
 import { AgentShape } from '../AgentShape'
 import { ContextObjectShape } from '../ContextObjectShape'
+import { ApiObjectShape } from '../ApiObjectShape'
+import { FileShape } from '../FileShape'
 import { shapeRegistry } from '../shapeRegistry'
 import { ShapeCallbacks, ShapeState } from './types'
 
@@ -196,8 +198,41 @@ export function renderShape(
           dragBoundFunc={shapeDragBoundFunc}
         />
       )
-    case 'group':
+    case 'api_object':
+      return (
+        <ApiObjectShape
+          key={obj.id}
+          object={obj}
+          onDragEnd={handleShapeDragEnd}
+          onDragMove={handleShapeDragMove}
+          onDragStart={handleShapeDragStart}
+          isSelected={isSelected}
+          onSelect={handleShapeSelect}
+          shapeRef={handleShapeRef}
+          onTransformEnd={onTransformEnd}
+          onContextMenu={handleContextMenu}
+          editable={shapeEditable}
+          dragBoundFunc={shapeDragBoundFunc}
+        />
+      )
     case 'file':
+      return (
+        <FileShape
+          key={obj.id}
+          object={obj}
+          onDragEnd={handleShapeDragEnd}
+          onDragMove={handleShapeDragMove}
+          onDragStart={handleShapeDragStart}
+          isSelected={isSelected}
+          onSelect={handleShapeSelect}
+          shapeRef={handleShapeRef}
+          onTransformEnd={onTransformEnd}
+          onContextMenu={handleContextMenu}
+          editable={shapeEditable}
+          dragBoundFunc={shapeDragBoundFunc}
+        />
+      )
+    case 'group':
       return null
     default: {
       const _exhaustive: never = obj.type as never

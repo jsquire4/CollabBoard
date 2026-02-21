@@ -150,10 +150,8 @@ describe('shapeRegistry', () => {
     expect(def.getTextInset(200, 160, 8)).toEqual({ x: 8, y: 8, width: 184, height: 144 })
   })
 
-  it('api_object has rect strategy', () => {
-    const def = shapeRegistry.get('api_object')!
-    expect(def.strategy).toBe('rect')
-    expect(def.defaultColor).toBe('#F0EBE3')
+  it('api_object is not in registry (custom component)', () => {
+    expect(shapeRegistry.has('api_object')).toBe(false)
   })
 
   it('context_object has rect strategy', () => {

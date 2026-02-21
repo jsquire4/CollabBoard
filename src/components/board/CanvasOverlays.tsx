@@ -1,8 +1,9 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { BoardObject } from '@/types/board'
 import { ContextMenu } from './ContextMenu'
 import { FloatingPropertyPanel } from './FloatingPropertyPanel'
 import { ZoomControls } from './ZoomControls'
+import { ApiObjectOverlay } from './ApiObjectOverlay'
 import { getTextCharLimit, STICKY_TITLE_CHAR_LIMIT } from '@/hooks/board/useTextEditing'
 import { RICH_TEXT_ENABLED } from '@/lib/richText'
 import type { ContextMenuState } from '@/hooks/board/useContextMenu'
@@ -37,6 +38,10 @@ interface CanvasOverlaysProps {
   setContextMenu: (m: ContextMenuState | null) => void
   recentColors?: string[]
   onCellKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
+
+  // API object overlays
+  boardId?: string
+  onApiConfigChange?: (id: string, formula: string) => void
 }
 
 export function CanvasOverlays({
@@ -46,11 +51,38 @@ export function CanvasOverlays({
   zoomIn, zoomOut, resetZoom,
   contextMenu, setContextMenu, recentColors,
   onCellKeyDown,
+  boardId, onApiConfigChange,
 }: CanvasOverlaysProps) {
   const { handleConnectorHintMouseDown } = useDrawInteraction({ connectorHint, connectorDrawingRefs })
 
+  const apiObjects = useMemo(() => {
+    if (!boardId || !onApiConfigChange) return []
+    return [...objects.values()].filter(o => o.type === 'api_object' && !o.deleted_at)
+  }, [objects, boardId, onApiConfigChange])
+
   return (
     <>
+      {/* API object HTML overlays — single scaled container for all */}
+      {apiObjects.length > 0 && (
+        <div
+          className="absolute top-0 left-0"
+          style={{
+            transform: `translate(${stagePos.x}px, ${stagePos.y}px) scale(${stageScale})`,
+            transformOrigin: '0 0',
+            pointerEvents: 'none',
+            zIndex: 1,
+          }}
+        >
+          {apiObjects.map(obj => (
+            <ApiObjectOverlay
+              key={`api-overlay-${obj.id}`}
+              object={obj}
+              boardId={boardId!}
+              onConfigChange={onApiConfigChange!}
+            />
+          ))}
+        </div>
+      )}
       {/* Textarea overlay for editing text (skip for rich text body editing — handled by TipTapEditorOverlay) */}
       {editingId && !(RICH_TEXT_ENABLED && editingField !== 'title') && (
         <textarea

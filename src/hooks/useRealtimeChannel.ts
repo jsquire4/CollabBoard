@@ -25,7 +25,15 @@ export function useRealtimeChannel(boardId: string): RealtimeChannel | null {
       if ((ch as unknown as { state: string }).state === 'joined') {
         ch.untrack()
       }
-      supabase.removeChannel(ch)
+      // Synchronously remove the channel from the socket's internal channel list
+      // BEFORE the async unsubscribe completes. This prevents Supabase's
+      // RealtimeClient.channel() topic-based deduplication from returning this
+      // stale (leaving-state) channel when the effect re-runs (e.g. React Strict
+      // Mode double-mount). Without this, subscribe() silently no-ops on the
+      // stale channel because it only works when state === 'closed'.
+      const socket = (ch as unknown as { socket: { _remove: (c: RealtimeChannel) => void } }).socket
+      socket._remove(ch)
+      ch.unsubscribe()
       setChannel(null)
     }
   }, [boardId])

@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
       storage_path: storagePath,
       owner_type: 'board',
       owner_id: boardId,
-      uploaded_by: user.id,
+      created_by: user.id,
     })
     .select()
     .single()

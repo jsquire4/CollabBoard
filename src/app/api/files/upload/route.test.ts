@@ -112,7 +112,7 @@ const MOCK_FILE_RECORD = {
   storage_path: `files/${TEST_BOARD_ID}/${TEST_FILE_ID}.png`,
   owner_type: 'board',
   owner_id: TEST_BOARD_ID,
-  uploaded_by: TEST_USER_ID,
+  created_by: TEST_USER_ID,
 }
 
 // ── Test suite ────────────────────────────────────────────────────────────────

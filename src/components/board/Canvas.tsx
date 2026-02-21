@@ -125,12 +125,13 @@ export function Canvas() {
     onAddRow, onDeleteRow, onAddColumn, onDeleteColumn,
     onAddRowAt, onDeleteRowAt, onAddColumnAt, onDeleteColumnAt,
     onAgentClick,
+    onApiConfigChange,
   } = useBoardMutations()
   // ── Read shared state from context ──────────────────────────────
   const {
     objects, sortedObjects, selectedIds, activeGroupId, activeTool,
     getDescendants,
-    canEdit,
+    boardId, canEdit,
     onlineUsers, remoteSelections, isObjectLocked,
     gridSize, gridSubdivisions, gridVisible,
     snapToGrid: snapToGridEnabled,
@@ -205,7 +206,7 @@ export function Canvas() {
         for (const d of getDescendants(id)) {
           if (d.type !== 'group' && !isVectorType(d.type)) ids.add(d.id)
         }
-      } else if (obj && !isVectorType(obj.type) && obj.type !== 'agent' && obj.type !== 'context_object' && obj.type !== 'agent_output') {
+      } else if (obj && !isVectorType(obj.type) && obj.type !== 'agent' && obj.type !== 'context_object' && obj.type !== 'agent_output' && obj.type !== 'api_object') {
         ids.add(id)
       }
     }
@@ -773,6 +774,8 @@ export function Canvas() {
         setContextMenu={setContextMenu}
         recentColors={recentColors}
         onCellKeyDown={handleCellKeyDown}
+        boardId={boardId}
+        onApiConfigChange={onApiConfigChange}
       />
 
     </div>

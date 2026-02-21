@@ -22,6 +22,7 @@ const mockChannel = {
   unsubscribe: vi.fn(),
   presenceState: vi.fn(() => ({})),
   untrack: vi.fn(),
+  socket: { _remove: vi.fn() },
 }
 
 function mockFromChain() {

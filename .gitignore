@@ -2,8 +2,7 @@
 
 # dependencies
 /node_modules
-/agent/node_modules
-/agent/dist
+/agent
 /.pnp
 .pnp.*
 .yarn/*
@@ -37,6 +36,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -54,3 +54,4 @@ CLAUDE.md
 /docs
 /research
 AI_Dev_log.md
+PLAN.md

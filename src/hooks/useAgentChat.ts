@@ -13,13 +13,22 @@ export interface ChatMessage {
   isStreaming?: boolean
 }
 
+/**
+ * Chat mode:
+ * - agent: scoped to a specific agent object (agentObjectId required)
+ * - global: scoped to the whole board (agent_object_id IS NULL)
+ */
+export type AgentChatMode =
+  | { type: 'agent'; agentObjectId: string }
+  | { type: 'global' }
+
 interface UseAgentChatOptions {
   boardId: string
-  agentObjectId: string
+  mode: AgentChatMode
   enabled?: boolean
 }
 
-export function useAgentChat({ boardId, agentObjectId, enabled = true }: UseAgentChatOptions) {
+export function useAgentChat({ boardId, mode, enabled = true }: UseAgentChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -131,11 +140,19 @@ export function useAgentChat({ boardId, agentObjectId, enabled = true }: UseAgen
     const abort = new AbortController()
     abortRef.current = abort
 
+    const url = mode.type === 'global'
+      ? `/api/agent/${boardId}/global`
+      : `/api/agent/${boardId}`
+
+    const requestBody = mode.type === 'global'
+      ? { message }
+      : { message, agentObjectId: mode.agentObjectId }
+
     try {
-      const res = await fetch(`/api/agent/${boardId}`, {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, agentObjectId }),
+        body: JSON.stringify(requestBody),
         signal: abort.signal,
       })
 
@@ -158,24 +175,31 @@ export function useAgentChat({ boardId, agentObjectId, enabled = true }: UseAgen
       setIsLoading(false)
       abortRef.current = null
     }
-  }, [boardId, agentObjectId, isLoading, consumeSSE])
+  }, [boardId, mode, isLoading, consumeSSE])
 
   // ── Load history + greet on mount ─────────────────────────
 
   useEffect(() => {
-    if (!enabled || !agentObjectId || loadedRef.current) return
+    const agentObjectId = mode.type === 'agent' ? mode.agentObjectId : null
+    if (!enabled || (mode.type === 'agent' && !agentObjectId) || loadedRef.current) return
     loadedRef.current = true
 
     const abortController = new AbortController()
 
     const init = async () => {
-      // Load persisted messages scoped to this agent
       const supabase = createClient()
-      const { data } = await supabase
+
+      // Build history query based on mode (filter must precede order+limit)
+      const baseQuery = supabase
         .from('board_messages')
         .select('id, role, content, tool_calls, user_display_name, created_at')
         .eq('board_id', boardId)
-        .eq('agent_object_id', agentObjectId)
+
+      const filteredQuery = mode.type === 'agent' && agentObjectId
+        ? baseQuery.eq('agent_object_id', agentObjectId)
+        : baseQuery.is('agent_object_id', null)
+
+      const { data } = await filteredQuery
         .order('created_at', { ascending: true })
         .limit(200)
 
@@ -191,47 +215,47 @@ export function useAgentChat({ boardId, agentObjectId, enabled = true }: UseAgen
         }))
         messageIdRef.current = loaded.length
         setMessages(loaded)
-        greetedRef.current = true
+        if (mode.type === 'agent') greetedRef.current = true
         return
       }
 
-      // No history — show greeting
-      if (greetedRef.current) return
-      greetedRef.current = true
+      // Per-agent mode: show greeting if no history
+      if (mode.type === 'agent' && !greetedRef.current) {
+        greetedRef.current = true
 
-      const assistantId = nextId()
-      const assistantMsg: ChatMessage = {
-        id: assistantId,
-        role: 'assistant',
-        content: '',
-        isStreaming: true,
-      }
-      setMessages([assistantMsg])
+        const assistantId = nextId()
+        setMessages([{
+          id: assistantId,
+          role: 'assistant',
+          content: '',
+          isStreaming: true,
+        }])
 
-      try {
-        const res = await fetch(`/api/agent/${boardId}/greet`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ isNewBoard: false }),
-          signal: abortController.signal,
-        })
+        try {
+          const res = await fetch(`/api/agent/${boardId}/greet`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isNewBoard: false }),
+            signal: abortController.signal,
+          })
 
-        if (res.ok) {
-          await consumeSSE(res, assistantId)
-        } else {
+          if (res.ok) {
+            await consumeSSE(res, assistantId)
+          } else {
+            setMessages(prev => prev.map(m =>
+              m.id === assistantId
+                ? { ...m, content: 'Welcome! How can I help you with your board?', isStreaming: false }
+                : m,
+            ))
+          }
+        } catch (err) {
+          if ((err as Error).name === 'AbortError') return
           setMessages(prev => prev.map(m =>
             m.id === assistantId
               ? { ...m, content: 'Welcome! How can I help you with your board?', isStreaming: false }
               : m,
           ))
         }
-      } catch (err) {
-        if ((err as Error).name === 'AbortError') return
-        setMessages(prev => prev.map(m =>
-          m.id === assistantId
-            ? { ...m, content: 'Welcome! How can I help you with your board?', isStreaming: false }
-            : m,
-        ))
       }
     }
 
@@ -243,7 +267,7 @@ export function useAgentChat({ boardId, agentObjectId, enabled = true }: UseAgen
       loadedRef.current = false
       greetedRef.current = false
     }
-  }, [boardId, agentObjectId, enabled, consumeSSE])
+  }, [boardId, mode, enabled, consumeSSE])
 
   // ── Cancel ────────────────────────────────────────────────
 

@@ -46,6 +46,9 @@ import { ChatPanel } from './ChatPanel'
 import { AgentChatPanel } from './AgentChatPanel'
 import { GlobalAgentPanel } from './GlobalAgentPanel'
 import { FileLibraryPanel } from './FileLibraryPanel'
+import { FilmstripPanel } from './FilmstripPanel'
+import { CommentThread } from './CommentThread'
+import { ApiObjectPanel } from './ApiObjectPanel'
 
 // Konva is client-only — must disable SSR
 const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canvas })), {
@@ -136,6 +139,10 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const [agentChatPanel, setAgentChatPanel] = useState<{ objectId: string; position: { x: number; y: number } } | null>(null)
   const [globalAgentOpen, setGlobalAgentOpen] = useState(false)
   const [fileLibraryOpen, setFileLibraryOpen] = useState(false)
+  const [filmstripOpen, setFilmstripOpen] = useState(false)
+  const [commentThread, setCommentThread] = useState<{ objectId: string; position: { x: number; y: number } } | null>(null)
+  const [apiObjectPanel, setApiObjectPanel] = useState<{ objectId: string; formula?: string | null } | null>(null)
+  const [slideThumbnails, setSlideThumbnails] = useState<Record<string, string>>({})
   const [isEditingText, setIsEditingText] = useState(false)
   const [activeTool, setActiveTool] = useState<BoardObjectType | null>(null)
   const [activePreset, setActivePreset] = useState<ShapePreset | null>(null)
@@ -523,6 +530,13 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     }
   }, [selectedIds, objects])
 
+  // Slide frames — sorted by slide_index, used by FilmstripPanel
+  const slideFrames = useMemo(() =>
+    [...objects.values()]
+      .filter(o => o.type === 'frame' && o.is_slide)
+      .sort((a, b) => (a.slide_index ?? 0) - (b.slide_index ?? 0))
+  , [objects])
+
   // ── Board context (read-only shared state for child components) ──
   const boardContextValue: BoardContextValue = useMemo(() => ({
     objects, selectedIds, activeGroupId, sortedObjects, remoteSelections,
@@ -546,8 +560,35 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
 
   // ── Mutations context (all callbacks for Canvas + child components) ──
   const handleAgentClick = useCallback((id: string) => {
-    // TODO Phase 2+: convert canvas world coords to screen coords using stageRef context
     setAgentChatPanel({ objectId: id, position: { x: 20, y: 80 } })
+  }, [])
+
+  const handleApiObjectClick = useCallback((id: string) => {
+    const obj = objects.get(id)
+    if (!obj) return
+    setApiObjectPanel({ objectId: id, formula: obj.formula })
+  }, [objects])
+
+  const handleCommentOpen = useCallback((id: string) => {
+    setCommentThread({ objectId: id, position: { x: window.innerWidth - 320, y: 80 } })
+  }, [])
+
+  const handleSlideReorder = useCallback((newOrder: string[]) => {
+    if (!canEdit) return
+    newOrder.forEach((frameId, index) => {
+      updateObject(frameId, { slide_index: index })
+    })
+  }, [canEdit, updateObject])
+
+  const handleSlideSelect = useCallback((frameId: string) => {
+    selectObject(frameId)
+  }, [selectObject])
+
+  const handleFilmstripOpen = useCallback(() => {
+    setFilmstripOpen(true)
+    // Thumbnails would require access to the Konva stage — set empty for now,
+    // the filmstrip will show numbered fallbacks.
+    setSlideThumbnails({})
   }, [])
 
   const handleCanvasDrop = useCallback((e: React.DragEvent) => {
@@ -636,6 +677,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     onAddColumnAt: handleAddColumnAt,
     onDeleteColumnAt: handleDeleteColumnAt,
     onAgentClick: handleAgentClick,
+    onApiObjectClick: handleApiObjectClick,
+    onCommentOpen: handleCommentOpen,
   }), [
     handleDrawShape, handleCancelTool,
     selectObject, selectObjects, clearSelection, enterGroup, exitGroup,
@@ -661,7 +704,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     handleCellTextUpdate, handleTableDataChange,
     handleAddRow, handleDeleteRow, handleAddColumn, handleDeleteColumn,
     handleAddRowAt, handleDeleteRowAt, handleAddColumnAt, handleDeleteColumnAt,
-    handleAgentClick,
+    handleAgentClick, handleApiObjectClick, handleCommentOpen,
   ])
 
   // ── Tool context ──
@@ -774,6 +817,17 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       </button>
+      {/* Slide deck / Filmstrip toggle button */}
+      <button
+        onClick={handleFilmstripOpen}
+        className="fixed bottom-52 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700"
+        aria-label="Toggle slide deck"
+        title="Slide Deck"
+      >
+        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+        </svg>
+      </button>
       <ChatPanel boardId={boardId} isOpen={chatOpen} onClose={() => setChatOpen(false)} />
       <AgentChatPanel
         agentObjectId={agentChatPanel?.objectId ?? ''}
@@ -794,6 +848,40 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         isOpen={fileLibraryOpen}
         onClose={() => setFileLibraryOpen(false)}
       />
+      <FilmstripPanel
+        boardId={boardId}
+        isOpen={filmstripOpen}
+        onClose={() => setFilmstripOpen(false)}
+        frames={slideFrames}
+        currentFrameId={selectedIds.size === 1 ? (selectedIds.values().next().value ?? null) : null}
+        onSelectSlide={handleSlideSelect}
+        onReorder={handleSlideReorder}
+        onExport={() => { /* TODO: export PDF */ }}
+        thumbnails={slideThumbnails}
+      />
+      {commentThread && (
+        <CommentThread
+          boardId={boardId}
+          objectId={commentThread.objectId}
+          position={commentThread.position}
+          isOpen={true}
+          onClose={() => setCommentThread(null)}
+        />
+      )}
+      {apiObjectPanel && (
+        <ApiObjectPanel
+          boardId={boardId}
+          objectId={apiObjectPanel.objectId}
+          formula={apiObjectPanel.formula}
+          isOpen={true}
+          onClose={() => setApiObjectPanel(null)}
+          onSave={(formula) => {
+            if (!canEdit) return
+            updateObject(apiObjectPanel.objectId, { formula })
+            setApiObjectPanel(null)
+          }}
+        />
+      )}
     </div>
     </BoardToolProvider>
     </BoardMutationsProvider>

@@ -9,190 +9,43 @@
 import { z } from 'zod'
 import { v4 as uuidv4 } from 'uuid'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { tickHLC, createHLC, type HLC } from '@/lib/crdt/hlc'
-import { stampFields, mergeClocks, type FieldClocks } from '@/lib/crdt/merge'
+import { createHLC } from '@/lib/crdt/hlc'
+import { stampFields } from '@/lib/crdt/merge'
 import { getShapeDefaults } from '@/lib/agent/defaults'
 import { createDefaultTableData, serializeTableData } from '@/lib/table/tableUtils'
 import { plainTextToTipTap } from '@/lib/richText'
 import { loadBoardState, getMaxZIndex, broadcastChanges, type BoardState } from '@/lib/agent/boardState'
 import type { BoardObject } from '@/types/board'
 import type OpenAI from 'openai'
+import {
+  advanceClock,
+  insertObject,
+  updateFields,
+  MAX_FILE_CHARS,
+  SIGNED_URL_TTL,
+} from './helpers'
+import {
+  createStickyNoteSchema,
+  createShapeSchema,
+  createFrameSchema,
+  createTableSchema,
+  createConnectorSchema,
+  moveObjectSchema,
+  resizeObjectSchema,
+  updateTextSchema,
+  changeColorSchema,
+  deleteObjectSchema,
+  describeImageSchema,
+  readFileContentSchema,
+  getFrameObjectsSchema,
+  emptySchema,
+  TOOL_SCHEMAS,
+} from './schemas'
 
-// ── Shared helpers ───────────────────────────────────────────
+export type { ToolContext } from './types'
+import type { ToolContext } from './types'
 
-export interface ToolContext {
-  boardId: string
-  userId: string
-  hlc: HLC
-  state: BoardState
-}
-
-function advanceClock(ctx: ToolContext): HLC {
-  ctx.hlc = tickHLC(ctx.hlc)
-  return ctx.hlc
-}
-
-function buildInsertRow(
-  obj: Record<string, unknown>,
-  clocks: FieldClocks,
-): Record<string, unknown> {
-  const row: Record<string, unknown> = { ...obj, field_clocks: clocks }
-  if (typeof row.table_data === 'string') {
-    try { row.table_data = JSON.parse(row.table_data) } catch { /* leave as-is */ }
-  }
-  if (typeof row.rich_text === 'string') {
-    try { row.rich_text = JSON.parse(row.rich_text) } catch { /* leave as-is */ }
-  }
-  return row
-}
-
-async function insertObject(
-  obj: Record<string, unknown>,
-  clocks: FieldClocks,
-  ctx: ToolContext,
-): Promise<{ success: boolean; error?: string }> {
-  const admin = createAdminClient()
-  const row = buildInsertRow(obj, clocks)
-  const { error } = await admin.from('board_objects').insert(row)
-  if (error) return { success: false, error: error.message }
-
-  // Update local state so subsequent tools in same request see the new object
-  ctx.state.objects.set(obj.id as string, obj as unknown as BoardObject)
-  ctx.state.fieldClocks.set(obj.id as string, clocks)
-
-  return { success: true }
-}
-
-async function updateFields(
-  id: string,
-  boardId: string,
-  updates: Record<string, unknown>,
-  clocks: FieldClocks,
-  ctx: ToolContext,
-): Promise<{ success: boolean; error?: string }> {
-  const existing = ctx.state.objects.get(id)
-  if (!existing) return { success: false, error: `Object ${id} not found` }
-  if (existing.deleted_at) return { success: false, error: `Object ${id} has been deleted` }
-
-  // Cross-board guard
-  if (existing.board_id !== boardId) return { success: false, error: 'Object not found' }
-
-  const existingClocks = ctx.state.fieldClocks.get(id) ?? {}
-  const mergedClocks = mergeClocks(existingClocks, clocks)
-
-  const row: Record<string, unknown> = {
-    ...updates,
-    field_clocks: mergedClocks,
-    updated_at: new Date().toISOString(),
-  }
-  if (typeof row.table_data === 'string') {
-    try { row.table_data = JSON.parse(row.table_data as string) } catch { /* leave as-is */ }
-  }
-  if (typeof row.rich_text === 'string') {
-    try { row.rich_text = JSON.parse(row.rich_text as string) } catch { /* leave as-is */ }
-  }
-
-  const admin = createAdminClient()
-  const { error } = await admin
-    .from('board_objects')
-    .update(row)
-    .eq('id', id)
-    .is('deleted_at', null)
-  if (error) return { success: false, error: error.message }
-
-  ctx.state.objects.set(id, { ...existing, ...updates, updated_at: new Date().toISOString() } as BoardObject)
-  ctx.state.fieldClocks.set(id, mergedClocks)
-
-  return { success: true }
-}
-
-// ── Zod schemas ──────────────────────────────────────────────
-
-const createStickyNoteSchema = z.object({
-  text: z.string().default(''),
-  color: z.string().optional().describe('Hex color, e.g. #FFEB3B'),
-  x: z.number().optional(),
-  y: z.number().optional(),
-  title: z.string().optional(),
-})
-
-const createShapeSchema = z.object({
-  type: z.enum(['rectangle', 'circle', 'triangle', 'chevron', 'parallelogram', 'ngon']),
-  x: z.number().optional(),
-  y: z.number().optional(),
-  width: z.number().optional(),
-  height: z.number().optional(),
-  color: z.string().optional(),
-  text: z.string().optional(),
-  sides: z.number().optional(),
-})
-
-const createFrameSchema = z.object({
-  title: z.string().optional().default('Frame'),
-  x: z.number().optional(),
-  y: z.number().optional(),
-  width: z.number().optional(),
-  height: z.number().optional(),
-  color: z.string().optional(),
-})
-
-const createTableSchema = z.object({
-  columns: z.number().min(1).max(10).default(3),
-  rows: z.number().min(1).max(20).default(3),
-  x: z.number().optional(),
-  y: z.number().optional(),
-  title: z.string().optional(),
-})
-
-const createConnectorSchema = z.object({
-  type: z.enum(['line', 'arrow']).default('arrow'),
-  startObjectId: z.string(),
-  endObjectId: z.string(),
-  startAnchor: z.string().optional().default('right'),
-  endAnchor: z.string().optional().default('left'),
-  color: z.string().optional(),
-})
-
-const moveObjectSchema = z.object({
-  id: z.string(),
-  x: z.number(),
-  y: z.number(),
-})
-
-const resizeObjectSchema = z.object({
-  id: z.string(),
-  width: z.number(),
-  height: z.number(),
-})
-
-const updateTextSchema = z.object({
-  id: z.string(),
-  text: z.string().optional(),
-  title: z.string().optional(),
-})
-
-const changeColorSchema = z.object({
-  id: z.string(),
-  color: z.string(),
-})
-
-const deleteObjectSchema = z.object({
-  id: z.string(),
-})
-
-const describeImageSchema = z.object({
-  objectId: z.string(),
-})
-
-const readFileContentSchema = z.object({
-  objectId: z.string(),
-})
-
-const getFrameObjectsSchema = z.object({
-  frameId: z.string(),
-})
-
-// ── OpenAI tool definition helpers ──────────────────────────
+// ── Tool definition helper ────────────────────────────────────────────────────
 
 function makeTool(name: string, description: string, parameters: Record<string, unknown>): OpenAI.Chat.ChatCompletionTool {
   return {
@@ -201,111 +54,7 @@ function makeTool(name: string, description: string, parameters: Record<string, 
   }
 }
 
-// Manually defined JSON schemas (Zod 4 dropped instanceof-based introspection)
-const TOOL_SCHEMAS: Record<string, Record<string, unknown>> = {
-  createStickyNote: {
-    type: 'object',
-    properties: {
-      text: { type: 'string' },
-      color: { type: 'string', description: 'Hex color, e.g. #FFEB3B' },
-      x: { type: 'number' },
-      y: { type: 'number' },
-      title: { type: 'string' },
-    },
-  },
-  createShape: {
-    type: 'object',
-    required: ['type'],
-    properties: {
-      type: { type: 'string', enum: ['rectangle', 'circle', 'triangle', 'chevron', 'parallelogram', 'ngon'] },
-      x: { type: 'number' }, y: { type: 'number' },
-      width: { type: 'number' }, height: { type: 'number' },
-      color: { type: 'string' }, text: { type: 'string' },
-      sides: { type: 'number', description: 'Number of sides for ngon type' },
-    },
-  },
-  createFrame: {
-    type: 'object',
-    properties: {
-      title: { type: 'string' },
-      x: { type: 'number' }, y: { type: 'number' },
-      width: { type: 'number' }, height: { type: 'number' },
-      color: { type: 'string' },
-    },
-  },
-  createTable: {
-    type: 'object',
-    properties: {
-      columns: { type: 'number' }, rows: { type: 'number' },
-      x: { type: 'number' }, y: { type: 'number' },
-      title: { type: 'string' },
-    },
-  },
-  createConnector: {
-    type: 'object',
-    required: ['startObjectId', 'endObjectId'],
-    properties: {
-      type: { type: 'string', enum: ['line', 'arrow'] },
-      startObjectId: { type: 'string' }, endObjectId: { type: 'string' },
-      startAnchor: { type: 'string' }, endAnchor: { type: 'string' },
-      color: { type: 'string' },
-    },
-  },
-  moveObject: {
-    type: 'object',
-    required: ['id', 'x', 'y'],
-    properties: {
-      id: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' },
-    },
-  },
-  resizeObject: {
-    type: 'object',
-    required: ['id', 'width', 'height'],
-    properties: {
-      id: { type: 'string' }, width: { type: 'number' }, height: { type: 'number' },
-    },
-  },
-  updateText: {
-    type: 'object',
-    required: ['id'],
-    properties: {
-      id: { type: 'string' }, text: { type: 'string' }, title: { type: 'string' },
-    },
-  },
-  changeColor: {
-    type: 'object',
-    required: ['id', 'color'],
-    properties: {
-      id: { type: 'string' }, color: { type: 'string' },
-    },
-  },
-  deleteObject: {
-    type: 'object',
-    required: ['id'],
-    properties: { id: { type: 'string' } },
-  },
-  describeImage: {
-    type: 'object',
-    required: ['objectId'],
-    properties: { objectId: { type: 'string' } },
-  },
-  readFileContent: {
-    type: 'object',
-    required: ['objectId'],
-    properties: { objectId: { type: 'string' } },
-  },
-  getFrameObjects: {
-    type: 'object',
-    required: ['frameId'],
-    properties: { frameId: { type: 'string' } },
-  },
-  getBoardState: {
-    type: 'object',
-    properties: {},
-  },
-}
-
-// ── Tool factory ─────────────────────────────────────────────
+// ── Tool factory ──────────────────────────────────────────────────────────────
 
 export function createTools(ctx: ToolContext): {
   definitions: OpenAI.Chat.ChatCompletionTool[]
@@ -625,7 +374,7 @@ export function createTools(ctx: ToolContext): {
 
   register(
     'changeColor',
-    'Change the color of an object on the board.',
+    'Change the color of an object on the board. Color must be a valid hex value, e.g. #FF5733.',
     changeColorSchema,
     async ({ id, color }: z.infer<typeof changeColorSchema>) => {
       const clock = advanceClock(ctx)
@@ -639,7 +388,6 @@ export function createTools(ctx: ToolContext): {
 
   // ── getBoardState ────────────────────────────────────────
 
-  const emptySchema = z.object({})
   register(
     'getBoardState',
     'Get the current state of all objects on the board. Use this to understand what is on the board before making changes.',
@@ -696,7 +444,7 @@ export function createTools(ctx: ToolContext): {
       const { data: signedUrl, error: urlError } = await admin
         .storage
         .from('board-assets')
-        .createSignedUrl(obj.storage_path, 60)
+        .createSignedUrl(obj.storage_path, SIGNED_URL_TTL)
 
       if (urlError || !signedUrl) {
         return { error: `Failed to create signed URL: ${urlError?.message}` }
@@ -706,7 +454,7 @@ export function createTools(ctx: ToolContext): {
         imageUrl: signedUrl.signedUrl,
         fileName: obj.file_name,
         mimeType: obj.mime_type,
-        instruction: 'Use this signed URL to view and describe the image. The URL is temporary (60s).',
+        instruction: `Use this signed URL to view and describe the image. The URL is temporary (${SIGNED_URL_TTL}s).`,
       }
     },
   )
@@ -745,13 +493,15 @@ export function createTools(ctx: ToolContext): {
       }
 
       const text = await data.text()
-      const truncated = text.length > 200000 ? text.slice(0, 200000) + '\n\n[Content truncated...]' : text
+      const truncated = text.length > MAX_FILE_CHARS
+        ? text.slice(0, MAX_FILE_CHARS) + '\n\n[Content truncated...]'
+        : text
 
       return {
         fileName: obj.file_name,
         mimeType: obj.mime_type,
         content: truncated,
-        truncated: text.length > 200000,
+        truncated: text.length > MAX_FILE_CHARS,
       }
     },
   )
@@ -819,7 +569,8 @@ export function createTools(ctx: ToolContext): {
   return { definitions, executors }
 }
 
-// Helper: create a fresh ToolContext with a new HLC
+// ── Helper: create a fresh ToolContext with a new HLC ─────────────────────────
+
 export function createToolContext(boardId: string, userId: string, state: BoardState): ToolContext {
   return {
     boardId,

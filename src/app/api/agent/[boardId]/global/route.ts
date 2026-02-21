@@ -8,22 +8,19 @@
 
 import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
-type FunctionToolCall = OpenAI.Chat.ChatCompletionMessageFunctionToolCall
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadBoardState } from '@/lib/agent/boardState'
 import { createTools, createToolContext } from '@/lib/agent/tools'
 import { getUserDisplayName } from '@/lib/userUtils'
+import { runAgentLoop, SSE_HEADERS } from '@/lib/agent/sse'
+import { capHistory } from '@/lib/agent/summarize'
 
 export const maxDuration = 60
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-function sseEvent(data: Record<string, unknown>): string {
-  return `data: ${JSON.stringify(data)}\n\n`
-}
 
 export async function POST(
   request: NextRequest,
@@ -119,133 +116,46 @@ export async function POST(
 
 You can read and modify the board using the available tools. Be helpful to all team members and coordinate work effectively.`
 
-  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+  const toolCtx = createToolContext(boardId, user.id, boardState)
+  const { definitions: toolDefinitions, executors } = createTools(toolCtx)
+
+  const rawMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
     ...history.map(h => ({ role: h.role as 'user' | 'assistant', content: h.content })),
     { role: 'user', content: prefixedMessage },
   ]
 
-  const toolCtx = createToolContext(boardId, user.id, boardState)
-  const { definitions: toolDefinitions, executors } = createTools(toolCtx)
+  // Apply token cap before sending to OpenAI
+  const messages = await capHistory(rawMessages, openai)
 
-  const encoder = new TextEncoder()
-  let fullAssistantContent = ''
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      const enqueue = (data: Record<string, unknown>) => {
-        controller.enqueue(encoder.encode(sseEvent(data)))
+  // ── Stream ────────────────────────────────────────────────
+  const stream = runAgentLoop(openai, {
+    messages,
+    tools: toolDefinitions,
+    model: 'gpt-4o',
+    executors,
+    async onMessage(_msg) {
+      // Intermediate tool-call steps are not persisted individually
+    },
+    async onToolResult(_name, _result) {
+      // Tool results are visible in SSE stream; no separate persistence needed
+    },
+    async onDone(content, toolCalls) {
+      if (content) {
+        await admin.from('board_messages').insert({
+          board_id: boardId,
+          agent_object_id: null,
+          role: 'assistant',
+          content,
+          tool_calls: toolCalls.length > 0 ? JSON.stringify(toolCalls) : null,
+        })
       }
-
-      try {
-        let stepCount = 0
-        const MAX_STEPS = 10
-
-        while (stepCount < MAX_STEPS) {
-          stepCount++
-
-          const completion = await openai.chat.completions.create({
-            model: 'gpt-4o',
-            messages,
-            tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
-            tool_choice: toolDefinitions.length > 0 ? 'auto' : undefined,
-            stream: true,
-          })
-
-          let chunkContent = ''
-          const pendingToolCalls: Map<number, { id: string; name: string; args: string }> = new Map()
-          let finishReason: string | null = null
-
-          for await (const chunk of completion) {
-            const choice = chunk.choices[0]
-            if (!choice) continue
-
-            finishReason = choice.finish_reason ?? finishReason
-            const delta = choice.delta
-
-            if (delta.content) {
-              chunkContent += delta.content
-              fullAssistantContent += delta.content
-              enqueue({ type: 'text-delta', text: delta.content })
-            }
-
-            if (delta.tool_calls) {
-              for (const tc of delta.tool_calls) {
-                const existing = pendingToolCalls.get(tc.index) ?? { id: '', name: '', args: '' }
-                if (tc.id) existing.id = tc.id
-                if (tc.function?.name) existing.name = tc.function.name
-                if (tc.function?.arguments) existing.args += tc.function.arguments
-                pendingToolCalls.set(tc.index, existing)
-              }
-            }
-          }
-
-          if (pendingToolCalls.size === 0 || finishReason === 'stop') break
-
-          const toolCallsArr: FunctionToolCall[] = Array.from(pendingToolCalls.values()).map(tc => ({
-            id: tc.id,
-            type: 'function' as const,
-            function: { name: tc.name, arguments: tc.args },
-          }))
-
-          messages.push({
-            role: 'assistant',
-            content: chunkContent || null,
-            tool_calls: toolCallsArr,
-          })
-
-          const toolResultMessages: OpenAI.Chat.ChatCompletionToolMessageParam[] = []
-          for (const tc of toolCallsArr as FunctionToolCall[]) {
-            const toolName = tc.function.name
-            let args: unknown
-            try { args = JSON.parse(tc.function.arguments) } catch { args = {} }
-
-            enqueue({ type: 'tool-call', toolName, args })
-
-            const executor = executors.get(toolName)
-            const result = executor ? await executor(args) : { error: `Unknown tool: ${toolName}` }
-
-            enqueue({ type: 'tool-result', toolName, result })
-            toolResultMessages.push({
-              role: 'tool',
-              tool_call_id: tc.id,
-              content: JSON.stringify(result),
-            })
-          }
-
-          messages.push(...toolResultMessages)
-        }
-
-        // Persist assistant response
-        if (fullAssistantContent) {
-          await admin.from('board_messages').insert({
-            board_id: boardId,
-            agent_object_id: null,
-            role: 'assistant',
-            content: fullAssistantContent,
-          })
-        }
-
-        enqueue({ type: 'done' })
-      } catch (err) {
-        console.error('[api/agent/global] Stream error details:', err)
-        const errMsg = (err as Error).message ?? ''
-        const errorMsg = errMsg.includes('429')
-          ? 'Rate limit reached, please try again.'
-          : 'An error occurred. Please try again.'
-        enqueue({ type: 'error', error: errorMsg })
-      } finally {
-        controller.close()
-      }
+    },
+    async onError(err) {
+      console.error('[api/agent/global] Stream error details:', err)
+      // No agent_state to update for global route
     },
   })
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    },
-  })
+  return new Response(stream, { headers: SSE_HEADERS })
 }

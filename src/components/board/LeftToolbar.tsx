@@ -21,6 +21,7 @@ import {
 } from './shapePresets'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { useFlyoutPosition } from '@/hooks/useFlyoutPosition'
+import { FilePickerFlyout } from './FilePickerFlyout'
 import { RichTextToolbar } from './RichTextToolbar'
 import { RICH_TEXT_ENABLED } from '@/lib/richText'
 import type { Editor } from '@tiptap/react'
@@ -45,6 +46,8 @@ interface LeftToolbarProps {
   onPresetSelect: (preset: ShapePreset) => void
   uiDarkMode?: boolean
   richTextEditor?: Editor | null
+  boardId?: string
+  onFilePick?: (file: import('./FileLibraryPanel').FileRecord) => void
 }
 
 // IDs that belong to each tool group (for active-state highlighting)
@@ -75,10 +78,13 @@ export function LeftToolbar({
   onPresetSelect,
   uiDarkMode = false,
   richTextEditor,
+  boardId,
+  onFilePick,
 }: LeftToolbarProps) {
   const canEdit = userRole !== 'viewer'
   const [openGroupId, setOpenGroupId] = useState<string | null>(null)
   const [ngonSides, setNgonSides] = useState(5)
+  const [filePickerOpen, setFilePickerOpen] = useState(false)
 
   const closeFlyout = useCallback(() => setOpenGroupId(null), [])
   const handlePresetSelect = useCallback((p: ShapePreset) => {
@@ -144,7 +150,19 @@ export function LeftToolbar({
                 <FlyoutPresetButton preset={TABLE_PRESET} activePreset={activePreset} onSelect={handlePresetSelect} />
                 <FlyoutPlaceholder label="Connector" iconPath="M4 20h2a4 4 0 0 0 4-4v-8a4 4 0 0 1 4-4h2 M18 4l2 4-2 4" />
                 <FlyoutPlaceholder label="Web Frame" iconPath="M3 3h18v18H3z M3 9h18 M9 9v12" />
-                <FlyoutPlaceholder label="File" iconPath="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M9 13h6 M9 17h4" />
+                <button
+                  type="button"
+                  onClick={() => { closeFlyout(); setFilePickerOpen(prev => !prev) }}
+                  className={`flex flex-col items-center justify-center rounded-lg p-1.5 transition ${
+                    filePickerOpen
+                      ? 'bg-navy/10 text-navy dark:bg-navy/30 dark:text-parchment'
+                      : 'text-charcoal/70 hover:bg-parchment-dark dark:text-parchment/60 dark:hover:bg-white/10'
+                  }`}
+                  title="File"
+                >
+                  <PresetIcon iconPath="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M9 13h6 M9 17h4" className="h-5 w-5" />
+                  <span className="text-[8px] mt-0.5 leading-tight truncate w-full text-center text-charcoal/70 dark:text-parchment/60">File</span>
+                </button>
               </div>
             </ToolGroupButton>
 
@@ -237,6 +255,16 @@ export function LeftToolbar({
         </>
       )}
 
+      {filePickerOpen && boardId && onFilePick && (
+        <FilePickerFlyout
+          boardId={boardId}
+          onSelect={(file) => {
+            onFilePick(file)
+            setFilePickerOpen(false)
+          }}
+          onClose={() => setFilePickerOpen(false)}
+        />
+      )}
     </aside>
   )
 }

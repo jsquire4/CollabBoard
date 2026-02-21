@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { BoardObject } from '@/types/board'
 import { toast } from 'sonner'
@@ -43,25 +42,8 @@ export function useFileUpload({ boardId, canEdit, supabase, addObject, removeObj
     }
 
     setIsUploading(true)
-    const objectId = uuidv4()
-    // Sanitize filename: strip path separators to prevent traversal
-    const safeName = file.name.replace(/[/\\]/g, '_')
-    const storagePath = `${boardId}/${objectId}/${safeName}`
 
     try {
-      const { error: uploadError } = await supabase
-        .storage
-        .from('board-assets')
-        .upload(storagePath, file, {
-          contentType: file.type,
-          upsert: false,
-        })
-
-      if (uploadError) {
-        toast.error(`Upload failed: ${uploadError.message}`)
-        return null
-      }
-
       // For images, read native dimensions and cap to reasonable canvas size
       const MAX_IMG_DIM = 800
       let imgWidth: number | undefined
@@ -76,7 +58,6 @@ export function useFileUpload({ boardId, canEdit, supabase, addObject, removeObj
             img.onerror = reject
             img.src = blobUrl!
           })
-          // Scale down to fit within MAX_IMG_DIM while preserving aspect ratio
           const scale = Math.min(1, MAX_IMG_DIM / Math.max(dims.w, dims.h))
           imgWidth = Math.round(dims.w * scale)
           imgHeight = Math.round(dims.h * scale)
@@ -85,14 +66,29 @@ export function useFileUpload({ boardId, canEdit, supabase, addObject, removeObj
         }
       }
 
-      // Create a file-type board object
+      // Upload via API route — creates both storage file and DB record
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('boardId', boardId)
+
+      const res = await fetch('/api/files/upload', { method: 'POST', body: formData })
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast.error(data.error ?? 'Upload failed')
+        return null
+      }
+
+      const fileRecord = data.file as { id: string; storage_path: string; name: string; file_type: string; size: number }
+
+      // Create a file-type board object using the DB record
       const obj = addObject('file' as 'file', x ?? 0, y ?? 0, {
-        id: objectId,
-        storage_path: storagePath,
-        file_name: file.name,
-        mime_type: file.type,
-        file_size: file.size,
-        text: file.name,
+        file_id: fileRecord.id,
+        storage_path: fileRecord.storage_path,
+        file_name: fileRecord.name,
+        mime_type: fileRecord.file_type,
+        file_size: fileRecord.size,
+        text: fileRecord.name,
         ...(imgWidth && imgHeight ? { width: imgWidth, height: imgHeight } : {}),
       })
 
@@ -105,7 +101,7 @@ export function useFileUpload({ boardId, canEdit, supabase, addObject, removeObj
     } finally {
       setIsUploading(false)
     }
-  }, [boardId, canEdit, supabase, addObject])
+  }, [boardId, canEdit, addObject])
 
   const handleDrop = useCallback(async (files: FileList | File[]) => {
     for (const file of Array.from(files)) {

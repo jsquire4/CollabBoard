@@ -44,10 +44,11 @@ import { ConnectionBanner } from '@/components/ui/ConnectionBanner'
 import { AgentChatPanel } from './AgentChatPanel'
 import { GlobalAgentPanel } from './GlobalAgentPanel'
 import { useFileUpload } from '@/hooks/useFileUpload'
-import { FileLibraryPanel } from './FileLibraryPanel'
+import { FileLibraryPanel, type FileRecord } from './FileLibraryPanel'
 import { FilmstripPanel } from './FilmstripPanel'
 import { CommentThread } from './CommentThread'
 import { FileDropZone } from './FileDropZone'
+import { canvasTransform } from '@/lib/canvasTransform'
 import { PropertiesPanel } from './PropertiesPanel'
 
 // Konva is client-only — must disable SSR
@@ -598,11 +599,41 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     const data = e.dataTransfer.getData('application/collabboard-file')
     if (data) {
       try {
-        const { fileId, fileName, mimeType } = JSON.parse(data)
-        addObject('context_object', 200, 200, { file_id: fileId, file_name: fileName, mime_type: mimeType })
+        const { fileId, fileName, mimeType, storagePath, fileSize } = JSON.parse(data)
+        // Convert screen coordinates to canvas world space
+        const container = (e.currentTarget as HTMLElement).getBoundingClientRect()
+        const ct = canvasTransform
+        const dropX = (e.clientX - container.left - ct.x) / ct.scale
+        const dropY = (e.clientY - container.top - ct.y) / ct.scale
+        addObject('file', dropX, dropY, {
+          file_id: fileId,
+          storage_path: storagePath,
+          file_name: fileName,
+          mime_type: mimeType,
+          file_size: fileSize,
+          text: fileName,
+          width: 300,
+          height: 200,
+        })
       } catch { /* ignore malformed drag data */ }
     }
   }, [addObject, canEdit])
+
+  const handleFilePick = useCallback((file: FileRecord) => {
+    const ct = canvasTransform
+    const centerX = (-ct.x + ct.width / 2) / ct.scale
+    const centerY = (-ct.y + ct.height / 2) / ct.scale
+    addObject('file', centerX, centerY, {
+      file_id: file.id,
+      storage_path: file.storage_path,
+      file_name: file.name,
+      mime_type: file.file_type,
+      file_size: file.size,
+      text: file.name,
+      width: 300,
+      height: 200,
+    })
+  }, [addObject])
 
   const mutationsValue: BoardMutationsContextValue = useMemo(() => ({
     onDrawShape: handleDrawShape,
@@ -766,6 +797,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           onPresetSelect={handlePresetSelect}
           uiDarkMode={uiDarkMode}
           richTextEditor={RICH_TEXT_ENABLED ? richTextEditor : undefined}
+          boardId={boardId}
+          onFilePick={handleFilePick}
         />
         <FileDropZone
           onDrop={(files) => {

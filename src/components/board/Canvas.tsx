@@ -4,6 +4,7 @@ import React, { useRef, useCallback, useEffect, useMemo, useState } from 'react'
 import { Stage, Layer, Transformer, Rect as KonvaRect, Group as KonvaGroup, Line as KonvaLine, Circle as KonvaCircle } from 'react-konva'
 import Konva from 'konva'
 import { useCanvas } from '@/hooks/useCanvas'
+import { canvasTransform } from '@/lib/canvasTransform'
 import { useModifierKeys } from '@/hooks/useModifierKeys'
 import { BoardObject } from '@/types/board'
 import { useBoardContext } from '@/contexts/BoardContext'
@@ -174,6 +175,15 @@ export function Canvas() {
     stagePos, stageScale, gridSize, gridSubdivisions, gridStyle,
     gridVisible, canvasColor, gridColor, subdivisionColor, snapToGridEnabled,
   })
+
+  // Sync transform to shared store so BoardClient can convert screen→world coords
+  useEffect(() => {
+    canvasTransform.x = stagePos.x
+    canvasTransform.y = stagePos.y
+    canvasTransform.scale = stageScale
+    canvasTransform.width = dimensions.width
+    canvasTransform.height = dimensions.height
+  }, [stagePos, stageScale, dimensions])
 
   const { isPanning, didPanRef } = useRightClickPan({
     stageRef, containerRef, setStagePos,

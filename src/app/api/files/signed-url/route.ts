@@ -28,15 +28,16 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: 'Invalid path' }, { status: 400 })
   }
 
-  // Extract boardId from storage path (format: "boardId/objectId/filename")
+  // Extract boardId from storage path.
+  // API uploads use "files/{boardId}/{fileId}.{ext}"; legacy canvas-drop uses "{boardId}/...".
   const segments = safePath.split('/')
-  const boardId = segments[0]
+  const boardId = segments[0] === 'files' ? segments[1] : segments[0]
   if (!boardId || !UUID_RE.test(boardId)) {
     return Response.json({ error: 'Invalid path' }, { status: 400 })
   }
 
-  // Verify the normalized path starts with the validated boardId prefix
-  if (!safePath.startsWith(`${boardId}/`)) {
+  // Verify the normalized path contains the validated boardId
+  if (!safePath.includes(boardId)) {
     return Response.json({ error: 'Invalid path' }, { status: 400 })
   }
 

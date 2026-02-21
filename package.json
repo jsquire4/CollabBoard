@@ -16,7 +16,8 @@
     "test:e2e:stress": "playwright test --project=performance",
     "test:e2e:load": "playwright test --project=performance e2e/multi-user-load.spec.ts --reporter=list",
     "test:all": "npm run test && npm run test:stress && npm run test:e2e && npm run test:e2e:stress",
-    "seed:500": "tsx scripts/seed-500-shapes.ts"
+    "seed:500": "tsx scripts/seed-500-shapes.ts",
+    "postinstall": "cp node_modules/pdfjs-dist/build/pdf.worker.min.mjs public/pdf.worker.min.mjs 2>/dev/null || true"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
@@ -36,6 +37,7 @@
     "langsmith": "^0.5.5",
     "next": "16.1.6",
     "openai": "^6.22.0",
+    "pdfjs-dist": "^5.4.624",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-konva": "^19.2.2",

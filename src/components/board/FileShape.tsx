@@ -5,6 +5,7 @@ import { Group, Rect, Text, Image as KonvaImage } from 'react-konva'
 import type { ShapeProps } from './shapeUtils'
 import { handleShapeTransformEnd, getOutlineProps } from './shapeUtils'
 import { mimeTypeLabel, mimeTypeBadgeColor } from '@/lib/agent/mimeClassification'
+import { usePdfThumbnail } from '@/hooks/usePdfThumbnail'
 
 const MAX_TEXT_LENGTH = 2000
 
@@ -87,15 +88,24 @@ export const FileShape = memo(function FileShape({
   const outline = getOutlineProps(object, isSelected)
   const isImage = mime_type?.startsWith('image/')
   const isText = mime_type?.startsWith('text/')
+  const isPdf = mime_type === 'application/pdf'
 
-  // Signed URL (shared for both image and text rendering)
-  const signedUrl = useSignedUrl(isImage || isText ? storage_path : null)
+  // Signed URL (shared for image, text, and PDF rendering)
+  const signedUrl = useSignedUrl(isImage || isText || isPdf ? storage_path : null)
 
   // Image loading
   const { image, failed: imageFailed } = useLoadImage(isImage ? signedUrl : null)
 
   // Text content loading
   const textContent = useTextContent(isText ? signedUrl : null)
+
+  // PDF first-page thumbnail
+  const pdfCanvas = usePdfThumbnail(
+    isPdf ? signedUrl : null,
+    isPdf ? storage_path ?? null : null,
+    width ?? 300,
+    height ?? 200,
+  )
 
   const displayName = file_name || 'Untitled file'
   const label = mimeTypeLabel(mime_type)
@@ -210,8 +220,70 @@ export const FileShape = memo(function FileShape({
             ellipsis
           />
         </>
+      ) : isPdf ? (
+        // PDF first-page preview
+        <>
+          <Rect
+            width={width}
+            height={height}
+            fill="#FAFAF9"
+            stroke={outline.stroke ?? '#CBD5E1'}
+            strokeWidth={outline.strokeWidth ?? 1}
+            cornerRadius={6}
+            shadowBlur={isSelected ? 6 : 1}
+            shadowColor="rgba(0,0,0,0.1)"
+            {...(outline.dash ? { dash: outline.dash } : {})}
+          />
+          {/* Filename header */}
+          <Rect
+            width={width}
+            height={HEADER_HEIGHT}
+            fill="#F1F5F9"
+            cornerRadius={[6, 6, 0, 0]}
+          />
+          <Text
+            x={PADDING}
+            y={2}
+            width={width - PADDING * 2}
+            height={HEADER_HEIGHT}
+            text={displayName}
+            fontSize={9}
+            fontStyle="bold"
+            fill="#475569"
+            verticalAlign="middle"
+            ellipsis
+          />
+          {pdfCanvas ? (
+            <KonvaImage
+              image={pdfCanvas}
+              x={0}
+              y={HEADER_HEIGHT}
+              width={width}
+              height={height - HEADER_HEIGHT}
+            />
+          ) : (
+            <>
+              <Rect
+                y={HEADER_HEIGHT}
+                width={width}
+                height={height - HEADER_HEIGHT}
+                fill="#F8FAFC"
+              />
+              <Text
+                y={HEADER_HEIGHT}
+                width={width}
+                height={height - HEADER_HEIGHT}
+                text="Loading PDF..."
+                fontSize={11}
+                fill="#94A3B8"
+                align="center"
+                verticalAlign="middle"
+              />
+            </>
+          )}
+        </>
       ) : (
-        // Generic file rendering (PDF, etc.)
+        // Generic file rendering
         <>
           <Rect
             width={width}

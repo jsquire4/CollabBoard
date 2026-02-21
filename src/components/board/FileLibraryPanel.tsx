@@ -91,7 +91,7 @@ export function FileLibraryPanel({ boardId, isOpen, onClose }: FileLibraryPanelP
   const handleDragStart = useCallback((file: FileRecord) => (e: React.DragEvent) => {
     e.dataTransfer.setData(
       'application/collabboard-file',
-      JSON.stringify({ fileId: file.id, fileName: file.name, mimeType: file.file_type }),
+      JSON.stringify({ fileId: file.id, fileName: file.name, mimeType: file.file_type, storagePath: file.storage_path, fileSize: file.size }),
     )
     e.dataTransfer.effectAllowed = 'copy'
   }, [])

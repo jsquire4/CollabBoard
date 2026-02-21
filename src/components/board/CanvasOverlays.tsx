@@ -6,23 +6,7 @@ import { ZoomControls } from './ZoomControls'
 import { getTextCharLimit, STICKY_TITLE_CHAR_LIMIT } from '@/hooks/board/useTextEditing'
 import { RICH_TEXT_ENABLED } from '@/lib/richText'
 import type { ContextMenuState } from '@/hooks/board/useContextMenu'
-import { useDrawInteraction } from '@/hooks/board/useDrawInteraction'
-
-interface ConnectorHintData {
-  shapeId: string
-  anchor: { id: string; x: number; y: number }
-}
-
-interface ConnectorDrawingRefs {
-  drawSnapStartRef: React.MutableRefObject<{ shapeId: string; anchorId: string; x: number; y: number } | null>
-  connectorHintDrawingRef: React.MutableRefObject<boolean>
-  drawIsLineRef: React.MutableRefObject<boolean>
-  isDrawing: React.MutableRefObject<boolean>
-  drawStart: React.MutableRefObject<{ x: number; y: number } | null>
-  setDrawPreview: (p: { x: number; y: number; width: number; height: number } | null) => void
-  setLinePreview: (p: { x1: number; y1: number; x2: number; y2: number } | null) => void
-  setConnectorHint: (h: ConnectorHintData | null) => void
-}
+import { useDrawInteraction, ConnectorHintData, ConnectorDrawingRefs } from '@/hooks/board/useDrawInteraction'
 
 interface CanvasOverlaysProps {
   // Textarea editing

@@ -1,12 +1,12 @@
 import { useCallback } from 'react'
 import React from 'react'
 
-interface ConnectorHintData {
+export interface ConnectorHintData {
   shapeId: string
   anchor: { id: string; x: number; y: number }
 }
 
-interface ConnectorDrawingRefs {
+export interface ConnectorDrawingRefs {
   drawSnapStartRef: React.MutableRefObject<{ shapeId: string; anchorId: string; x: number; y: number } | null>
   connectorHintDrawingRef: React.MutableRefObject<boolean>
   drawIsLineRef: React.MutableRefObject<boolean>

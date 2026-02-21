@@ -26,6 +26,9 @@ import { RICH_TEXT_ENABLED } from '@/lib/richText'
 import type { Editor } from '@tiptap/react'
 
 const SUBMENU_MIN_WIDTH = { minWidth: '160px' } as const
+const SUBMENU_MIN_WIDTH_SM = { minWidth: '120px' } as const
+const SUBMENU_MIN_WIDTH_MD = { minWidth: '140px' } as const
+const SUBMENU_MIN_WIDTH_LG = { minWidth: '180px' } as const
 
 interface LeftToolbarProps {
   userRole: BoardRole
@@ -152,7 +155,7 @@ export function LeftToolbar({
                 onClose={closeFlyout}
               >
                 <FlyoutHeader text="Basics" />
-                <div className="grid grid-cols-3 gap-1" style={{ minWidth: '140px' }}>
+                <div className="grid grid-cols-3 gap-1" style={SUBMENU_MIN_WIDTH_MD}>
                   {STANDALONE_PRESETS.filter(p => p.id === 'sticky_note' || p.id === 'text_box').map(preset => (
                     <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
                   ))}
@@ -175,7 +178,7 @@ export function LeftToolbar({
                 onClose={closeFlyout}
               >
                 <FlyoutHeader text="Lines" />
-                <div className="grid grid-cols-2 gap-1" style={{ minWidth: '120px' }}>
+                <div className="grid grid-cols-2 gap-1" style={SUBMENU_MIN_WIDTH_SM}>
                   {LINE_PRESETS.map(preset => (
                     <FlyoutPresetButton key={preset.id} preset={preset} activePreset={activePreset} onSelect={handlePresetSelect} />
                   ))}
@@ -195,7 +198,7 @@ export function LeftToolbar({
                 onToggle={() => setOpenGroupId(prev => prev === 'shapes' ? null : 'shapes')}
                 onClose={closeFlyout}
               >
-                <div style={{ minWidth: '180px' }}>
+                <div style={SUBMENU_MIN_WIDTH_LG}>
                   <FlyoutHeader text="Circle" />
                   <div className="grid grid-cols-3 gap-1 mb-2">
                     {STANDALONE_PRESETS.filter(p => p.id === 'circle').map(preset => (

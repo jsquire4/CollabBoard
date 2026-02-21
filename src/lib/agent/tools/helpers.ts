@@ -10,6 +10,7 @@ import { tickHLC, type HLC } from '@/lib/crdt/hlc'
 import { mergeClocks, stampFields, type FieldClocks } from '@/lib/crdt/merge'
 import type { ZodType } from 'zod'
 import type { BoardObject } from '@/types/board'
+import type { BoardState } from '@/lib/agent/boardState'
 import type { ToolContext, ToolDef } from './types'
 
 // ── Named constants ────────────────────────────────────────────────────────────
@@ -20,7 +21,7 @@ export const MAX_FILE_CHARS = 200_000
 /** Signed URL TTL in seconds for describeImage */
 export const SIGNED_URL_TTL = 60
 
-/** Maximum objects returned by getBoardState */
+/** Maximum objects loaded from the DB for agent tool context */
 export const BOARD_STATE_OBJECT_LIMIT = 5_000
 
 /** Minimum canvas margin for auto-placed objects (px) */
@@ -176,4 +177,42 @@ export function makeToolDef<T>(
       }
     },
   }
+}
+
+// ── Connection graph helper ─────────────────────────────────────────────────
+
+/**
+ * Walk data_connector edges from `agentObjectId` and return the set of IDs
+ * the agent is allowed to see: the agent itself, connector IDs, and connected
+ * object IDs.
+ */
+export function getConnectedObjectIds(state: BoardState, agentObjectId: string): Set<string> {
+  const ids = new Set<string>([agentObjectId])
+
+  for (const obj of state.objects.values()) {
+    if (obj.type !== 'data_connector') continue
+    if (obj.deleted_at) continue
+
+    const isConnected =
+      obj.connect_start_id === agentObjectId ||
+      obj.connect_end_id === agentObjectId
+
+    if (!isConnected) continue
+
+    ids.add(obj.id) // the connector itself
+
+    const otherId =
+      obj.connect_start_id === agentObjectId
+        ? obj.connect_end_id
+        : obj.connect_start_id
+
+    if (otherId) {
+      const other = state.objects.get(otherId)
+      if (other && !other.deleted_at) {
+        ids.add(otherId)
+      }
+    }
+  }
+
+  return ids
 }

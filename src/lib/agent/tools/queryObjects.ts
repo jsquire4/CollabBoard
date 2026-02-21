@@ -3,22 +3,31 @@
  */
 
 import { loadBoardState } from '@/lib/agent/boardState'
-import { makeToolDef } from './helpers'
+import { makeToolDef, getConnectedObjectIds } from './helpers'
 import { getFrameObjectsSchema, emptySchema } from './schemas'
 import type { ToolDef } from './types'
 
 export const queryObjectTools: ToolDef[] = [
 
   makeToolDef(
-    'getBoardState',
-    'Get the current state of all objects on the board. Use this to understand what is on the board before making changes.',
+    'getConnectedObjects',
+    'Get the objects connected to you via data connectors. Returns only objects in your visibility scope. Use this to understand what you can see and interact with.',
     emptySchema,
     async (ctx, _args) => {
       // Refresh state so subsequent tools see up-to-date data
       const freshState = await loadBoardState(ctx.boardId)
       ctx.state = freshState
 
-      const objects = Array.from(freshState.objects.values()).map(obj => ({
+      let objectsIter = freshState.objects.values()
+
+      // When scoped to a per-agent context, filter to connected objects only
+      if (ctx.agentObjectId) {
+        const connectedIds = getConnectedObjectIds(freshState, ctx.agentObjectId)
+        objectsIter = Array.from(freshState.objects.values())
+          .filter(obj => connectedIds.has(obj.id))[Symbol.iterator]()
+      }
+
+      const objects = Array.from(objectsIter).map(obj => ({
         id: obj.id,
         type: obj.type,
         x: Math.round(obj.x),
@@ -45,6 +54,14 @@ export const queryObjectTools: ToolDef[] = [
     'Get all objects contained within a frame. Use this to inspect frame contents before making changes.',
     getFrameObjectsSchema,
     async (ctx, { frameId }) => {
+      // Scope check: if agent is scoped, frame must be connected
+      if (ctx.agentObjectId) {
+        const connectedIds = getConnectedObjectIds(ctx.state, ctx.agentObjectId)
+        if (!connectedIds.has(frameId)) {
+          return { error: 'Object not connected to this agent' }
+        }
+      }
+
       const frame = ctx.state.objects.get(frameId)
       if (!frame) return { error: `Frame ${frameId} not found` }
       if (frame.type !== 'frame') return { error: `Object ${frameId} is not a frame` }

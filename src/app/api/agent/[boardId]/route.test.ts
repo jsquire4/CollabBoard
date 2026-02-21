@@ -298,43 +298,15 @@ describe('POST /api/agent/[boardId]', () => {
     expect(mockExecutor).toHaveBeenCalled()
   })
 
-  // ── Persistence ───────────────────────────────────────────────────────────
+  // ── Ephemeral chat (no DB persistence) ──────────────────────────────────
 
-  it('inserts user message with user_display_name and agent_object_id', async () => {
+  it('does not insert board_messages (ephemeral chat)', async () => {
     const req = makeRequest(defaultBody())
     const res = await POST(req, makeParams())
     await collectSSE(res)
 
-    const userInsert = mockInsert.mock.calls.find(
-      (args: unknown[]) => (args[0] as Record<string, unknown>)?.role === 'user'
-    )
-    expect(userInsert).toBeDefined()
-    expect(userInsert![0]).toMatchObject({
-      role: 'user',
-      agent_object_id: TEST_AGENT_ID,
-      user_display_name: 'Alice',
-      board_id: TEST_BOARD_ID,
-    })
-  })
-
-  it('inserts assistant message after successful stream', async () => {
-    mockCreate.mockImplementation(() =>
-      makeFakeChatStream([{ type: 'text', text: 'The answer is 42.' }, { type: 'done' }])
-    )
-    const req = makeRequest(defaultBody())
-    const res = await POST(req, makeParams())
-    await collectSSE(res)
-
-    const assistantInsert = mockInsert.mock.calls.find(
-      (args: unknown[]) => (args[0] as Record<string, unknown>)?.role === 'assistant'
-    )
-    expect(assistantInsert).toBeDefined()
-    expect(assistantInsert![0]).toMatchObject({
-      role: 'assistant',
-      agent_object_id: TEST_AGENT_ID,
-      board_id: TEST_BOARD_ID,
-    })
-    expect((assistantInsert![0] as Record<string, unknown>).content).toContain('The answer is 42.')
+    // No board_messages inserts should happen for per-agent chat
+    expect(mockInsert).not.toHaveBeenCalled()
   })
 
   // ── agent_state transitions ───────────────────────────────────────────────

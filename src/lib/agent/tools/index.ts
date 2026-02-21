@@ -8,7 +8,7 @@
  * Tools are split by domain:
  *   createObjects.ts  — createStickyNote, createShape, createFrame, createTable, createConnector
  *   editObjects.ts    — moveObject, resizeObject, updateText, changeColor, deleteObject
- *   queryObjects.ts   — getBoardState, getFrameObjects
+ *   queryObjects.ts   — getConnectedObjects, getFrameObjects
  *   fileTools.ts      — describeImage, readFileContent
  */
 
@@ -63,11 +63,12 @@ export function createTools(ctx: ToolContext): {
 
 // ── Helper: create a fresh ToolContext with a new HLC ─────────────────────────
 
-export function createToolContext(boardId: string, userId: string, state: BoardState): ToolContext {
+export function createToolContext(boardId: string, userId: string, state: BoardState, agentObjectId?: string): ToolContext {
   return {
     boardId,
     userId,
     hlc: createHLC(userId),
     state,
+    agentObjectId,
   }
 }

@@ -1,23 +1,22 @@
 /**
- * POST /api/agent/[boardId] — direct OpenAI Chat Completions streaming.
- * Replaced Fly.io proxy in Phase 2.
+ * POST /api/agent/[boardId] — per-agent Chat Completions streaming.
+ *
+ * Ephemeral chat: no DB history. The agent persists memory via saveMemory tool
+ * (creates context_object + data_connector on the board).
+ * Visibility is scoped to objects connected via data_connector edges.
  */
 
 import { NextRequest } from 'next/server'
-import OpenAI from 'openai'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadBoardState } from '@/lib/agent/boardState'
 import { resolveConnectionGraph } from '@/lib/agent/contextResolver'
 import { createTools, createToolContext } from '@/lib/agent/tools'
 import { getUserDisplayName } from '@/lib/userUtils'
-import { runAgentLoop, SSE_HEADERS } from '@/lib/agent/sse'
-import { capHistory } from '@/lib/agent/summarize'
+import { runAgentLoop, SSE_HEADERS, getOpenAI } from '@/lib/agent/sse'
 import { UUID_RE } from '@/lib/api/uuidRe'
 
 export const maxDuration = 60
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 export async function POST(
   request: NextRequest,
@@ -32,6 +31,8 @@ export async function POST(
   if (!process.env.OPENAI_API_KEY) {
     return Response.json({ error: 'OPENAI_API_KEY not configured' }, { status: 500 })
   }
+
+  const openai = getOpenAI()
 
   // ── Auth ──────────────────────────────────────────────────
   const supabase = await createClient()
@@ -48,18 +49,18 @@ export async function POST(
     .eq('user_id', user.id)
     .single()
 
-  if (!member || !['owner', 'editor'].includes(member.role) || !member.can_use_agents) {
+  if (!member || !['owner', 'manager', 'editor'].includes(member.role) || !member.can_use_agents) {
     return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  let body: { message?: string; agentObjectId?: string }
+  let body: { message?: string; agentObjectId?: string; viewportCenter?: { x: number; y: number } }
   try {
     body = await request.json()
   } catch {
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { message, agentObjectId } = body
+  const { message, agentObjectId, viewportCenter } = body
   if (!message || typeof message !== 'string') {
     return Response.json({ error: 'message is required' }, { status: 400 })
   }
@@ -70,30 +71,14 @@ export async function POST(
   const admin = createAdminClient()
   const userDisplayName = getUserDisplayName(user)
 
-  // ── Parallel data loading ─────────────────────────────────
+  // ── Load board state ────────────────────────────────────
   let boardState: Awaited<ReturnType<typeof loadBoardState>>
-  let historyResult: { data: { role: string; content: string }[] | null; error: unknown }
   try {
-    [boardState, historyResult] = await Promise.all([
-      loadBoardState(boardId),
-      admin
-        .from('board_messages')
-        .select('role, content')
-        .eq('board_id', boardId)
-        .eq('agent_object_id', agentObjectId)
-        .order('created_at', { ascending: true })
-        .limit(20),
-    ])
+    boardState = await loadBoardState(boardId)
   } catch (err) {
     console.error('[api/agent] Failed to load board data:', err)
     return Response.json({ error: 'Failed to load board data' }, { status: 503 })
   }
-
-  if (historyResult.error) {
-    console.error('[api/agent] Failed to load history:', historyResult.error)
-  }
-
-  const history = (historyResult.data ?? []) as { role: string; content: string }[]
 
   const agentObj = boardState.objects.get(agentObjectId)
   if (!agentObj || agentObj.board_id !== boardId) {
@@ -108,14 +93,25 @@ export async function POST(
     ? `\n\nConnected context objects:\n${JSON.stringify(connectedObjects, null, 2)}`
     : ''
 
-  const systemPrompt = `You are ${agentName}, an AI assistant embedded on a collaborative whiteboard. You can read and modify the board using the tools provided.
-${contextBlock}
+  const validViewport = viewportCenter
+    && typeof viewportCenter.x === 'number' && typeof viewportCenter.y === 'number'
+    && Number.isFinite(viewportCenter.x) && Number.isFinite(viewportCenter.y)
+  const viewportHint = validViewport
+    ? `\n\nThe user's viewport is centered at approximately (${Math.round(viewportCenter.x)}, ${Math.round(viewportCenter.y)}).`
+    : ''
+
+  const systemPrompt = `You are ${agentName}, an AI assistant embedded on a collaborative whiteboard. The user talking to you is ${userDisplayName}.
+
+You can only see and edit objects that are connected to you via data connectors. Use getConnectedObjects to see what's in your scope.
+${contextBlock}${viewportHint}
 
 Guidelines:
 - Be concise and helpful. Use tools proactively when the user asks you to create or modify things.
 - When creating multiple related objects, batch them logically.
 - Always confirm what you created or changed in your final response.
-- If a tool returns an error, explain the issue and suggest alternatives.`
+- If a tool returns an error, explain the issue and suggest alternatives.
+- Use saveMemory to persist important information — your chat history is not saved between sessions.
+- Use createDataConnector to add existing board objects to your visibility scope.`
 
   // ── Set agent_state to thinking ───────────────────────────
   await admin
@@ -135,28 +131,14 @@ Guidelines:
       .is('deleted_at', null)
   })
 
-  // ── Persist user message ──────────────────────────────────
-  await admin.from('board_messages').insert({
-    board_id: boardId,
-    agent_object_id: agentObjectId,
-    role: 'user',
-    content: message,
-    user_id: user.id,
-    user_display_name: userDisplayName,
-  })
-
   // ── Build messages + tools ────────────────────────────────
-  const toolCtx = createToolContext(boardId, user.id, boardState)
+  const toolCtx = createToolContext(boardId, user.id, boardState, agentObjectId)
   const { definitions: toolDefinitions, executors } = createTools(toolCtx)
 
-  const rawMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    { role: 'system', content: systemPrompt },
-    ...history.map(h => ({ role: h.role as 'user' | 'assistant', content: h.content })),
-    { role: 'user', content: message },
+  const messages = [
+    { role: 'system' as const, content: systemPrompt },
+    { role: 'user' as const, content: message },
   ]
-
-  // Apply token cap before sending to OpenAI
-  const messages = await capHistory(rawMessages, openai)
 
   // ── Stream ────────────────────────────────────────────────
   const stream = runAgentLoop(openai, {
@@ -165,22 +147,12 @@ Guidelines:
     model: agentModel,
     executors,
     async onMessage(_msg) {
-      // Intermediate tool-call steps are not persisted individually
+      // Ephemeral — no persistence
     },
     async onToolResult(_name, _result) {
-      // Tool results are visible in SSE stream; no separate persistence needed
+      // Tool results are visible in SSE stream
     },
-    async onDone(content, toolCalls) {
-      if (content) {
-        await admin.from('board_messages').insert({
-          board_id: boardId,
-          agent_object_id: agentObjectId,
-          role: 'assistant',
-          content,
-          tool_calls: toolCalls.length > 0 ? JSON.stringify(toolCalls) : null,
-        })
-      }
-
+    async onDone(_content, _toolCalls) {
       await admin
         .from('board_objects')
         .update({ agent_state: 'done' })

@@ -9,6 +9,7 @@ import type { BoardObject } from '@/types/board'
 import {
   buildAndInsertObject,
   makeToolDef,
+  getConnectedObjectIds,
   SCATTER_MARGIN,
   SCATTER_X_WIDE,
   SCATTER_X_NARROW,
@@ -21,6 +22,8 @@ import {
   createFrameSchema,
   createTableSchema,
   createConnectorSchema,
+  saveMemorySchema,
+  createDataConnectorSchema,
 } from './schemas'
 import type { ToolDef } from './types'
 
@@ -133,6 +136,13 @@ export const createObjectTools: ToolDef[] = [
     'Create a line or arrow connecting two objects on the board.',
     createConnectorSchema,
     async (ctx, { type, startObjectId, endObjectId, startAnchor, endAnchor, color }) => {
+      // Scope guard: both endpoints must be connected to the agent
+      if (ctx.agentObjectId) {
+        const connected = getConnectedObjectIds(ctx.state, ctx.agentObjectId)
+        if (!connected.has(startObjectId)) return { error: 'Start object not connected to this agent' }
+        if (!connected.has(endObjectId)) return { error: 'End object not connected to this agent' }
+      }
+
       const startObj = ctx.state.objects.get(startObjectId)
       const endObj = ctx.state.objects.get(endObjectId)
       if (!startObj) return { error: `Start object ${startObjectId} not found` }
@@ -170,6 +180,125 @@ export const createObjectTools: ToolDef[] = [
       if (!result.success) return { error: result.error }
       broadcastChanges(ctx.boardId, [{ action: 'create', object: result.obj as Partial<BoardObject> & { id: string } }])
       return { id: result.id, type, startObjectId, endObjectId }
+    },
+  ),
+
+  makeToolDef(
+    'saveMemory',
+    'Save a memory as a context_object on the board, connected to you via a data_connector. Use this to persist important information across conversations.',
+    saveMemorySchema,
+    async (ctx, { summary }) => {
+      if (!ctx.agentObjectId) return { error: 'saveMemory is only available for per-agent chat' }
+
+      const agentObj = ctx.state.objects.get(ctx.agentObjectId)
+      if (!agentObj) return { error: 'Agent object not found' }
+
+      // Count existing context objects connected to this agent for vertical stacking
+      let contextCount = 0
+      for (const obj of ctx.state.objects.values()) {
+        if (obj.type !== 'data_connector' || obj.deleted_at) continue
+        if (obj.connect_start_id !== ctx.agentObjectId && obj.connect_end_id !== ctx.agentObjectId) continue
+        const otherId = obj.connect_start_id === ctx.agentObjectId ? obj.connect_end_id : obj.connect_start_id
+        const other = otherId ? ctx.state.objects.get(otherId) : null
+        if (other?.type === 'context_object' && !other.deleted_at) contextCount++
+      }
+
+      const defaults = getShapeDefaults('context_object')
+      const ctxX = agentObj.x + (agentObj.width ?? 200) + 80
+      const ctxY = agentObj.y + contextCount * ((defaults.height) + 20)
+
+      // Create the context object
+      const ctxResult = await buildAndInsertObject(ctx, 'context_object', {
+        x: ctxX,
+        y: ctxY,
+        width: defaults.width,
+        height: defaults.height,
+        rotation: 0,
+        text: summary,
+        color: defaults.color,
+        font_size: 12,
+        z_index: getMaxZIndex(ctx.state) + 1,
+        parent_id: null,
+      })
+      if (!ctxResult.success) return { error: ctxResult.error }
+
+      // Create data_connector from agent to context object
+      const connDefaults = getShapeDefaults('data_connector')
+      const connResult = await buildAndInsertObject(ctx, 'data_connector', {
+        x: agentObj.x + (agentObj.width ?? 200),
+        y: agentObj.y + (agentObj.height ?? 140) / 2,
+        x2: ctxX,
+        y2: ctxY + defaults.height / 2,
+        width: connDefaults.width,
+        height: connDefaults.height,
+        rotation: 0,
+        text: '',
+        color: connDefaults.color,
+        font_size: 14,
+        stroke_width: connDefaults.stroke_width ?? 2,
+        z_index: getMaxZIndex(ctx.state) + 1,
+        parent_id: null,
+        connect_start_id: ctx.agentObjectId,
+        connect_start_anchor: 'right',
+        connect_end_id: ctxResult.id,
+        connect_end_anchor: 'left',
+      })
+      if (!connResult.success) return { error: connResult.error }
+
+      broadcastChanges(ctx.boardId, [
+        { action: 'create', object: ctxResult.obj as Partial<BoardObject> & { id: string } },
+        { action: 'create', object: connResult.obj as Partial<BoardObject> & { id: string } },
+      ])
+
+      return { contextObjectId: ctxResult.id, connectorId: connResult.id, summary }
+    },
+  ),
+
+  makeToolDef(
+    'createDataConnector',
+    'Create a data connector from you to another object, adding it to your visibility scope.',
+    createDataConnectorSchema,
+    async (ctx, { targetObjectId }) => {
+      if (!ctx.agentObjectId) return { error: 'createDataConnector is only available for per-agent chat' }
+
+      const agentObj = ctx.state.objects.get(ctx.agentObjectId)
+      if (!agentObj) return { error: 'Agent object not found' }
+
+      const target = ctx.state.objects.get(targetObjectId)
+      if (!target || target.deleted_at) return { error: `Target object ${targetObjectId} not found` }
+
+      const vectorTypes = ['line', 'arrow', 'data_connector']
+      if (vectorTypes.includes(target.type)) return { error: `Cannot connect to a ${target.type}` }
+
+      const connDefaults = getShapeDefaults('data_connector')
+      const x = agentObj.x + (agentObj.width ?? 200)
+      const y = agentObj.y + (agentObj.height ?? 140) / 2
+      const x2 = target.x
+      const y2 = target.y + (target.height ?? 0) / 2
+
+      const result = await buildAndInsertObject(ctx, 'data_connector', {
+        x, y, x2, y2,
+        width: connDefaults.width,
+        height: connDefaults.height,
+        rotation: 0,
+        text: '',
+        color: connDefaults.color,
+        font_size: 14,
+        stroke_width: connDefaults.stroke_width ?? 2,
+        z_index: getMaxZIndex(ctx.state) + 1,
+        parent_id: null,
+        connect_start_id: ctx.agentObjectId,
+        connect_start_anchor: 'right',
+        connect_end_id: targetObjectId,
+        connect_end_anchor: 'left',
+      })
+      if (!result.success) return { error: result.error }
+
+      broadcastChanges(ctx.boardId, [
+        { action: 'create', object: result.obj as Partial<BoardObject> & { id: string } },
+      ])
+
+      return { id: result.id, targetObjectId }
     },
   ),
 ]

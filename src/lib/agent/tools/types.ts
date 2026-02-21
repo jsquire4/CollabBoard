@@ -10,6 +10,8 @@ export interface ToolContext {
   userId: string
   hlc: HLC
   state: BoardState
+  /** When set, scopes tool visibility to objects connected via data_connector edges. */
+  agentObjectId?: string
 }
 
 /**

@@ -43,11 +43,15 @@ describe('useAgentChat', () => {
     vi.restoreAllMocks()
   })
 
-  it('requires agentObjectId in options', () => {
+  it('greets on mount when enabled (per-agent mode)', async () => {
     const { result } = renderHook(() =>
       useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' } }),
     )
-    expect(result.current.messages).toEqual([])
+    // Per-agent mode greets on mount — expect a streaming assistant message
+    await waitFor(() => {
+      const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+      expect(assistantMsg).toBeTruthy()
+    })
     expect(result.current.isLoading).toBe(false)
   })
 
@@ -189,19 +193,11 @@ describe('useAgentChat', () => {
     })
   })
 
-  it('history query includes agent_object_id filter', async () => {
+  it('per-agent mode skips board_messages query (ephemeral)', async () => {
     const { createClient } = await import('@/lib/supabase/client')
-    const orderChain = {
-      order: vi.fn(() => ({
-        limit: vi.fn(() => Promise.resolve({ data: [], error: null })),
-      })),
-    }
-    const filterEq = vi.fn(() => orderChain)
-    const filterIs = vi.fn(() => orderChain)
-    const boardEq = vi.fn(() => ({ eq: filterEq, is: filterIs }))
-    const select = vi.fn(() => ({ eq: boardEq }))
+    const fromFn = vi.fn()
     vi.mocked(createClient).mockReturnValueOnce({
-      from: vi.fn(() => ({ select })),
+      from: fromFn,
     } as unknown as ReturnType<typeof createClient>)
 
     renderHook(() =>
@@ -209,8 +205,8 @@ describe('useAgentChat', () => {
     )
 
     await waitFor(() => {
-      // The second .eq call should be for agent_object_id
-      expect(filterEq).toHaveBeenCalledWith('agent_object_id', 'my-agent-id')
+      // Per-agent mode is ephemeral — should NOT query board_messages
+      expect(fromFn).not.toHaveBeenCalled()
     })
   })
 

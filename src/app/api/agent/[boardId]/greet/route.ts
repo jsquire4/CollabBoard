@@ -4,13 +4,11 @@
  */
 
 import { NextRequest } from 'next/server'
-import OpenAI from 'openai'
 import { createClient } from '@/lib/supabase/server'
 import { UUID_RE } from '@/lib/api/uuidRe'
+import { getOpenAI } from '@/lib/agent/sse'
 
 export const maxDuration = 30
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 function sseEvent(data: Record<string, unknown>): string {
   return `data: ${JSON.stringify(data)}\n\n`
@@ -25,6 +23,12 @@ export async function POST(
   if (!UUID_RE.test(boardId)) {
     return Response.json({ error: 'Invalid board ID' }, { status: 400 })
   }
+
+  if (!process.env.OPENAI_API_KEY) {
+    return Response.json({ error: 'OPENAI_API_KEY not configured' }, { status: 500 })
+  }
+
+  const openai = getOpenAI()
 
   // Auth — viewers can see greetings
   const supabase = await createClient()

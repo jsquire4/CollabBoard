@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { useAgentChat } from '@/hooks/useAgentChat'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
@@ -21,9 +21,10 @@ const PANEL_MIN_WIDTH = 320
 const PANEL_MIN_HEIGHT = 300
 
 export function ChatPanel({ boardId, isOpen, onClose, objects, onDeleteFile }: ChatPanelProps) {
+  const mode = useMemo(() => ({ type: 'global' as const }), [])
   const { messages, isLoading, error, sendMessage, cancel } = useAgentChat({
     boardId,
-    mode: { type: 'global' },
+    mode,
     enabled: isOpen,
   })
   const scrollRef = useRef<HTMLDivElement>(null)

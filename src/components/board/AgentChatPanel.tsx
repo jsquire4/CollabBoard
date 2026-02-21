@@ -12,6 +12,7 @@ export interface AgentChatPanelProps {
   onClose: () => void
   agentState?: 'idle' | 'thinking' | 'done' | 'error' | null
   agentName?: string
+  viewportCenter?: { x: number; y: number }
 }
 
 const TOOL_LABELS: Record<string, string> = {
@@ -25,10 +26,12 @@ const TOOL_LABELS: Record<string, string> = {
   deleteObject: 'Deleting object...',
   updateText: 'Updating text...',
   changeColor: 'Changing color...',
-  getBoardState: 'Reading board...',
+  getConnectedObjects: 'Reading connected objects...',
   readFileContent: 'Reading file...',
   getFrameObjects: 'Inspecting frame...',
   describeImage: 'Analyzing image...',
+  saveMemory: 'Saving memory...',
+  createDataConnector: 'Creating data connector...',
 }
 
 function getToolProgressLabel(toolName: string): string {
@@ -80,6 +83,7 @@ export function AgentChatPanel({
   onClose,
   agentState,
   agentName = 'Board Agent',
+  viewportCenter,
 }: AgentChatPanelProps) {
   const [input, setInput] = useState('')
 
@@ -88,6 +92,7 @@ export function AgentChatPanel({
     boardId,
     mode,
     enabled: isOpen && !!agentObjectId,
+    viewportCenter,
   })
 
   const handleSend = useCallback(() => {

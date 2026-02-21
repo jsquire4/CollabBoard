@@ -4,7 +4,7 @@
 
 import path from 'path'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { makeToolDef, MAX_FILE_CHARS, SIGNED_URL_TTL } from './helpers'
+import { makeToolDef, MAX_FILE_CHARS, SIGNED_URL_TTL, getConnectedObjectIds } from './helpers'
 import { describeImageSchema, readFileContentSchema } from './schemas'
 import type { ToolDef } from './types'
 
@@ -15,6 +15,9 @@ export const fileTools: ToolDef[] = [
     'Describe an image that has been uploaded to the board. Pass the object ID of a file-type board object with an image MIME type.',
     describeImageSchema,
     async (ctx, { objectId }) => {
+      if (ctx.agentObjectId && !getConnectedObjectIds(ctx.state, ctx.agentObjectId).has(objectId)) {
+        return { error: 'Object not connected to this agent' }
+      }
       const obj = ctx.state.objects.get(objectId)
       if (!obj) return { error: `Object ${objectId} not found` }
       if (!obj.storage_path) return { error: 'Object has no file attached' }
@@ -51,6 +54,9 @@ export const fileTools: ToolDef[] = [
     'Read the text content of an uploaded file (text, markdown, CSV, or PDF). Returns the file content as text.',
     readFileContentSchema,
     async (ctx, { objectId }) => {
+      if (ctx.agentObjectId && !getConnectedObjectIds(ctx.state, ctx.agentObjectId).has(objectId)) {
+        return { error: 'Object not connected to this agent' }
+      }
       const obj = ctx.state.objects.get(objectId)
       if (!obj) return { error: `Object ${objectId} not found` }
       if (!obj.storage_path) return { error: 'Object has no file attached' }

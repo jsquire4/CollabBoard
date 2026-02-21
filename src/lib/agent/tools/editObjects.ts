@@ -6,7 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { plainTextToTipTap } from '@/lib/richText'
 import { broadcastChanges } from '@/lib/agent/boardState'
 import type { BoardObject } from '@/types/board'
-import { advanceClock, updateFields, makeToolDef } from './helpers'
+import { advanceClock, updateFields, makeToolDef, getConnectedObjectIds } from './helpers'
 import { stampFields } from '@/lib/crdt/merge'
 import {
   moveObjectSchema,
@@ -24,6 +24,9 @@ export const editObjectTools: ToolDef[] = [
     'Move an object to a new position on the board.',
     moveObjectSchema,
     async (ctx, { id, x, y }) => {
+      if (ctx.agentObjectId && !getConnectedObjectIds(ctx.state, ctx.agentObjectId).has(id)) {
+        return { error: 'Object not connected to this agent' }
+      }
       const clock = advanceClock(ctx)
       const clocks = stampFields(['x', 'y'], clock)
       const result = await updateFields(id, ctx.boardId, { x, y }, clocks, ctx)
@@ -38,6 +41,9 @@ export const editObjectTools: ToolDef[] = [
     'Resize an object on the board.',
     resizeObjectSchema,
     async (ctx, { id, width, height }) => {
+      if (ctx.agentObjectId && !getConnectedObjectIds(ctx.state, ctx.agentObjectId).has(id)) {
+        return { error: 'Object not connected to this agent' }
+      }
       const clock = advanceClock(ctx)
       const clocks = stampFields(['width', 'height'], clock)
       const result = await updateFields(id, ctx.boardId, { width, height }, clocks, ctx)
@@ -52,6 +58,9 @@ export const editObjectTools: ToolDef[] = [
     'Update the text content of an object. For sticky notes and frames, can also update the title.',
     updateTextSchema,
     async (ctx, { id, text, title }) => {
+      if (ctx.agentObjectId && !getConnectedObjectIds(ctx.state, ctx.agentObjectId).has(id)) {
+        return { error: 'Object not connected to this agent' }
+      }
       const clock = advanceClock(ctx)
       const updates: Record<string, unknown> = {}
       const fields: string[] = []
@@ -85,6 +94,9 @@ export const editObjectTools: ToolDef[] = [
     'Change the color of an object on the board. Color must be a valid hex value, e.g. #FF5733.',
     changeColorSchema,
     async (ctx, { id, color }) => {
+      if (ctx.agentObjectId && !getConnectedObjectIds(ctx.state, ctx.agentObjectId).has(id)) {
+        return { error: 'Object not connected to this agent' }
+      }
       const clock = advanceClock(ctx)
       const clocks = stampFields(['color'], clock)
       const result = await updateFields(id, ctx.boardId, { color }, clocks, ctx)
@@ -99,6 +111,9 @@ export const editObjectTools: ToolDef[] = [
     'Delete an object from the board by marking it as deleted.',
     deleteObjectSchema,
     async (ctx, { id }) => {
+      if (ctx.agentObjectId && !getConnectedObjectIds(ctx.state, ctx.agentObjectId).has(id)) {
+        return { error: 'Object not connected to this agent' }
+      }
       const existing = ctx.state.objects.get(id)
       if (!existing) return { error: `Object ${id} not found` }
 

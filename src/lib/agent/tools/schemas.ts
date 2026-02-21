@@ -93,6 +93,14 @@ export const getFrameObjectsSchema = z.object({
   frameId: z.string(),
 })
 
+export const saveMemorySchema = z.object({
+  summary: z.string().min(1).max(2000).describe('The memory content to persist as a context object on the board'),
+})
+
+export const createDataConnectorSchema = z.object({
+  targetObjectId: z.string().describe('The ID of the object to connect to'),
+})
+
 export const emptySchema = z.object({})
 
 // ── OpenAI JSON schemas (derived from Zod — single source of truth) ───────────
@@ -118,7 +126,9 @@ export const TOOL_SCHEMAS: Record<string, Record<string, unknown>> = Object.from
       ['describeImage', describeImageSchema],
       ['readFileContent', readFileContentSchema],
       ['getFrameObjects', getFrameObjectsSchema],
-      ['getBoardState', emptySchema],
+      ['getConnectedObjects', emptySchema],
+      ['saveMemory', saveMemorySchema],
+      ['createDataConnector', createDataConnectorSchema],
     ] as const
   ).map(([name, schema]) => {
     const jsonSchema = z.toJSONSchema(schema) as Record<string, unknown>

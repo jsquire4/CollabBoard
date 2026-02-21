@@ -1,28 +1,41 @@
 /**
  * Tests for POST /api/agent/[boardId]/global
- * Key differences from per-agent route: no agentObjectId, message prefixed with [Name (role)]:,
- * history scoped by agent_object_id IS NULL, no agent_state transitions.
+ * Now uses OpenAI Assistants API (threads + runs) instead of Chat Completions + board_messages.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
-import { collectSSE } from '@/test/sseHelpers'
-import { makeFakeChatStream } from '@/test/mocks/openai'
 
 // ── Hoisted constants + spies ─────────────────────────────────────────────────
-const { TEST_BOARD_ID, mockCreate, mockInsert, mockIsCall, mockGetUser, mockMemberSingle } = vi.hoisted(() => ({
+const {
+  TEST_BOARD_ID,
+  mockThreadMessageCreate,
+  mockRunStream,
+  mockGetUser,
+  mockMemberSingle,
+  mockGetOrCreateThread,
+  mockEnsureAssistant,
+} = vi.hoisted(() => ({
   TEST_BOARD_ID: '11111111-1111-1111-1111-111111111111',
-  mockCreate: vi.fn(),
-  mockInsert: vi.fn(),
-  mockIsCall: vi.fn(),
+  mockThreadMessageCreate: vi.fn(),
+  mockRunStream: vi.fn(),
   mockGetUser: vi.fn(),
   mockMemberSingle: vi.fn(),
+  mockGetOrCreateThread: vi.fn(),
+  mockEnsureAssistant: vi.fn(),
 }))
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 vi.mock('openai', () => ({
-  // Must use regular function (not arrow) so `new OpenAI(...)` works as constructor
   default: vi.fn().mockImplementation(function() {
-    return { chat: { completions: { create: mockCreate } } }
+    return {
+      beta: {
+        threads: {
+          messages: { create: mockThreadMessageCreate },
+          runs: { stream: mockRunStream },
+        },
+        assistants: { create: vi.fn().mockResolvedValue({ id: 'asst_test' }) },
+      },
+    }
   }),
 }))
 
@@ -44,19 +57,7 @@ vi.mock('@/lib/supabase/server', () => ({
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: vi.fn().mockReturnValue({
-    from: vi.fn((table: string) => {
-      if (table === 'board_messages') {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          is: mockIsCall,
-          order: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockResolvedValue({ data: [], error: null }),
-          insert: mockInsert,
-        }
-      }
-      return {}
-    }),
+    from: vi.fn().mockReturnValue({}),
   }),
 }))
 
@@ -75,6 +76,38 @@ vi.mock('@/lib/agent/tools', () => ({
 
 vi.mock('@/lib/userUtils', () => ({
   getUserDisplayName: vi.fn().mockReturnValue('Alice'),
+}))
+
+vi.mock('@/lib/agent/assistantsThread', () => ({
+  getOrCreateThread: mockGetOrCreateThread,
+  ensureAssistant: mockEnsureAssistant,
+}))
+
+vi.mock('@/lib/agent/sse', () => ({
+  getOpenAI: vi.fn().mockReturnValue({
+    beta: {
+      threads: {
+        messages: { create: mockThreadMessageCreate },
+        runs: { stream: mockRunStream },
+      },
+      assistants: { create: vi.fn().mockResolvedValue({ id: 'asst_test' }) },
+    },
+  }),
+  runAssistantsLoop: vi.fn().mockReturnValue(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'text-delta', text: 'Hello' })}\n\n`))
+        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
+        controller.close()
+      },
+    }),
+  ),
+  SSE_HEADERS: {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  },
 }))
 
 // Import route AFTER mocks
@@ -105,15 +138,9 @@ beforeEach(() => {
     data: { role: 'editor', can_use_agents: true },
     error: null,
   })
-  mockInsert.mockResolvedValue({ data: null, error: null })
-  // .is() in history chain must be chainable (returns object with order/limit)
-  mockIsCall.mockReturnValue({
-    order: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue({ data: [], error: null }),
-  })
-  mockCreate.mockImplementation(() =>
-    makeFakeChatStream([{ type: 'text', text: 'Hello from global' }, { type: 'done' }])
-  )
+  mockGetOrCreateThread.mockResolvedValue('thread_test123')
+  mockEnsureAssistant.mockResolvedValue('asst_test123')
+  mockThreadMessageCreate.mockResolvedValue({ id: 'msg_test' })
 })
 
 afterEach(() => {
@@ -158,40 +185,16 @@ describe('POST /api/agent/[boardId]/global', () => {
     expect(res.headers.get('Content-Type')).toContain('text/event-stream')
   })
 
-  it('streams text-delta and done events', async () => {
-    const res = await POST(makeRequest({ message: 'Summarize' }), makeParams())
-    const events = await collectSSE(res) as Array<Record<string, unknown>>
-    expect(events.some(e => e.type === 'text-delta')).toBe(true)
-    expect(events.some(e => e.type === 'done')).toBe(true)
-  })
+  it('adds prefixed user message to the OpenAI thread', async () => {
+    await POST(makeRequest({ message: 'Hello board' }), makeParams())
 
-  it('prefixes user message with [DisplayName (role)]: before persisting', async () => {
-    const res = await POST(makeRequest({ message: 'Hello board' }), makeParams())
-    await collectSSE(res)
-
-    const userInsert = mockInsert.mock.calls.find(
-      (args: unknown[]) => (args[0] as Record<string, unknown>)?.role === 'user'
+    expect(mockThreadMessageCreate).toHaveBeenCalledWith(
+      'thread_test123',
+      expect.objectContaining({
+        role: 'user',
+        content: expect.stringMatching(/^\[Alice \(editor\)\]: Hello board$/),
+      }),
     )
-    expect(userInsert).toBeDefined()
-    const content = (userInsert![0] as Record<string, unknown>).content as string
-    expect(content).toMatch(/^\[Alice \(editor\)\]: Hello board$/)
-  })
-
-  it('persists user message with agent_object_id as null', async () => {
-    const res = await POST(makeRequest({ message: 'Hi' }), makeParams())
-    await collectSSE(res)
-
-    const userInsert = mockInsert.mock.calls.find(
-      (args: unknown[]) => (args[0] as Record<string, unknown>)?.role === 'user'
-    )
-    expect(userInsert).toBeDefined()
-    expect((userInsert![0] as Record<string, unknown>).agent_object_id).toBeNull()
-  })
-
-  it('queries history with .is("agent_object_id", null) filter', async () => {
-    await POST(makeRequest({ message: 'Hi' }), makeParams())
-    // The history query should call .is('agent_object_id', null)
-    expect(mockIsCall).toHaveBeenCalledWith('agent_object_id', null)
   })
 
   it('returns 400 for non-UUID boardId', async () => {
@@ -210,16 +213,30 @@ describe('POST /api/agent/[boardId]/global', () => {
   it('sanitizes display name special chars in prefix', async () => {
     const { getUserDisplayName } = await import('@/lib/userUtils')
     vi.mocked(getUserDisplayName).mockReturnValueOnce('Alice [Admin]')
-    const res = await POST(makeRequest({ message: 'Hi' }), makeParams())
-    await collectSSE(res)
+    await POST(makeRequest({ message: 'Hi' }), makeParams())
 
-    const userInsert = mockInsert.mock.calls.find(
-      (args: unknown[]) => (args[0] as Record<string, unknown>)?.role === 'user'
+    expect(mockThreadMessageCreate).toHaveBeenCalledWith(
+      'thread_test123',
+      expect.objectContaining({
+        content: expect.stringContaining('Alice Admin'),
+      }),
     )
-    expect(userInsert).toBeDefined()
-    const content = (userInsert![0] as Record<string, unknown>).content as string
-    // Brackets from displayName should be stripped
+    // Brackets should be stripped
+    const content = mockThreadMessageCreate.mock.calls[0][1].content as string
     expect(content).not.toMatch(/\[Admin\]/)
-    expect(content).toContain('Alice Admin')
+  })
+
+  it('calls getOrCreateThread with boardId', async () => {
+    await POST(makeRequest({ message: 'Hi' }), makeParams())
+    expect(mockGetOrCreateThread).toHaveBeenCalledWith(expect.anything(), TEST_BOARD_ID)
+  })
+
+  it('calls ensureAssistant with tools and system prompt', async () => {
+    await POST(makeRequest({ message: 'Hi' }), makeParams())
+    expect(mockEnsureAssistant).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(Array),
+      expect.stringContaining('global board assistant'),
+    )
   })
 })

@@ -38,6 +38,9 @@ const BOARD_OBJECT_COLUMNS = [
   'field_clocks',
 ].join(',')
 
+/** Sentinel sender_id that tells the Realtime broadcast handler on the client
+ *  to skip applying this change (the agent already wrote it to the DB and the
+ *  client will receive the Realtime INSERT/UPDATE separately via the board channel). */
 const AGENT_SENDER_ID = '__agent__'
 
 export async function loadBoardState(boardId: string): Promise<BoardState> {

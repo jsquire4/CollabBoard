@@ -2,25 +2,8 @@ import { memo } from 'react'
 import { Group, Rect, Text } from 'react-konva'
 import type { ShapeProps } from './shapeUtils'
 import { handleShapeTransformEnd } from './shapeUtils'
+import { mimeTypeLabel, mimeTypeBadgeColor } from '@/lib/agent/mimeClassification'
 
-function fileTypeLabel(mimeType?: string | null): string {
-  if (!mimeType) return 'FILE'
-  if (mimeType.startsWith('image/')) return 'IMG'
-  if (mimeType === 'application/pdf') return 'PDF'
-  if (mimeType === 'text/csv') return 'CSV'
-  if (mimeType === 'text/markdown') return 'MD'
-  if (mimeType === 'text/plain') return 'TXT'
-  return 'FILE'
-}
-
-function badgeColor(mimeType?: string | null): string {
-  if (!mimeType) return '#94A3B8'
-  if (mimeType.startsWith('image/')) return '#10B981'
-  if (mimeType === 'application/pdf') return '#EF4444'
-  if (mimeType === 'text/csv') return '#F59E0B'
-  if (mimeType === 'text/markdown') return '#6366F1'
-  return '#94A3B8'
-}
 
 interface ContextObjectShapeProps extends ShapeProps {}
 
@@ -38,8 +21,8 @@ export const ContextObjectShape = memo(function ContextObjectShape({
   dragBoundFunc,
 }: ContextObjectShapeProps) {
   const { id, x, y, width, height, rotation, file_name, mime_type } = object
-  const label = fileTypeLabel(mime_type)
-  const badge = badgeColor(mime_type)
+  const label = mimeTypeLabel(mime_type)
+  const badge = mimeTypeBadgeColor(mime_type)
   const displayName = file_name || 'Untitled file'
   const BADGE_SIZE = 32
   const PADDING = 8

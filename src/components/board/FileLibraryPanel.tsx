@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { mimeTypeLabel, mimeTypeBadgeClass } from '@/lib/agent/mimeClassification'
 
 export interface FileRecord {
   id: string
@@ -23,21 +24,6 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function typeLabel(mimeType: string): string {
-  if (mimeType.startsWith('image/')) return 'IMG'
-  if (mimeType === 'application/pdf') return 'PDF'
-  if (mimeType === 'text/csv') return 'CSV'
-  if (mimeType === 'text/markdown') return 'MD'
-  if (mimeType === 'text/plain') return 'TXT'
-  return 'FILE'
-}
-
-function typeBg(mimeType: string): string {
-  if (mimeType.startsWith('image/')) return 'bg-emerald-100 text-emerald-700'
-  if (mimeType === 'application/pdf') return 'bg-red-100 text-red-700'
-  if (mimeType === 'text/csv') return 'bg-amber-100 text-amber-700'
-  return 'bg-slate-100 text-slate-600'
-}
 
 export function FileLibraryPanel({ boardId, isOpen, onClose }: FileLibraryPanelProps) {
   const [files, setFiles] = useState<FileRecord[]>([])
@@ -181,8 +167,8 @@ export function FileLibraryPanel({ boardId, isOpen, onClose }: FileLibraryPanelP
                 className="flex items-center gap-3 p-2 rounded-lg border border-slate-100 hover:border-slate-200 hover:bg-slate-50 cursor-grab active:cursor-grabbing transition-colors"
                 title="Drag onto canvas to add as context"
               >
-                <span className={`shrink-0 text-xs font-bold px-1.5 py-0.5 rounded ${typeBg(file.file_type)}`}>
-                  {typeLabel(file.file_type)}
+                <span className={`shrink-0 text-xs font-bold px-1.5 py-0.5 rounded ${mimeTypeBadgeClass(file.file_type)}`}>
+                  {mimeTypeLabel(file.file_type)}
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-slate-700 truncate">{file.name}</p>

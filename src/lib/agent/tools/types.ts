@@ -11,3 +11,13 @@ export interface ToolContext {
   hlc: HLC
   state: BoardState
 }
+
+/**
+ * A fully-wrapped tool definition (name, description, validated executor).
+ */
+export interface ToolDef {
+  name: string
+  description: string
+  /** Validates rawArgs with the tool's Zod schema, then calls execute. */
+  executor: (ctx: ToolContext, rawArgs: unknown) => Promise<unknown>
+}

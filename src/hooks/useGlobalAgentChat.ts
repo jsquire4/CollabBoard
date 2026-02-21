@@ -2,29 +2,20 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import type { ChatMessage } from './useAgentChat'
 
-export interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  user_display_name?: string | null
-  toolCalls?: { toolName: string; args: unknown }[]
-  toolResults?: { toolName: string; result: unknown }[]
-  isStreaming?: boolean
-}
+export type { ChatMessage }
 
-interface UseAgentChatOptions {
+interface UseGlobalAgentChatOptions {
   boardId: string
-  agentObjectId: string
   enabled?: boolean
 }
 
-export function useAgentChat({ boardId, agentObjectId, enabled = true }: UseAgentChatOptions) {
+export function useGlobalAgentChat({ boardId, enabled = true }: UseGlobalAgentChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
-  const greetedRef = useRef(false)
   const loadedRef = useRef(false)
   const messageIdRef = useRef(0)
 
@@ -81,9 +72,7 @@ export function useAgentChat({ boardId, agentObjectId, enabled = true }: UseAgen
             } else if (event.type === 'done') {
               receivedDone = true
               setMessages(prev => prev.map(m =>
-                m.id === assistantId
-                  ? { ...m, isStreaming: false }
-                  : m,
+                m.id === assistantId ? { ...m, isStreaming: false } : m,
               ))
             } else if (event.type === 'error') {
               setError(event.error)
@@ -97,9 +86,7 @@ export function useAgentChat({ boardId, agentObjectId, enabled = true }: UseAgen
       try { reader.cancel() } catch { /* ignore */ }
       if (!receivedDone) {
         setMessages(prev => prev.map(m =>
-          m.id === assistantId
-            ? { ...m, isStreaming: false }
-            : m,
+          m.id === assistantId ? { ...m, isStreaming: false } : m,
         ))
       }
     }
@@ -132,10 +119,10 @@ export function useAgentChat({ boardId, agentObjectId, enabled = true }: UseAgen
     abortRef.current = abort
 
     try {
-      const res = await fetch(`/api/agent/${boardId}`, {
+      const res = await fetch(`/api/agent/${boardId}/global`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, agentObjectId }),
+        body: JSON.stringify({ message }),
         signal: abort.signal,
       })
 
@@ -158,24 +145,24 @@ export function useAgentChat({ boardId, agentObjectId, enabled = true }: UseAgen
       setIsLoading(false)
       abortRef.current = null
     }
-  }, [boardId, agentObjectId, isLoading, consumeSSE])
+  }, [boardId, isLoading, consumeSSE])
 
-  // ── Load history + greet on mount ─────────────────────────
+  // ── Load history on mount ─────────────────────────────────
 
   useEffect(() => {
-    if (!enabled || !agentObjectId || loadedRef.current) return
+    if (!enabled || loadedRef.current) return
     loadedRef.current = true
 
     const abortController = new AbortController()
 
     const init = async () => {
-      // Load persisted messages scoped to this agent
       const supabase = createClient()
+      // Global messages: agent_object_id IS NULL
       const { data } = await supabase
         .from('board_messages')
         .select('id, role, content, tool_calls, user_display_name, created_at')
         .eq('board_id', boardId)
-        .eq('agent_object_id', agentObjectId)
+        .is('agent_object_id', null)
         .order('created_at', { ascending: true })
         .limit(200)
 
@@ -191,72 +178,21 @@ export function useAgentChat({ boardId, agentObjectId, enabled = true }: UseAgen
         }))
         messageIdRef.current = loaded.length
         setMessages(loaded)
-        greetedRef.current = true
-        return
-      }
-
-      // No history — show greeting
-      if (greetedRef.current) return
-      greetedRef.current = true
-
-      const assistantId = nextId()
-      const assistantMsg: ChatMessage = {
-        id: assistantId,
-        role: 'assistant',
-        content: '',
-        isStreaming: true,
-      }
-      setMessages([assistantMsg])
-
-      try {
-        const res = await fetch(`/api/agent/${boardId}/greet`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ isNewBoard: false }),
-          signal: abortController.signal,
-        })
-
-        if (res.ok) {
-          await consumeSSE(res, assistantId)
-        } else {
-          setMessages(prev => prev.map(m =>
-            m.id === assistantId
-              ? { ...m, content: 'Welcome! How can I help you with your board?', isStreaming: false }
-              : m,
-          ))
-        }
-      } catch (err) {
-        if ((err as Error).name === 'AbortError') return
-        setMessages(prev => prev.map(m =>
-          m.id === assistantId
-            ? { ...m, content: 'Welcome! How can I help you with your board?', isStreaming: false }
-            : m,
-        ))
       }
     }
 
     init()
-
     return () => {
       abortController.abort()
       abortRef.current?.abort()
       loadedRef.current = false
-      greetedRef.current = false
     }
-  }, [boardId, agentObjectId, enabled, consumeSSE])
-
-  // ── Cancel ────────────────────────────────────────────────
+  }, [boardId, enabled])
 
   const cancel = useCallback(() => {
     abortRef.current?.abort()
     setIsLoading(false)
   }, [])
 
-  return {
-    messages,
-    isLoading,
-    error,
-    sendMessage,
-    cancel,
-  }
+  return { messages, isLoading, error, sendMessage, cancel }
 }

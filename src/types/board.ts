@@ -88,3 +88,4 @@ export type {
   GenericShapeObject,
   AgentObject,
 } from './boardObject'
+export type { BoardMessage } from './boardMessage'

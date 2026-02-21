@@ -89,6 +89,7 @@ export interface BoardObjectAgent {
   agent_state?: 'idle' | 'thinking' | 'done' | 'error' | null
   agent_session_id?: string | null
   source_agent_id?: string | null
+  model?: string | null
 }
 
 export interface BoardObjectMeta {

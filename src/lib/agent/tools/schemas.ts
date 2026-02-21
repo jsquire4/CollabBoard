@@ -103,6 +103,15 @@ export const createDataConnectorSchema = z.object({
 
 export const emptySchema = z.object({})
 
+export const layoutObjectsSchema = z.object({
+  objectIds: z.array(z.string()).optional().describe('IDs of objects to arrange. If omitted, arranges all moveable objects.'),
+  layout: z.enum(['grid', 'horizontal', 'vertical']).describe('Layout strategy'),
+  columns: z.number().optional().describe('Number of columns (grid only). Defaults to sqrt of object count.'),
+  startX: z.number().optional().describe('Starting X coordinate. Defaults to 100.'),
+  startY: z.number().optional().describe('Starting Y coordinate. Defaults to 100.'),
+  padding: z.number().optional().describe('Spacing between objects in pixels. Defaults to 20.'),
+})
+
 // ── OpenAI JSON schemas (derived from Zod — single source of truth) ───────────
 
 /**
@@ -129,6 +138,8 @@ export const TOOL_SCHEMAS: Record<string, Record<string, unknown>> = Object.from
       ['getConnectedObjects', emptySchema],
       ['saveMemory', saveMemorySchema],
       ['createDataConnector', createDataConnectorSchema],
+      ['getBoardState', emptySchema],
+      ['layoutObjects', layoutObjectsSchema],
     ] as const
   ).map(([name, schema]) => {
     const jsonSchema = z.toJSONSchema(schema) as Record<string, unknown>

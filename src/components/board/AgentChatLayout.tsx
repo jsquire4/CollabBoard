@@ -11,6 +11,9 @@ export interface AgentChatLayoutProps {
   /** Header content */
   header: ReactNode
 
+  /** Optional quick-action buttons between header and messages */
+  quickActions?: ReactNode
+
   /** Messages to display */
   messages: ChatMessage[]
   /** Render a single message */
@@ -39,6 +42,7 @@ export function AgentChatLayout({
   className = '',
   style,
   header,
+  quickActions,
   messages,
   renderMessage,
   emptyText = 'No messages yet.',
@@ -70,6 +74,13 @@ export function AgentChatLayout({
     >
       {/* Header slot */}
       {header}
+
+      {/* Quick actions slot */}
+      {quickActions && (
+        <div className="border-b border-slate-100 shrink-0">
+          {quickActions}
+        </div>
+      )}
 
       {/* Messages area */}
       <div className="flex-1 p-4 overflow-y-auto min-h-32">

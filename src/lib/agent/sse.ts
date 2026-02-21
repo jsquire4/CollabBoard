@@ -10,10 +10,21 @@ type AssistantStreamEvent = OpenAI.Beta.Assistants.AssistantStreamEvent
 let _openai: OpenAI | null = null
 
 /** Lazily instantiate the OpenAI client so route modules can load even when
- *  OPENAI_API_KEY is not yet in the environment (e.g. during build). */
+ *  OPENAI_API_KEY is not yet in the environment (e.g. during build).
+ *  When LANGSMITH_API_KEY is set, wraps the client for automatic tracing. */
 export function getOpenAI(): OpenAI {
   if (!_openai) {
-    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    let client: OpenAI = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    if (process.env.LANGSMITH_API_KEY) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { wrapOpenAI } = require('langsmith/wrappers/openai')
+        client = wrapOpenAI(client)
+      } catch {
+        // langsmith not available — continue without tracing
+      }
+    }
+    _openai = client
   }
   return _openai
 }
@@ -24,11 +35,20 @@ const MAX_STEPS = 10
 // Maximum characters for a single tool-call argument blob (prevents huge DB writes)
 const MAX_TOOL_ARG_CHARS = 4_096
 
+export interface TraceMetadata {
+  boardId?: string
+  userId?: string
+  agentType?: string
+  [key: string]: unknown
+}
+
 export interface AgentLoopConfig {
   messages: OpenAI.Chat.ChatCompletionMessageParam[]
   tools: OpenAI.Chat.ChatCompletionTool[]
   model: string
   executors: Map<string, (args: unknown) => Promise<unknown>>
+  /** Optional LangSmith trace metadata (boardId, userId, agentType) */
+  traceMetadata?: TraceMetadata
   onMessage(msg: OpenAI.Chat.ChatCompletionMessageParam): Promise<void>
   onToolResult(name: string, result: unknown): Promise<void>
   onError(err: Error): Promise<void>
@@ -72,13 +92,21 @@ export function runAgentLoop(
         while (stepCount < MAX_STEPS) {
           stepCount++
 
-          const completion = await openai.chat.completions.create({
+          const createParams: Parameters<typeof openai.chat.completions.create>[0] = {
             model,
             messages,
             tools: tools.length > 0 ? tools : undefined,
             tool_choice: tools.length > 0 ? 'auto' : undefined,
             stream: true,
-          })
+          }
+          // LangSmith metadata — wrapOpenAI reads langsmithExtra from the second arg
+          const langsmithOpts = config.traceMetadata
+            ? { langsmithExtra: { metadata: config.traceMetadata } }
+            : undefined
+          const completion = await openai.chat.completions.create(
+            createParams,
+            langsmithOpts as Parameters<typeof openai.chat.completions.create>[1],
+          )
 
           let chunkContent = ''
           const pendingToolCalls: Map<number, { id: string; name: string; args: string }> = new Map()
@@ -198,6 +226,8 @@ export interface AssistantsLoopConfig {
   assistantId: string
   additionalInstructions?: string
   executors: Map<string, (args: unknown) => Promise<unknown>>
+  /** Optional LangSmith trace metadata (boardId, userId, agentType) */
+  traceMetadata?: TraceMetadata
   onDone(content: string): Promise<void>
   onError(err: Error): Promise<void>
 }

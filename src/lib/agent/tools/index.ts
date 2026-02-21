@@ -19,6 +19,7 @@ import { TOOL_SCHEMAS } from './schemas'
 import { createObjectTools } from './createObjects'
 import { editObjectTools } from './editObjects'
 import { queryObjectTools } from './queryObjects'
+import { layoutObjectTools } from './layoutObjects'
 import { fileTools } from './fileTools'
 import type { ToolContext } from './types'
 
@@ -35,21 +36,29 @@ function openaiTool(name: string, description: string, parameters: Record<string
 
 // ── Tool factory ──────────────────────────────────────────────────────────────
 
-export function createTools(ctx: ToolContext): {
+export interface CreateToolsOptions {
+  /** Tool names to exclude from the returned set (e.g. ['saveMemory', 'createDataConnector']) */
+  excludeTools?: string[]
+}
+
+export function createTools(ctx: ToolContext, options?: CreateToolsOptions): {
   definitions: OpenAI.Chat.ChatCompletionTool[]
   executors: Map<string, (args: unknown) => Promise<unknown>>
 } {
   const definitions: OpenAI.Chat.ChatCompletionTool[] = []
   const executors = new Map<string, (args: unknown) => Promise<unknown>>()
+  const excludeSet = new Set(options?.excludeTools ?? [])
 
   const allTools = [
     ...createObjectTools,
     ...editObjectTools,
     ...queryObjectTools,
+    ...layoutObjectTools,
     ...fileTools,
   ]
 
   for (const tool of allTools) {
+    if (excludeSet.has(tool.name)) continue
     definitions.push(openaiTool(
       tool.name,
       tool.description,

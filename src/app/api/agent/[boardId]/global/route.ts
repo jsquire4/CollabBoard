@@ -93,10 +93,22 @@ export async function POST(
   // ── Build tools ───────────────────────────────────────────
   const systemPrompt = `You are the global board assistant for a collaborative whiteboard. Multiple team members share this conversation. User messages are prefixed with [Name (role)]: to identify who sent them.
 
-You can read and modify the board using the available tools. Be helpful to all team members and coordinate work effectively.`
+You can read and modify the board using the available tools. Be helpful to all team members and coordinate work effectively.
+
+## Execution Rules
+
+1. **Always call getBoardState first** when asked about board contents, before summarizing or rearranging.
+2. **For templates** (SWOT, journey map, retro, grids): execute ALL creation steps before responding. Do not stop partway — the user expects a complete result.
+3. **Create the frame first**, then place child objects inside its bounds. Children should have coordinates within the frame's x/y/width/height.
+4. **After creating objects**, call layoutObjects if the user asks for arrangement or if objects need tidy positioning.
+5. **Coordinate system**: x increases rightward, y increases downward. Default canvas area is roughly 0–2000 x 0–1200. Place new content starting around (100, 100) unless the user specifies otherwise.
+6. **Colors**: Use distinct hex colors for visual differentiation. Good defaults: #FFEB3B (yellow), #4FC3F7 (blue), #81C784 (green), #E57373 (red), #FFB74D (orange), #CE93D8 (purple).
+7. When summarizing the board, read all objects via getBoardState and produce a structured text overview grouped by type or spatial region.`
 
   const toolCtx = createToolContext(boardId, user.id, boardState)
-  const { definitions: toolDefinitions, executors } = createTools(toolCtx)
+  const { definitions: toolDefinitions, executors } = createTools(toolCtx, {
+    excludeTools: ['saveMemory', 'createDataConnector'],
+  })
 
   // Convert Chat Completions tool format to Assistants API format
   const assistantTools: Parameters<typeof ensureAssistant>[1] = toolDefinitions
@@ -113,6 +125,7 @@ You can read and modify the board using the available tools. Be helpful to all t
     threadId,
     assistantId,
     executors,
+    traceMetadata: { boardId, userId: user.id, agentType: 'global' },
     async onDone(_content) {
       // Thread stores messages automatically — no DB writes needed
     },

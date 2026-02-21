@@ -146,6 +146,7 @@ Guidelines:
     tools: toolDefinitions,
     model: agentModel,
     executors,
+    traceMetadata: { boardId, userId: user.id, agentType: 'per-agent' },
     async onMessage(_msg) {
       // Ephemeral — no persistence
     },

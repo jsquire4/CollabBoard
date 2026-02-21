@@ -84,6 +84,7 @@ vi.mock('uuid', () => ({
 import { createObjectTools } from './createObjects'
 import { editObjectTools } from './editObjects'
 import { queryObjectTools } from './queryObjects'
+import { layoutObjectTools } from './layoutObjects'
 import { fileTools } from './fileTools'
 import type { ToolContext } from './types'
 import type { BoardObject } from '@/types/board'
@@ -653,6 +654,87 @@ describe('editObjects', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe('queryObjects', () => {
+  describe('getBoardState', () => {
+    it('returns all non-deleted objects from freshly loaded state', async () => {
+      const obj1 = makeBoardObject({ id: 'obj-1', type: 'sticky_note', x: 10.5, y: 20.3 })
+      const obj2 = makeBoardObject({ id: 'obj-2', type: 'rectangle', x: 100, y: 200 })
+      const freshState = {
+        boardId: 'board-1',
+        objects: new Map([['obj-1', obj1], ['obj-2', obj2]]),
+        fieldClocks: new Map(),
+      }
+      mockLoadBoardState.mockResolvedValue(freshState)
+
+      const ctx = makeCtx()
+      const result = await getTool(queryObjectTools, 'getBoardState').executor(ctx, {}) as {
+        objectCount: number
+        objects: Array<{ id: string; x: number; y: number }>
+      }
+
+      expect(mockLoadBoardState).toHaveBeenCalledWith('board-1')
+      expect(ctx.state).toBe(freshState)
+      expect(result.objectCount).toBe(2)
+      expect(result.objects).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'obj-1', x: 11, y: 20 }), // rounded
+        expect.objectContaining({ id: 'obj-2', x: 100, y: 200 }),
+      ]))
+    })
+
+    it('filters out deleted objects', async () => {
+      const alive = makeBoardObject({ id: 'alive-1', type: 'sticky_note', deleted_at: null })
+      const deleted = makeBoardObject({ id: 'del-1', type: 'sticky_note', deleted_at: '2026-01-01T00:00:00Z' })
+      const freshState = {
+        boardId: 'board-1',
+        objects: new Map([['alive-1', alive], ['del-1', deleted]]),
+        fieldClocks: new Map(),
+      }
+      mockLoadBoardState.mockResolvedValue(freshState)
+
+      const ctx = makeCtx()
+      const result = await getTool(queryObjectTools, 'getBoardState').executor(ctx, {}) as {
+        objectCount: number
+        objects: Array<{ id: string }>
+      }
+
+      expect(result.objectCount).toBe(1)
+      expect(result.objects[0].id).toBe('alive-1')
+    })
+
+    it('returns empty when board has no objects', async () => {
+      mockLoadBoardState.mockResolvedValue({
+        boardId: 'board-1',
+        objects: new Map(),
+        fieldClocks: new Map(),
+      })
+
+      const ctx = makeCtx()
+      const result = await getTool(queryObjectTools, 'getBoardState').executor(ctx, {}) as {
+        objectCount: number
+        objects: unknown[]
+      }
+
+      expect(result.objectCount).toBe(0)
+      expect(result.objects).toHaveLength(0)
+    })
+
+    it('works regardless of agentObjectId (no scope guard)', async () => {
+      const obj = makeBoardObject({ id: 'obj-1', type: 'rectangle' })
+      mockLoadBoardState.mockResolvedValue({
+        boardId: 'board-1',
+        objects: new Map([['obj-1', obj]]),
+        fieldClocks: new Map(),
+      })
+
+      const ctx = makeCtx()
+      ctx.agentObjectId = 'some-agent' // scoped, but getBoardState should still work
+      const result = await getTool(queryObjectTools, 'getBoardState').executor(ctx, {}) as {
+        objectCount: number
+      }
+
+      expect(result.objectCount).toBe(1)
+    })
+  })
+
   describe('getConnectedObjects', () => {
     it('returns all objects from freshly loaded state and updates ctx.state', async () => {
       const freshObj = makeBoardObject({ id: 'fresh-1', type: 'rectangle', x: 10.7, y: 20.3 })
@@ -801,6 +883,129 @@ describe('queryObjects', () => {
       ctx.agentObjectId = 'agent-1'
       const result = await getTool(queryObjectTools, 'getFrameObjects').executor(ctx, { frameId: 'frame-1' })
       expect(result).toMatchObject({ error: 'Object not connected to this agent' })
+    })
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// layoutObjects
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('layoutObjects', () => {
+  describe('layoutObjects', () => {
+    it('arranges objects in grid layout with correct math', async () => {
+      const obj1 = makeBoardObject({ id: 'o1', type: 'sticky_note', width: 150, height: 150, deleted_at: null })
+      const obj2 = makeBoardObject({ id: 'o2', type: 'rectangle', width: 150, height: 150, deleted_at: null })
+      const obj3 = makeBoardObject({ id: 'o3', type: 'circle', width: 150, height: 150, deleted_at: null })
+      const obj4 = makeBoardObject({ id: 'o4', type: 'sticky_note', width: 150, height: 150, deleted_at: null })
+      const freshState = {
+        boardId: 'board-1',
+        objects: new Map([['o1', obj1], ['o2', obj2], ['o3', obj3], ['o4', obj4]]),
+        fieldClocks: new Map(),
+      }
+      mockLoadBoardState.mockResolvedValue(freshState)
+
+      const ctx = makeCtx()
+      const result = await getTool(layoutObjectTools, 'layoutObjects').executor(ctx, {
+        layout: 'grid',
+        columns: 2,
+        startX: 100,
+        startY: 100,
+        padding: 20,
+      }) as { success: boolean; movedCount: number; movedIds: string[] }
+
+      expect(result.success).toBe(true)
+      expect(result.movedCount).toBe(4)
+      expect(result.movedIds).toHaveLength(4)
+      // Should call updateFields for each object
+      expect(mockUpdateFields).toHaveBeenCalledTimes(4)
+      // Should broadcast once
+      expect(mockBroadcastChanges).toHaveBeenCalledOnce()
+    })
+
+    it('arranges specific objects by ID', async () => {
+      const obj1 = makeBoardObject({ id: 'o1', type: 'sticky_note', width: 150, height: 150, deleted_at: null })
+      const obj2 = makeBoardObject({ id: 'o2', type: 'rectangle', width: 200, height: 200, deleted_at: null })
+      const obj3 = makeBoardObject({ id: 'o3', type: 'circle', width: 100, height: 100, deleted_at: null })
+      const freshState = {
+        boardId: 'board-1',
+        objects: new Map([['o1', obj1], ['o2', obj2], ['o3', obj3]]),
+        fieldClocks: new Map(),
+      }
+      mockLoadBoardState.mockResolvedValue(freshState)
+
+      const ctx = makeCtx()
+      const result = await getTool(layoutObjectTools, 'layoutObjects').executor(ctx, {
+        objectIds: ['o1', 'o3'],
+        layout: 'horizontal',
+      }) as { success: boolean; movedCount: number; movedIds: string[] }
+
+      expect(result.success).toBe(true)
+      expect(result.movedCount).toBe(2)
+      expect(mockUpdateFields).toHaveBeenCalledTimes(2)
+    })
+
+    it('returns error when no objects found', async () => {
+      mockLoadBoardState.mockResolvedValue({
+        boardId: 'board-1',
+        objects: new Map(),
+        fieldClocks: new Map(),
+      })
+
+      const ctx = makeCtx()
+      const result = await getTool(layoutObjectTools, 'layoutObjects').executor(ctx, {
+        layout: 'grid',
+      })
+      expect(result).toMatchObject({ error: 'No objects found to arrange' })
+    })
+
+    it('skips non-moveable types (e.g. data_connector)', async () => {
+      const connector = makeBoardObject({ id: 'dc-1', type: 'data_connector', deleted_at: null })
+      const freshState = {
+        boardId: 'board-1',
+        objects: new Map([['dc-1', connector]]),
+        fieldClocks: new Map(),
+      }
+      mockLoadBoardState.mockResolvedValue(freshState)
+
+      const ctx = makeCtx()
+      const result = await getTool(layoutObjectTools, 'layoutObjects').executor(ctx, {
+        layout: 'grid',
+      })
+      expect(result).toMatchObject({ error: 'No objects found to arrange' })
+    })
+
+    it('vertical layout stacks objects vertically', async () => {
+      const obj1 = makeBoardObject({ id: 'o1', type: 'sticky_note', width: 150, height: 100, deleted_at: null })
+      const obj2 = makeBoardObject({ id: 'o2', type: 'sticky_note', width: 150, height: 100, deleted_at: null })
+      const freshState = {
+        boardId: 'board-1',
+        objects: new Map([['o1', obj1], ['o2', obj2]]),
+        fieldClocks: new Map(),
+      }
+      mockLoadBoardState.mockResolvedValue(freshState)
+
+      const ctx = makeCtx()
+      const result = await getTool(layoutObjectTools, 'layoutObjects').executor(ctx, {
+        layout: 'vertical',
+        startX: 50,
+        startY: 50,
+        padding: 10,
+      }) as { success: boolean; movedCount: number }
+
+      expect(result.success).toBe(true)
+      expect(result.movedCount).toBe(2)
+      // First object at y=50, second at y=50+100+10=160
+      const firstCall = mockUpdateFields.mock.calls[0]
+      const secondCall = mockUpdateFields.mock.calls[1]
+      expect(firstCall[2]).toMatchObject({ x: 50, y: 50 })
+      expect(secondCall[2]).toMatchObject({ x: 50, y: 160 })
+    })
+
+    it('returns { error } on invalid args (missing layout)', async () => {
+      const ctx = makeCtx()
+      const result = await getTool(layoutObjectTools, 'layoutObjects').executor(ctx, {})
+      expect((result as { error: string }).error).toMatch(/Invalid arguments/)
     })
   })
 })

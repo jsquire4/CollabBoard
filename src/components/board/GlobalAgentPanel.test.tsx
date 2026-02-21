@@ -201,4 +201,50 @@ describe('GlobalAgentPanel', () => {
     // Error message should have red styling
     expect(screen.getByText('Something went wrong').className).toContain('text-red-500')
   })
+
+  // ── Quick Action Chips ────────────────────────────────────────────
+
+  // 12. renders all 6 quick action chips
+  it('renders all 6 quick action chips when open', () => {
+    render(<GlobalAgentPanel boardId={BOARD_ID} isOpen={true} onClose={noop} />)
+
+    expect(screen.getByText('SWOT Analysis')).toBeInTheDocument()
+    expect(screen.getByText('User Journey')).toBeInTheDocument()
+    expect(screen.getByText('Retrospective')).toBeInTheDocument()
+    expect(screen.getByText('Arrange in Grid')).toBeInTheDocument()
+    expect(screen.getByText('2x3 Sticky Grid')).toBeInTheDocument()
+    expect(screen.getByText('Summarize Board')).toBeInTheDocument()
+  })
+
+  // 13. clicking a quick action chip calls sendMessage with the crafted prompt
+  it('calls sendMessage when a quick action chip is clicked', async () => {
+    const sendMessage = vi.fn()
+    vi.mocked(useAgentChat).mockReturnValue(defaultHookReturn({ sendMessage }))
+
+    render(<GlobalAgentPanel boardId={BOARD_ID} isOpen={true} onClose={noop} />)
+
+    const swotChip = screen.getByText('SWOT Analysis')
+    await userEvent.click(swotChip)
+
+    expect(sendMessage).toHaveBeenCalledOnce()
+    // The prompt should contain SWOT-related instructions
+    expect(sendMessage.mock.calls[0][0]).toContain('SWOT Analysis')
+  })
+
+  // 14. quick action chips are disabled when isLoading
+  it('disables quick action chips when isLoading is true', () => {
+    vi.mocked(useAgentChat).mockReturnValue(
+      defaultHookReturn({ isLoading: true })
+    )
+
+    render(<GlobalAgentPanel boardId={BOARD_ID} isOpen={true} onClose={noop} />)
+
+    const chips = screen.getAllByRole('button').filter(
+      btn => btn.getAttribute('data-testid')?.startsWith('quick-action-')
+    )
+    expect(chips.length).toBe(6)
+    for (const chip of chips) {
+      expect(chip).toBeDisabled()
+    }
+  })
 })

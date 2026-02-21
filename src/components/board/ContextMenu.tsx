@@ -284,8 +284,7 @@ export function ContextMenu({
     let ny = position.y
     if (nx + rect.width > vw) nx = Math.max(0, vw - rect.width - 8)
     if (ny + rect.height > vh) ny = Math.max(0, vh - rect.height - 8)
-    if (nx !== pos.x || ny !== pos.y) setPos({ x: nx, y: ny })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    setPos({ x: nx, y: ny })
   }, [position.x, position.y])
 
   // Hover timer — 150 ms delay before opening sub-menu

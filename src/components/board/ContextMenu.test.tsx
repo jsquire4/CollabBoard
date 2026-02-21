@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, act, fireEvent } from '@testing-library/react'
 import { ContextMenu } from './ContextMenu'
 import { createBoardContextWrapper } from '@/test/renderWithBoardContext'
-import { makeRectangle, makeArrow, makeTable } from '@/test/boardObjectFactory'
+import { makeRectangle, makeArrow, makeTable, makeLine, makeDataConnector } from '@/test/boardObjectFactory'
 import type { BoardObject } from '@/types/board'
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -142,6 +142,93 @@ describe('ContextMenu', () => {
     expect(screen.getByRole('button', { name: /delete row/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /add column/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /delete column/i })).toBeInTheDocument()
+  })
+
+  // ── Order sub-menu (z-order) ──────────────────────────────────────────
+
+  it('shows Order button for unlocked objects', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    renderMenu('obj-1', objects)
+    expect(screen.getByRole('button', { name: /order/i })).toBeInTheDocument()
+  })
+
+  it('hides Order button when object is locked', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    renderMenu('obj-1', objects, {}, { isObjectLocked: () => true })
+    expect(screen.queryByRole('button', { name: /^order$/i })).not.toBeInTheDocument()
+  })
+
+  it('expands Order sub-menu showing all four z-order actions on hover', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    renderMenu('obj-1', objects)
+    hoverOpen(/^order$/i)
+    expect(screen.getByRole('button', { name: /bring to front/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Forward/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Backward/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /send to back/i })).toBeInTheDocument()
+  })
+
+  it('calls onBringToFront and onClose when Bring to Front is clicked', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    const onBringToFront = vi.fn()
+    const { onClose } = renderMenu('obj-1', objects, { onBringToFront })
+    hoverOpen(/^order$/i)
+    fireEvent.click(screen.getByRole('button', { name: /bring to front/i }))
+    expect(onBringToFront).toHaveBeenCalledTimes(1)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  // ── Comment button ─────────────────────────────────────────────────────
+
+  it('shows Comment button for rectangle objects', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    renderMenu('obj-1', objects)
+    expect(screen.getByRole('button', { name: /comment/i })).toBeInTheDocument()
+  })
+
+  it('hides Comment button for line objects', () => {
+    const objects = new Map([['obj-1', makeLine({ id: 'obj-1' })]])
+    renderMenu('obj-1', objects)
+    expect(screen.queryByRole('button', { name: /comment/i })).not.toBeInTheDocument()
+  })
+
+  it('hides Comment button for data_connector objects', () => {
+    const objects = new Map([['obj-1', makeDataConnector({ id: 'obj-1' })]])
+    renderMenu('obj-1', objects)
+    expect(screen.queryByRole('button', { name: /comment/i })).not.toBeInTheDocument()
+  })
+
+  it('calls onCommentOpen and onClose when Comment is clicked', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    const onCommentOpen = vi.fn()
+    const { onClose } = renderMenu('obj-1', objects, { onCommentOpen })
+    fireEvent.click(screen.getByRole('button', { name: /comment/i }))
+    expect(onCommentOpen).toHaveBeenCalledWith('obj-1')
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  // ── Edit sub-menu: canEditVertices ─────────────────────────────────────
+
+  it('shows Edit button when canEditVertices is true', () => {
+    const objects = new Map([['obj-1', makeArrow({ id: 'obj-1' })]])
+    renderMenu('obj-1', objects, { canEditVertices: true })
+    expect(screen.getByRole('button', { name: /edit/i })).toBeInTheDocument()
+  })
+
+  it('expands Edit sub-menu showing Edit Vertices button when canEditVertices', () => {
+    const objects = new Map([['obj-1', makeArrow({ id: 'obj-1' })]])
+    const onEditVertices = vi.fn()
+    renderMenu('obj-1', objects, { canEditVertices: true, onEditVertices })
+    hoverOpen(/edit/i)
+    expect(screen.getByRole('button', { name: /edit vertices/i })).toBeInTheDocument()
+  })
+
+  // ── Delete hidden when locked ──────────────────────────────────────────
+
+  it('hides Delete button when object is locked', () => {
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    renderMenu('obj-1', objects, { canUnlock: true }, { isObjectLocked: () => true })
+    expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument()
   })
 
   // ── Markers moved to PropertiesPanel — not in context menu ────────────

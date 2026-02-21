@@ -193,4 +193,33 @@ describe('POST /api/agent/[boardId]/global', () => {
     // The history query should call .is('agent_object_id', null)
     expect(mockIsCall).toHaveBeenCalledWith('agent_object_id', null)
   })
+
+  it('returns 400 for non-UUID boardId', async () => {
+    const res = await POST(makeRequest({ message: 'Hi' }), { params: Promise.resolve({ boardId: 'not-a-uuid' }) })
+    expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({ error: expect.stringMatching(/invalid board/i) })
+  })
+
+  it('returns 500 when OPENAI_API_KEY is not configured', async () => {
+    vi.stubEnv('OPENAI_API_KEY', '')
+    const res = await POST(makeRequest({ message: 'Hi' }), makeParams())
+    expect(res.status).toBe(500)
+    expect(await res.json()).toMatchObject({ error: expect.stringMatching(/OPENAI_API_KEY/i) })
+  })
+
+  it('sanitizes display name special chars in prefix', async () => {
+    const { getUserDisplayName } = await import('@/lib/userUtils')
+    vi.mocked(getUserDisplayName).mockReturnValueOnce('Alice [Admin]')
+    const res = await POST(makeRequest({ message: 'Hi' }), makeParams())
+    await collectSSE(res)
+
+    const userInsert = mockInsert.mock.calls.find(
+      (args: unknown[]) => (args[0] as Record<string, unknown>)?.role === 'user'
+    )
+    expect(userInsert).toBeDefined()
+    const content = (userInsert![0] as Record<string, unknown>).content as string
+    // Brackets from displayName should be stripped
+    expect(content).not.toMatch(/\[Admin\]/)
+    expect(content).toContain('Alice Admin')
+  })
 })

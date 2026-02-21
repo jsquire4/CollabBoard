@@ -185,6 +185,7 @@ export function useGlobalAgentChat({ boardId, enabled = true }: UseGlobalAgentCh
     return () => {
       abortController.abort()
       abortRef.current?.abort()
+      loadedRef.current = false
     }
   }, [boardId, enabled])
 

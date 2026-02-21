@@ -82,7 +82,6 @@ export function AgentChatPanel({
 }: AgentChatPanelProps) {
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const { messages, isLoading, error, sendMessage } = useAgentChat({
     boardId,
@@ -155,7 +154,6 @@ export function AgentChatPanel({
       {/* Input row */}
       <div className="border-t border-slate-100 p-3 flex gap-2 shrink-0">
         <textarea
-          ref={textareaRef}
           className="flex-1 resize-none rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:opacity-50"
           rows={2}
           placeholder="Ask this agent… (Enter to send)"

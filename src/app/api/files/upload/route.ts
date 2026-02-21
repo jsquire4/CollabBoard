@@ -110,7 +110,8 @@ export async function POST(request: NextRequest) {
     .from('files')
     .insert({
       id: fileId,
-      name: file.name,
+      // Strip path separators from the original filename before persisting
+      name: file.name.replace(/[/\\]/g, '_').slice(0, 255),
       file_type: file.type,
       size: file.size,
       storage_path: storagePath,

@@ -71,7 +71,11 @@ export async function POST(
 
   const admin = createAdminClient()
   const userDisplayName = getUserDisplayName(user)
-  const roleName = member.role as string
+  // Allowlist role values before embedding in the prefix sent to OpenAI
+  const ALLOWED_ROLES = ['owner', 'editor', 'viewer'] as const
+  const roleName = (ALLOWED_ROLES as readonly string[]).includes(member.role)
+    ? member.role
+    : 'member'
 
   // ── Load board state + history (parallel) ────────────────
   let boardState: Awaited<ReturnType<typeof loadBoardState>>

@@ -192,4 +192,31 @@ describe('FileLibraryPanel', () => {
 
     expect(screen.getByText('Upload failed. Please try again.')).toBeInTheDocument()
   })
+
+  it('sets correct drag data on drag start', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      mockJsonResponse({ files: [makeFile()] })
+    ))
+
+    await act(async () => {
+      render(<FileLibraryPanel boardId={DEFAULT_BOARD_ID} isOpen={true} onClose={noop} />)
+    })
+
+    const listItem = await screen.findByTitle('Drag onto canvas to add as context')
+
+    const dataTransfer: Record<string, string> = {}
+    fireEvent.dragStart(listItem, {
+      dataTransfer: {
+        setData: (key: string, value: string) => { dataTransfer[key] = value },
+        effectAllowed: '',
+      },
+    })
+
+    const payload = JSON.parse(dataTransfer['application/collabboard-file'])
+    expect(payload).toMatchObject({
+      fileId: 'file-1',
+      fileName: 'doc.pdf',
+      mimeType: 'application/pdf',
+    })
+  })
 })

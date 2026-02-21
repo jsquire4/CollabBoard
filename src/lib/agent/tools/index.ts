@@ -684,8 +684,11 @@ export function createTools(ctx: ToolContext): {
       if (!obj.mime_type?.startsWith('image/')) {
         return { error: `Object is not an image (mime: ${obj.mime_type})` }
       }
-      // Guard: storage path must be scoped to this board
-      if (!obj.storage_path.startsWith(`files/${ctx.boardId}/`)) {
+      // Guard: storage path must be scoped to this board and must not contain traversal segments
+      if (
+        !obj.storage_path.startsWith(`files/${ctx.boardId}/`) ||
+        obj.storage_path.includes('/../')
+      ) {
         return { error: 'File access denied' }
       }
 
@@ -718,8 +721,11 @@ export function createTools(ctx: ToolContext): {
       const obj = ctx.state.objects.get(objectId)
       if (!obj) return { error: `Object ${objectId} not found` }
       if (!obj.storage_path) return { error: 'Object has no file attached' }
-      // Guard: storage path must be scoped to this board
-      if (!obj.storage_path.startsWith(`files/${ctx.boardId}/`)) {
+      // Guard: storage path must be scoped to this board and must not contain traversal segments
+      if (
+        !obj.storage_path.startsWith(`files/${ctx.boardId}/`) ||
+        obj.storage_path.includes('/../')
+      ) {
         return { error: 'File access denied' }
       }
 

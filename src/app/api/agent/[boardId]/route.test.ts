@@ -14,6 +14,7 @@ const {
   mockCreate,
   mockInsert,
   mockAgentStateUpdate,
+  mockBoardObjectUpdate,
   mockGetUser,
   mockMemberSingle,
 } = vi.hoisted(() => ({
@@ -22,6 +23,7 @@ const {
   mockCreate: vi.fn(),
   mockInsert: vi.fn(),
   mockAgentStateUpdate: vi.fn(),
+  mockBoardObjectUpdate: vi.fn(),
   mockGetUser: vi.fn(),
   mockMemberSingle: vi.fn(),
 }))
@@ -68,7 +70,8 @@ vi.mock('@/lib/supabase/admin', () => ({
         // Both .eq() calls must be chainable before reaching .is()
         const chain: Record<string, unknown> = { is: mockAgentStateUpdate }
         chain.eq = vi.fn().mockReturnValue(chain)
-        return { update: vi.fn().mockReturnValue(chain) }
+        mockBoardObjectUpdate.mockReturnValue(chain)
+        return { update: mockBoardObjectUpdate }
       }
       return {}
     }),
@@ -258,11 +261,11 @@ describe('POST /api/agent/[boardId]', () => {
     const res = await POST(req, makeParams())
     const events = await collectSSE(res) as Array<Record<string, unknown>>
     expect(events.some(e => e.type === 'error')).toBe(true)
-    // agent_state should be set to 'error'
-    const updateCalls = mockAgentStateUpdate.mock.calls
-    // agent_state='error' is the value passed to the update chain's is() terminal
-    // We check that is() was called after update({agent_state:'error'})
-    expect(mockAgentStateUpdate).toHaveBeenCalled()
+    // Verify update() was called with agent_state:'error' (not 'done')
+    const errorUpdate = mockBoardObjectUpdate.mock.calls.find(
+      (args: unknown[]) => (args[0] as Record<string, unknown>)?.agent_state === 'error'
+    )
+    expect(errorUpdate).toBeDefined()
   })
 
   it('emits tool-call and tool-result events when a tool executes', async () => {

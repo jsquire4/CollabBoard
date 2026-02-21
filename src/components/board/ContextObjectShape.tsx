@@ -22,9 +22,7 @@ function badgeColor(mimeType?: string | null): string {
   return '#94A3B8'
 }
 
-interface ContextObjectShapeProps extends ShapeProps {
-  isEditing?: boolean
-}
+interface ContextObjectShapeProps extends ShapeProps {}
 
 export const ContextObjectShape = memo(function ContextObjectShape({
   object,

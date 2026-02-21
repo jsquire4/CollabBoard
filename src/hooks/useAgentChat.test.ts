@@ -263,8 +263,9 @@ describe('useAgentChat', () => {
       const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
       // The hook buffers by '\n' splits so cross-chunk data should be reconstructed
       expect(assistantMsg?.isStreaming).toBe(false)
+      // Also verify the content was not lost across the chunk boundary
+      expect(assistantMsg?.content).toBe('ok')
     })
-    void callCount
   })
 
   it('does not send if isLoading is true', async () => {

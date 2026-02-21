@@ -43,19 +43,25 @@ export function FileLibraryPanel({ boardId, isOpen, onClose }: FileLibraryPanelP
   const [files, setFiles] = useState<FileRecord[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load files on open
   useEffect(() => {
     if (!isOpen) return
     let cancelled = false
+    setFetchError(null)
 
     fetch(`/api/files/${boardId}`)
       .then(r => r.json())
       .then(data => {
-        if (!cancelled && data.files) setFiles(data.files)
+        if (cancelled) return
+        if (data.files) setFiles(data.files)
+        else if (data.error) setFetchError(data.error)
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!cancelled) setFetchError('Failed to load files')
+      })
 
     return () => { cancelled = true }
   }, [boardId, isOpen])
@@ -153,6 +159,9 @@ export function FileLibraryPanel({ boardId, isOpen, onClose }: FileLibraryPanelP
 
       {/* File list */}
       <div className="flex-1 overflow-y-auto p-4 pt-3">
+        {fetchError && (
+          <p className="text-xs text-red-500 text-center mb-2">{fetchError}</p>
+        )}
         {files.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 px-4">
             <svg className="w-10 h-10 text-slate-200 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

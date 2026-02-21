@@ -35,10 +35,12 @@ const STRIPPED_REQUEST_HEADERS = new Set([
 const PRIVATE_IP_PREFIXES = [
   '0.',
   '10.',
+  '100.64.',  // CGNAT (RFC 6598)
   '127.',
   '169.254.',
   '192.168.',
   '::1',
+  '::ffff:', // IPv4-mapped IPv6
   'fc',
   'fd',
   'fe80',

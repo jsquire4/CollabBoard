@@ -564,10 +564,11 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   }, [])
 
   const handleApiObjectClick = useCallback((id: string) => {
+    if (!canEdit) return
     const obj = objects.get(id)
     if (!obj) return
     setApiObjectPanel({ objectId: id, formula: obj.formula })
-  }, [objects])
+  }, [objects, canEdit])
 
   const handleCommentOpen = useCallback((id: string) => {
     setCommentThread({ objectId: id, position: { x: window.innerWidth - 320, y: 80 } })
@@ -829,15 +830,17 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         </svg>
       </button>
       <ChatPanel boardId={boardId} isOpen={chatOpen} onClose={() => setChatOpen(false)} />
-      <AgentChatPanel
-        agentObjectId={agentChatPanel?.objectId ?? ''}
-        boardId={boardId}
-        position={agentChatPanel?.position ?? { x: 0, y: 0 }}
-        isOpen={agentChatPanel !== null}
-        onClose={() => setAgentChatPanel(null)}
-        agentState={agentChatPanel ? (objects.get(agentChatPanel.objectId)?.agent_state ?? 'idle') : 'idle'}
-        agentName={agentChatPanel ? (objects.get(agentChatPanel.objectId)?.text || 'Board Agent') : 'Board Agent'}
-      />
+      {agentChatPanel && (
+        <AgentChatPanel
+          agentObjectId={agentChatPanel.objectId}
+          boardId={boardId}
+          position={agentChatPanel.position}
+          isOpen={true}
+          onClose={() => setAgentChatPanel(null)}
+          agentState={objects.get(agentChatPanel.objectId)?.agent_state ?? 'idle'}
+          agentName={objects.get(agentChatPanel.objectId)?.text || 'Board Agent'}
+        />
+      )}
       <GlobalAgentPanel
         boardId={boardId}
         isOpen={globalAgentOpen}

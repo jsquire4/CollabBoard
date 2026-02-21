@@ -162,8 +162,13 @@ export function useComments({ boardId, objectId, enabled = true }: UseCommentsOp
     const supabase = createClient()
     const now = new Date().toISOString()
 
-    // Optimistic update
-    setComments(prev => prev.map(c => c.id === id ? { ...c, resolved_at: now } : c))
+    // Capture original resolved_at for revert, then apply optimistic update
+    let originalResolvedAt: string | null = null
+    setComments(prev => {
+      const comment = prev.find(c => c.id === id)
+      originalResolvedAt = comment?.resolved_at ?? null
+      return prev.map(c => c.id === id ? { ...c, resolved_at: now } : c)
+    })
 
     const { error: updateError } = await supabase
       .from('comments')
@@ -171,8 +176,8 @@ export function useComments({ boardId, objectId, enabled = true }: UseCommentsOp
       .eq('id', id)
 
     if (updateError) {
-      // Revert optimistic update
-      setComments(prev => prev.map(c => c.id === id ? { ...c, resolved_at: null } : c))
+      // Revert to original value (not null — comment may have already been resolved)
+      setComments(prev => prev.map(c => c.id === id ? { ...c, resolved_at: originalResolvedAt } : c))
       setError(updateError.message)
     }
   }, [])

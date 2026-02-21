@@ -8,27 +8,46 @@ CREATE TABLE comments (
   object_id        UUID NOT NULL REFERENCES board_objects(id) ON DELETE CASCADE,
   user_id          UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   user_display_name TEXT,
-  content          TEXT NOT NULL,
+  content          TEXT NOT NULL CHECK (length(content) > 0 AND length(content) <= 10000),
   resolved_at      TIMESTAMPTZ,
   parent_id        UUID REFERENCES comments(id) ON DELETE SET NULL,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_comments_board_object ON comments (board_id, object_id, created_at);
+CREATE INDEX idx_comments_parent ON comments (parent_id) WHERE parent_id IS NOT NULL;
 
 ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
 
--- Auto-set user_id and user_display_name from auth context on insert
+-- Auto-set user_id from auth context on insert.
+-- Reads display name from auth.users (SECURITY DEFINER can access auth schema).
+-- Application layer supplies user_display_name as fallback if auth.uid() returns null
+-- (e.g. service role inserts during tests). The trigger overwrites with DB truth.
 CREATE OR REPLACE FUNCTION set_comment_user()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  _uid UUID;
+  _display_name TEXT;
 BEGIN
-  NEW.user_id := auth.uid();
-  NEW.user_display_name := COALESCE(
-    (auth.jwt() -> 'user_metadata' ->> 'full_name'),
-    (auth.jwt() -> 'user_metadata' ->> 'name'),
-    split_part(auth.email(), '@', 1),
-    'Unknown'
-  );
+  _uid := auth.uid();
+  NEW.user_id := _uid;
+
+  -- Prefer metadata name, fall back to email prefix, then to app-supplied value
+  IF _uid IS NOT NULL THEN
+    SELECT COALESCE(
+      raw_user_meta_data->>'full_name',
+      raw_user_meta_data->>'name',
+      split_part(email, '@', 1)
+    )
+    INTO _display_name
+    FROM auth.users
+    WHERE id = _uid;
+
+    IF _display_name IS NOT NULL THEN
+      NEW.user_display_name := _display_name;
+    END IF;
+  END IF;
+
   RETURN NEW;
 END;
 $$;
@@ -57,10 +76,18 @@ WITH CHECK (
   )
 );
 
--- Comment authors can resolve (update resolved_at) their own comments, owners can resolve any
+-- Authors can update only their own comments; owners can update any.
+-- WITH CHECK restricts updates to the same user_id (prevents user spoofing).
 CREATE POLICY "Authors and owners can resolve comments"
 ON comments FOR UPDATE
 USING (
+  auth.uid() = user_id
+  OR auth.uid() IN (
+    SELECT user_id FROM board_members
+    WHERE board_id = comments.board_id AND role = 'owner'
+  )
+)
+WITH CHECK (
   auth.uid() = user_id
   OR auth.uid() IN (
     SELECT user_id FROM board_members

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useAgentChat, type ChatMessage } from '@/hooks/useAgentChat'
 import { AgentChatLayout } from './AgentChatLayout'
 
@@ -39,9 +39,10 @@ function MessageRow({ msg }: { msg: ChatMessage }) {
 export function GlobalAgentPanel({ boardId, isOpen, onClose }: GlobalAgentPanelProps) {
   const [input, setInput] = useState('')
 
+  const mode = useMemo(() => ({ type: 'global' as const }), [])
   const { messages, isLoading, error, sendMessage } = useAgentChat({
     boardId,
-    mode: { type: 'global' },
+    mode,
     enabled: isOpen,
   })
 

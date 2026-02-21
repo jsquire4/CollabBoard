@@ -7,6 +7,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { BoardObject } from '@/types/board'
 import type { FieldClocks } from '@/lib/crdt/merge'
+import { BOARD_STATE_OBJECT_LIMIT } from './tools/helpers'
 
 export interface BoardState {
   boardId: string
@@ -46,7 +47,7 @@ export async function loadBoardState(boardId: string): Promise<BoardState> {
     .select(BOARD_OBJECT_COLUMNS)
     .eq('board_id', boardId)
     .is('deleted_at', null)
-    .limit(5000)
+    .limit(BOARD_STATE_OBJECT_LIMIT)
 
   if (error) {
     throw new Error(`Failed to load board objects: ${error.message}`)

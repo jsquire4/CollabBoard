@@ -6,6 +6,7 @@
  *   executors   — Map<toolName, (args) => Promise<unknown>> for tool dispatch
  */
 
+import path from 'path'
 import { z } from 'zod'
 import { v4 as uuidv4 } from 'uuid'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -265,10 +266,10 @@ export function createTools(ctx: ToolContext): {
       const id = uuidv4()
       const defaults = getShapeDefaults(type)
 
-      const x = startObj.x + startObj.width
-      const y = startObj.y + startObj.height / 2
+      const x = startObj.x + (startObj.width ?? 0)
+      const y = startObj.y + (startObj.height ?? 0) / 2
       const x2 = endObj.x
-      const y2 = endObj.y + endObj.height / 2
+      const y2 = endObj.y + (endObj.height ?? 0) / 2
 
       const obj: Record<string, unknown> = {
         id,
@@ -432,11 +433,9 @@ export function createTools(ctx: ToolContext): {
       if (!obj.mime_type?.startsWith('image/')) {
         return { error: `Object is not an image (mime: ${obj.mime_type})` }
       }
-      // Guard: storage path must be scoped to this board and must not contain traversal segments
-      if (
-        !obj.storage_path.startsWith(`files/${ctx.boardId}/`) ||
-        obj.storage_path.includes('/../')
-      ) {
+      // Guard: normalize the path first to collapse any traversal segments (e.g. /../),
+      // then verify it is scoped to this board's directory.
+      if (!path.posix.normalize(obj.storage_path).startsWith(`files/${ctx.boardId}/`)) {
         return { error: 'File access denied' }
       }
 
@@ -469,11 +468,9 @@ export function createTools(ctx: ToolContext): {
       const obj = ctx.state.objects.get(objectId)
       if (!obj) return { error: `Object ${objectId} not found` }
       if (!obj.storage_path) return { error: 'Object has no file attached' }
-      // Guard: storage path must be scoped to this board and must not contain traversal segments
-      if (
-        !obj.storage_path.startsWith(`files/${ctx.boardId}/`) ||
-        obj.storage_path.includes('/../')
-      ) {
+      // Guard: normalize the path first to collapse any traversal segments (e.g. /../),
+      // then verify it is scoped to this board's directory.
+      if (!path.posix.normalize(obj.storage_path).startsWith(`files/${ctx.boardId}/`)) {
         return { error: 'File access denied' }
       }
 

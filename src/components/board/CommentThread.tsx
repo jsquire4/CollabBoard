@@ -138,16 +138,17 @@ export function CommentThread({
       {/* Reply input */}
       <div className="border-t border-slate-100 p-3 flex gap-2 shrink-0">
         <textarea
-          className="flex-1 resize-none rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
+          className="flex-1 resize-none rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:opacity-50"
           rows={2}
           placeholder="Add a comment…"
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
+          disabled={isLoading}
         />
         <button
           onClick={() => void handleSend()}
-          disabled={!input.trim()}
+          disabled={!input.trim() || isLoading}
           className="px-3 py-2 rounded bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           Reply

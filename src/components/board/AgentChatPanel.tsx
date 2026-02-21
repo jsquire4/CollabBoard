@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useAgentChat, type ChatMessage } from '@/hooks/useAgentChat'
 import { AgentChatLayout } from './AgentChatLayout'
 
@@ -83,9 +83,10 @@ export function AgentChatPanel({
 }: AgentChatPanelProps) {
   const [input, setInput] = useState('')
 
+  const mode = useMemo(() => ({ type: 'agent' as const, agentObjectId }), [agentObjectId])
   const { messages, isLoading, error, sendMessage } = useAgentChat({
     boardId,
-    mode: { type: 'agent', agentObjectId },
+    mode,
     enabled: isOpen && !!agentObjectId,
   })
 

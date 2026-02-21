@@ -35,7 +35,7 @@ const defaultParams = {
   initialGridSubdivisions: 1,
   initialGridVisible: true,
   initialSnapToGrid: false,
-  initialGridStyle: 'lines',
+  initialGridStyle: 'lines' as const,
   initialCanvasColor: '#e8ecf1',
   initialGridColor: '#b4becd',
   initialSubdivisionColor: '#b4becd',

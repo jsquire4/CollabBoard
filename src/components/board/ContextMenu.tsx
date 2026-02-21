@@ -295,11 +295,11 @@ export function ContextMenu({
                   key={p.label}
                   type="button"
                   onClick={() => {
-                    onStrokeStyleChange({ stroke_width: p.stroke_width, stroke_dash: p.stroke_dash })
+                    onStrokeStyleChange({ stroke_width: p.stroke_width })
                     onClose()
                   }}
                   className={`rounded px-2 py-1 text-xs font-medium transition ${
-                    currentStrokeWidth === p.stroke_width && (currentStrokeDash ?? '[]') === p.stroke_dash
+                    currentStrokeWidth === p.stroke_width
                       ? 'bg-navy/10 text-navy dark:bg-navy/25 dark:text-parchment'
                       : 'bg-parchment-dark text-charcoal hover:bg-parchment-border dark:bg-white/10 dark:text-parchment/80 dark:hover:bg-white/20'
                   }`}
@@ -469,7 +469,7 @@ export function ContextMenu({
         <>
           <hr className="my-1 border-parchment-border opacity-60 dark:border-white/10" />
           <MenuItem
-            onClick={() => { onCommentOpen?.(objectId, position); onClose() }}
+            onClick={() => { onCommentOpen?.(objectId, pos); onClose() }}
             label="Add comment"
           />
         </>

@@ -3,7 +3,7 @@ const NAVY_30 = 'rgba(27,58,107,0.3)'
 const LEATHER_40 = 'rgba(196,154,108,0.4)'
 const PARCHMENT_DARK = 'rgb(240,235,227)'
 const PARCHMENT_BORDER = 'rgb(232,227,218)'
-const NAVY_RGB = 'rgb(219,228,243)'
+const NAVY_TINT = 'rgb(219,228,243)'
 const CHARCOAL = 'rgb(28,28,30)'
 const LEATHER_TINT = 'rgb(250,240,225)'
 const NAVY_STROKE = 'rgb(27,58,107)'
@@ -27,7 +27,7 @@ export function HeroIllustration() {
         <text x="-42" y="-5" fontSize="10" fontWeight="600" fill={CHARCOAL}>Ideas</text>
       </g>
       <g transform="rotate(5 680 15)">
-        <rect x="600" y="-20" width="90" height="36" rx="4" fill={NAVY_RGB} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
+        <rect x="600" y="-20" width="90" height="36" rx="4" fill={NAVY_TINT} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
         <text x="608" y="2" fontSize="10" fontWeight="600" fill={CHARCOAL}>Backlog</text>
       </g>
       <g transform="rotate(-3 -30 200)">
@@ -47,7 +47,7 @@ export function HeroIllustration() {
         <text x="58" y="50" fontSize="10" fontWeight="600" fill={CHARCOAL}>Big Idea</text>
       </g>
       <g transform="rotate(-2 180 130)">
-        <rect x="130" y="95" width="68" height="48" rx="4" fill={NAVY_RGB} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
+        <rect x="130" y="95" width="68" height="48" rx="4" fill={NAVY_TINT} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
         <text x="138" y="118" fontSize="10" fontWeight="700" fill={CHARCOAL}>Project</text>
       </g>
       <g transform="rotate(3 500 100)">
@@ -59,7 +59,7 @@ export function HeroIllustration() {
         <text x="438" y="240" fontSize="10" fontWeight="600" fill={CHARCOAL}>Goals</text>
       </g>
       <g transform="rotate(2 150 300)">
-        <rect x="95" y="270" width="78" height="44" rx="4" fill={NAVY_RGB} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
+        <rect x="95" y="270" width="78" height="44" rx="4" fill={NAVY_TINT} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
         <text x="103" y="295" fontSize="10" fontWeight="600" fill={CHARCOAL}>Capture</text>
       </g>
       <g transform="rotate(-6 520 320)">
@@ -76,7 +76,7 @@ export function HeroIllustration() {
       </g>
       {/* Additional shapes */}
       <g transform="rotate(6 -45 350)">
-        <rect x="-85" y="320" width="65" height="42" rx="4" fill={NAVY_RGB} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
+        <rect x="-85" y="320" width="65" height="42" rx="4" fill={NAVY_TINT} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
         <text x="-77" y="344" fontSize="9" fontWeight="600" fill={CHARCOAL}>Blockers</text>
       </g>
       <g transform="rotate(-3 680 -10)">
@@ -92,7 +92,7 @@ export function HeroIllustration() {
         <text x="383" y="348" fontSize="9" fontWeight="600" fill={CHARCOAL}>Feedback</text>
       </g>
       <g transform="rotate(3 -20 80)">
-        <rect x="-55" y="55" width="62" height="38" rx="4" fill={NAVY_RGB} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
+        <rect x="-55" y="55" width="62" height="38" rx="4" fill={NAVY_TINT} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
         <text x="-47" y="78" fontSize="9" fontWeight="600" fill={CHARCOAL}>Scope</text>
       </g>
       <g transform="rotate(-2 620 250)">
@@ -100,7 +100,7 @@ export function HeroIllustration() {
         <text x="583" y="244" fontSize="9" fontWeight="600" fill={CHARCOAL}>Launch</text>
       </g>
       <g transform="rotate(5 100 350)">
-        <rect x="55" y="330" width="72" height="40" rx="4" fill={NAVY_RGB} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
+        <rect x="55" y="330" width="72" height="40" rx="4" fill={NAVY_TINT} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
         <text x="63" y="353" fontSize="9" fontWeight="600" fill={CHARCOAL}>Next Steps</text>
       </g>
       <g transform="rotate(-7 380 80)">
@@ -112,7 +112,7 @@ export function HeroIllustration() {
         <text x="173" y="277" fontSize="9" fontWeight="600" fill={CHARCOAL}>Draft</text>
       </g>
       <g transform="rotate(-4 550 380)">
-        <rect x="505" y="355" width="75" height="42" rx="4" fill={NAVY_RGB} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
+        <rect x="505" y="355" width="75" height="42" rx="4" fill={NAVY_TINT} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
         <text x="513" y="378" fontSize="9" fontWeight="600" fill={CHARCOAL}>Phase 2</text>
       </g>
       <g transform="rotate(6 50 250)">
@@ -129,7 +129,7 @@ export function HeroIllustration() {
         <text x="-182" y="40" fontSize="10" fontWeight="600" fill={CHARCOAL}>Roadmap</text>
       </g>
       <g transform="rotate(4 -120 180)">
-        <rect x="-180" y="155" width="68" height="45" rx="4" fill={NAVY_RGB} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
+        <rect x="-180" y="155" width="68" height="45" rx="4" fill={NAVY_TINT} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
         <text x="-172" y="180" fontSize="9" fontWeight="600" fill={CHARCOAL}>Spec</text>
       </g>
       <g transform="rotate(-3 -150 320)">
@@ -141,7 +141,7 @@ export function HeroIllustration() {
         <text x="-122" y="-32" fontSize="9" fontWeight="600" fill={CHARCOAL}>Wishlist</text>
       </g>
       <g transform="rotate(-2 -170 420)">
-        <rect x="-230" y="395" width="70" height="42" rx="4" fill={NAVY_RGB} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
+        <rect x="-230" y="395" width="70" height="42" rx="4" fill={NAVY_TINT} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
         <text x="-222" y="418" fontSize="9" fontWeight="600" fill={CHARCOAL}>Archive</text>
       </g>
       <g transform="rotate(5 -50 100)">
@@ -153,7 +153,7 @@ export function HeroIllustration() {
         <text x="-187" y="248" fontSize="9" fontWeight="600" fill={CHARCOAL}>Pivot</text>
       </g>
       <g transform="rotate(3 -200 150)">
-        <rect x="-260" y="125" width="70" height="42" rx="4" fill={NAVY_RGB} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
+        <rect x="-260" y="125" width="70" height="42" rx="4" fill={NAVY_TINT} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
         <text x="-252" y="148" fontSize="9" fontWeight="600" fill={CHARCOAL}>Q2</text>
       </g>
       {/* Right group */}
@@ -162,7 +162,7 @@ export function HeroIllustration() {
         <text x="628" y="50" fontSize="10" fontWeight="600" fill={CHARCOAL}>Timeline</text>
       </g>
       <g transform="rotate(5 820 200)">
-        <rect x="760" y="175" width="68" height="48" rx="4" fill={NAVY_RGB} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
+        <rect x="760" y="175" width="68" height="48" rx="4" fill={NAVY_TINT} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
         <text x="768" y="200" fontSize="9" fontWeight="600" fill={CHARCOAL}>Milestone</text>
       </g>
       <g transform="rotate(-3 780 350)">
@@ -174,7 +174,7 @@ export function HeroIllustration() {
         <text x="848" y="-27" fontSize="9" fontWeight="600" fill={CHARCOAL}>Priority</text>
       </g>
       <g transform="rotate(-2 650 420)">
-        <rect x="585" y="395" width="78" height="42" rx="4" fill={NAVY_RGB} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
+        <rect x="585" y="395" width="78" height="42" rx="4" fill={NAVY_TINT} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
         <text x="593" y="418" fontSize="9" fontWeight="600" fill={CHARCOAL}>Follow-up</text>
       </g>
       <g transform="rotate(4 830 100)">
@@ -186,7 +186,7 @@ export function HeroIllustration() {
         <text x="693" y="280" fontSize="9" fontWeight="600" fill={CHARCOAL}>Beta</text>
       </g>
       <g transform="rotate(3 950 180)">
-        <rect x="890" y="155" width="68" height="45" rx="4" fill={NAVY_RGB} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
+        <rect x="890" y="155" width="68" height="45" rx="4" fill={NAVY_TINT} stroke={NAVY_STROKE} strokeWidth="1.5" strokeOpacity="0.3" />
         <text x="898" y="180" fontSize="9" fontWeight="600" fill={CHARCOAL}>Ideation</text>
       </g>
     </svg>

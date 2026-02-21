@@ -6,17 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { BoardRole } from '@/types/sharing'
 import { OnlineUser } from '@/hooks/usePresence'
 import { GridSettingsPopover } from './GridSettingsPopover'
-
-type BoardSettingsUpdate = {
-  grid_size?: number
-  grid_subdivisions?: number
-  grid_visible?: boolean
-  snap_to_grid?: boolean
-  grid_style?: string
-  canvas_color?: string
-  grid_color?: string
-  subdivision_color?: string
-}
+import { BoardSettingsUpdate } from './gridConstants'
 
 interface BoardTopBarProps {
   boardId: string
@@ -28,7 +18,7 @@ interface BoardTopBarProps {
   gridSubdivisions?: number
   gridVisible?: boolean
   snapToGrid?: boolean
-  gridStyle?: string
+  gridStyle?: 'lines' | 'dots' | 'both'
   canvasColor?: string
   gridColor?: string
   subdivisionColor?: string

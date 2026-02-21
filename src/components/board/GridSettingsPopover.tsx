@@ -3,17 +3,7 @@
 import { useState, useRef } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { GridThemeFlyout } from './GridThemeFlyout'
-
-type BoardSettingsUpdate = {
-  grid_size?: number
-  grid_subdivisions?: number
-  grid_visible?: boolean
-  snap_to_grid?: boolean
-  grid_style?: string
-  canvas_color?: string
-  grid_color?: string
-  subdivision_color?: string
-}
+import { BoardSettingsUpdate } from './gridConstants'
 
 export function GridSettingsPopover({
   gridSize, gridSubdivisions, gridVisible, snapToGrid,
@@ -24,7 +14,7 @@ export function GridSettingsPopover({
   gridSubdivisions: number
   gridVisible: boolean
   snapToGrid: boolean
-  gridStyle: string
+  gridStyle: 'lines' | 'dots' | 'both'
   canvasColor: string
   gridColor: string
   subdivisionColor: string

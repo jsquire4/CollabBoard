@@ -51,7 +51,7 @@ export function StylePanel({
   const btnRef = useRef<HTMLButtonElement>(null)
   const [popoverPos, setPopoverPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
 
-  useClickOutside(popoverRef, showPopover, () => setShowPopover(false))
+  useClickOutside(popoverRef, showPopover && !!compact, () => setShowPopover(false))
 
   useEffect(() => {
     if (!compact || !showPopover || !btnRef.current) return
@@ -116,9 +116,9 @@ export function StylePanel({
                 <button
                   key={p.label}
                   type="button"
-                  onClick={() => onStrokeStyleChange({ stroke_width: p.stroke_width, stroke_dash: p.stroke_dash })}
+                  onClick={() => onStrokeStyleChange({ stroke_width: p.stroke_width })}
                   className={`rounded px-2 py-0.5 text-xs font-medium transition ${
-                    strokeWidth === p.stroke_width && (strokeDash ?? '[]') === p.stroke_dash ? presetActive : presetInactive
+                    strokeWidth === p.stroke_width ? presetActive : presetInactive
                   }`}
                 >
                   {p.label}

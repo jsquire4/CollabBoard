@@ -72,7 +72,7 @@ interface BoardClientProps {
   initialGridSubdivisions?: number
   initialGridVisible?: boolean
   initialSnapToGrid?: boolean
-  initialGridStyle?: string
+  initialGridStyle?: 'lines' | 'dots' | 'both'
   initialCanvasColor?: string
   initialGridColor?: string
   initialSubdivisionColor?: string

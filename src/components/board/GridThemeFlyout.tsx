@@ -2,18 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
-import { GRID_PRESETS, GRID_PALETTE } from './gridConstants'
-
-type BoardSettingsUpdate = {
-  grid_size?: number
-  grid_subdivisions?: number
-  grid_visible?: boolean
-  snap_to_grid?: boolean
-  grid_style?: string
-  canvas_color?: string
-  grid_color?: string
-  subdivision_color?: string
-}
+import { GRID_PRESETS, GRID_PALETTE, BoardSettingsUpdate } from './gridConstants'
 
 function GridColorRow({ label, color, onChange, dark = false }: { label: string; color: string; onChange: (c: string) => void; dark?: boolean }) {
   const [expanded, setExpanded] = useState(false)

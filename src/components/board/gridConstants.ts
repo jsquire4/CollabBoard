@@ -1,3 +1,14 @@
+export type BoardSettingsUpdate = {
+  grid_visible?: boolean
+  grid_size?: number
+  grid_subdivisions?: number
+  snap_to_grid?: boolean
+  grid_style?: 'lines' | 'dots' | 'both'
+  canvas_color?: string
+  grid_color?: string
+  subdivision_color?: string
+}
+
 export const GRID_PRESETS: { name: string; canvas: string; grid: string; sub: string }[] = [
   { name: 'Default',    canvas: '#FAF8F4', grid: '#E8E3DA', sub: '#F0EBE3' },
   { name: 'Light',      canvas: '#f8fafc', grid: '#cbd5e1', sub: '#e2e8f0' },

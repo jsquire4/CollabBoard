@@ -7,6 +7,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { BoardObject } from '@/types/board'
 import type { FieldClocks } from '@/lib/crdt/merge'
+import { BOARD_STATE_OBJECT_LIMIT } from './tools/helpers'
 
 export interface BoardState {
   boardId: string
@@ -37,7 +38,10 @@ const BOARD_OBJECT_COLUMNS = [
   'field_clocks',
 ].join(',')
 
-const AGENT_SENDER_ID = '__agent__'
+/** Sentinel sender_id that tells the Realtime broadcast handler on the client
+ *  to skip applying this change (the agent already wrote it to the DB and the
+ *  client will receive the Realtime INSERT/UPDATE separately via the board channel). */
+export const AGENT_SENDER_ID = '__agent__'
 
 export async function loadBoardState(boardId: string): Promise<BoardState> {
   const admin = createAdminClient()
@@ -46,7 +50,7 @@ export async function loadBoardState(boardId: string): Promise<BoardState> {
     .select(BOARD_OBJECT_COLUMNS)
     .eq('board_id', boardId)
     .is('deleted_at', null)
-    .limit(5000)
+    .limit(BOARD_STATE_OBJECT_LIMIT)
 
   if (error) {
     throw new Error(`Failed to load board objects: ${error.message}`)

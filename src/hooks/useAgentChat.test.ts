@@ -3,21 +3,28 @@ import { renderHook, act, waitFor } from '@testing-library/react'
 import { makeFakeSSE } from '@/test/sseHelpers'
 
 // Mock createClient (Supabase browser client)
-vi.mock('@/lib/supabase/client', () => ({
-  createClient: vi.fn(() => ({
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            order: vi.fn(() => ({
-              limit: vi.fn(() => Promise.resolve({ data: [], error: null })),
-            })),
-          })),
+// Chain: .select().eq(board_id).eq|is(agent_filter).order().limit()
+vi.mock('@/lib/supabase/client', () => {
+  const terminalResult = { data: [], error: null }
+  const orderChain = {
+    order: vi.fn(() => ({
+      limit: vi.fn(() => Promise.resolve(terminalResult)),
+    })),
+  }
+  const filterChain = {
+    eq: vi.fn(() => orderChain),
+    is: vi.fn(() => orderChain),
+  }
+  return {
+    createClient: vi.fn(() => ({
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => filterChain),
         })),
       })),
     })),
-  })),
-}))
+  }
+})
 
 // We'll import useAgentChat dynamically after mocks are set up
 import { useAgentChat } from './useAgentChat'
@@ -38,7 +45,7 @@ describe('useAgentChat', () => {
 
   it('requires agentObjectId in options', () => {
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1' }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' } }),
     )
     expect(result.current.messages).toEqual([])
     expect(result.current.isLoading).toBe(false)
@@ -53,7 +60,7 @@ describe('useAgentChat', () => {
     })
 
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     await act(async () => {
@@ -70,7 +77,7 @@ describe('useAgentChat', () => {
     })
 
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-test-123', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-test-123', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     await act(async () => {
@@ -90,7 +97,7 @@ describe('useAgentChat', () => {
     )
 
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     await act(async () => {
@@ -112,7 +119,7 @@ describe('useAgentChat', () => {
     )
 
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     await act(async () => {
@@ -134,7 +141,7 @@ describe('useAgentChat', () => {
     )
 
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     await act(async () => {
@@ -149,7 +156,7 @@ describe('useAgentChat', () => {
 
   it('clears isStreaming on done event', async () => {
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     await act(async () => {
@@ -170,7 +177,7 @@ describe('useAgentChat', () => {
     )
 
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     await act(async () => {
@@ -184,24 +191,26 @@ describe('useAgentChat', () => {
 
   it('history query includes agent_object_id filter', async () => {
     const { createClient } = await import('@/lib/supabase/client')
-    const innerEq = vi.fn(() => ({
+    const orderChain = {
       order: vi.fn(() => ({
         limit: vi.fn(() => Promise.resolve({ data: [], error: null })),
       })),
-    }))
-    const outerEq = vi.fn(() => ({ eq: innerEq }))
-    const select = vi.fn(() => ({ eq: outerEq }))
+    }
+    const filterEq = vi.fn(() => orderChain)
+    const filterIs = vi.fn(() => orderChain)
+    const boardEq = vi.fn(() => ({ eq: filterEq, is: filterIs }))
+    const select = vi.fn(() => ({ eq: boardEq }))
     vi.mocked(createClient).mockReturnValueOnce({
       from: vi.fn(() => ({ select })),
     } as unknown as ReturnType<typeof createClient>)
 
     renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'my-agent-id', enabled: true }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'my-agent-id' }, enabled: true }),
     )
 
     await waitFor(() => {
       // The second .eq call should be for agent_object_id
-      expect(innerEq).toHaveBeenCalledWith('agent_object_id', 'my-agent-id')
+      expect(filterEq).toHaveBeenCalledWith('agent_object_id', 'my-agent-id')
     })
   })
 
@@ -220,7 +229,7 @@ describe('useAgentChat', () => {
     )
 
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     // Should not throw
@@ -252,7 +261,7 @@ describe('useAgentChat', () => {
     )
 
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     await act(async () => {
@@ -275,7 +284,7 @@ describe('useAgentChat', () => {
     )
 
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     // Start a message that won't complete
@@ -296,7 +305,7 @@ describe('useAgentChat', () => {
     )
 
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     act(() => { void result.current.sendMessage('test') })
@@ -314,7 +323,7 @@ describe('useAgentChat', () => {
     )
 
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     await act(async () => {
@@ -332,7 +341,7 @@ describe('useAgentChat', () => {
     )
 
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     act(() => { void result.current.sendMessage('My message') })
@@ -346,7 +355,7 @@ describe('useAgentChat', () => {
     )
 
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     act(() => { void result.current.sendMessage('Hi') })
@@ -359,7 +368,7 @@ describe('useAgentChat', () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
 
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     await act(async () => {
@@ -375,7 +384,7 @@ describe('useAgentChat', () => {
     )
 
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     await act(async () => {
@@ -397,7 +406,7 @@ describe('useAgentChat', () => {
       )
 
     const { result } = renderHook(() =>
-      useAgentChat({ boardId: 'board-1', agentObjectId: 'agent-1', enabled: false }),
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
     )
 
     await act(async () => {

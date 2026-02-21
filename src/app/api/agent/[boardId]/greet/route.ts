@@ -6,12 +6,11 @@
 import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
 import { createClient } from '@/lib/supabase/server'
+import { UUID_RE } from '@/lib/api/uuidRe'
 
 export const maxDuration = 30
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function sseEvent(data: Record<string, unknown>): string {
   return `data: ${JSON.stringify(data)}\n\n`

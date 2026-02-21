@@ -12,12 +12,12 @@ window.HTMLElement.prototype.scrollIntoView = vi.fn()
 
 // ── Hook mock ────────────────────────────────────────────────────────
 
-vi.mock('@/hooks/useGlobalAgentChat', () => ({
-  useGlobalAgentChat: vi.fn(),
+vi.mock('@/hooks/useAgentChat', () => ({
+  useAgentChat: vi.fn(),
 }))
 
-import { useGlobalAgentChat } from '@/hooks/useGlobalAgentChat'
-import type { ChatMessage } from '@/hooks/useGlobalAgentChat'
+import { useAgentChat } from '@/hooks/useAgentChat'
+import type { ChatMessage } from '@/hooks/useAgentChat'
 
 // ── Component under test ─────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
   }
 }
 
-function defaultHookReturn(overrides: Partial<ReturnType<typeof useGlobalAgentChat>> = {}) {
+function defaultHookReturn(overrides: Partial<ReturnType<typeof useAgentChat>> = {}) {
   return {
     messages: [] as ChatMessage[],
     isLoading: false,
@@ -55,7 +55,7 @@ function defaultHookReturn(overrides: Partial<ReturnType<typeof useGlobalAgentCh
 describe('GlobalAgentPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(useGlobalAgentChat).mockReturnValue(defaultHookReturn())
+    vi.mocked(useAgentChat).mockReturnValue(defaultHookReturn())
   })
 
   // 1. returns null when isOpen is false
@@ -85,7 +85,7 @@ describe('GlobalAgentPanel', () => {
 
   // 4. shows empty state text when no messages
   it('shows empty state text when no messages', () => {
-    vi.mocked(useGlobalAgentChat).mockReturnValue(defaultHookReturn({ messages: [] }))
+    vi.mocked(useAgentChat).mockReturnValue(defaultHookReturn({ messages: [] }))
 
     render(<GlobalAgentPanel boardId={BOARD_ID} isOpen={true} onClose={noop} />)
 
@@ -95,7 +95,7 @@ describe('GlobalAgentPanel', () => {
   // 5. renders a user message right-aligned
   it('renders a user message right-aligned', () => {
     const userMsg = makeMessage({ id: 'u1', role: 'user', content: 'Hello there' })
-    vi.mocked(useGlobalAgentChat).mockReturnValue(defaultHookReturn({ messages: [userMsg] }))
+    vi.mocked(useAgentChat).mockReturnValue(defaultHookReturn({ messages: [userMsg] }))
 
     render(<GlobalAgentPanel boardId={BOARD_ID} isOpen={true} onClose={noop} />)
 
@@ -108,7 +108,7 @@ describe('GlobalAgentPanel', () => {
   // 6. renders an assistant message left-aligned
   it('renders an assistant message left-aligned', () => {
     const assistantMsg = makeMessage({ id: 'a1', role: 'assistant', content: 'Hi, I am the assistant' })
-    vi.mocked(useGlobalAgentChat).mockReturnValue(defaultHookReturn({ messages: [assistantMsg] }))
+    vi.mocked(useAgentChat).mockReturnValue(defaultHookReturn({ messages: [assistantMsg] }))
 
     render(<GlobalAgentPanel boardId={BOARD_ID} isOpen={true} onClose={noop} />)
 
@@ -126,7 +126,7 @@ describe('GlobalAgentPanel', () => {
       content: 'My message',
       user_display_name: 'Alice',
     })
-    vi.mocked(useGlobalAgentChat).mockReturnValue(defaultHookReturn({ messages: [userMsg] }))
+    vi.mocked(useAgentChat).mockReturnValue(defaultHookReturn({ messages: [userMsg] }))
 
     render(<GlobalAgentPanel boardId={BOARD_ID} isOpen={true} onClose={noop} />)
 
@@ -136,7 +136,7 @@ describe('GlobalAgentPanel', () => {
   // 8. calls sendMessage and clears input when Send clicked
   it('calls sendMessage with trimmed text and clears input when Send clicked', async () => {
     const sendMessage = vi.fn()
-    vi.mocked(useGlobalAgentChat).mockReturnValue(defaultHookReturn({ sendMessage }))
+    vi.mocked(useAgentChat).mockReturnValue(defaultHookReturn({ sendMessage }))
 
     render(<GlobalAgentPanel boardId={BOARD_ID} isOpen={true} onClose={noop} />)
 
@@ -154,7 +154,7 @@ describe('GlobalAgentPanel', () => {
   // 9. calls sendMessage when Enter pressed (no Shift)
   it('calls sendMessage when Enter pressed without Shift', async () => {
     const sendMessage = vi.fn()
-    vi.mocked(useGlobalAgentChat).mockReturnValue(defaultHookReturn({ sendMessage }))
+    vi.mocked(useAgentChat).mockReturnValue(defaultHookReturn({ sendMessage }))
 
     render(<GlobalAgentPanel boardId={BOARD_ID} isOpen={true} onClose={noop} />)
 
@@ -169,7 +169,7 @@ describe('GlobalAgentPanel', () => {
   // 10. does NOT call sendMessage when Shift+Enter pressed
   it('does NOT call sendMessage when Shift+Enter is pressed', async () => {
     const sendMessage = vi.fn()
-    vi.mocked(useGlobalAgentChat).mockReturnValue(defaultHookReturn({ sendMessage }))
+    vi.mocked(useAgentChat).mockReturnValue(defaultHookReturn({ sendMessage }))
 
     render(<GlobalAgentPanel boardId={BOARD_ID} isOpen={true} onClose={noop} />)
 
@@ -182,7 +182,7 @@ describe('GlobalAgentPanel', () => {
 
   // 11. disables input and button when isLoading, and shows error when error is set
   it('disables input and Send button when isLoading is true, and shows error message when error is set', () => {
-    vi.mocked(useGlobalAgentChat).mockReturnValue(
+    vi.mocked(useAgentChat).mockReturnValue(
       defaultHookReturn({
         isLoading: true,
         error: 'Something went wrong',

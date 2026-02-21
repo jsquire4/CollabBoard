@@ -83,7 +83,7 @@ export function ContextMenu({
     colors,
     selectedColor,
     onCommentOpen,
-    onApiObjectOpen,
+    onApiObjectClick,
   } = useBoardMutations()
 
   const { objects, isObjectLocked, activeGroupId } = useBoardContext()
@@ -471,14 +471,14 @@ export function ContextMenu({
         <>
           <hr className="my-1 border-parchment-border opacity-60 dark:border-white/10" />
           <MenuItem
-            onClick={() => { onCommentOpen?.(objectId, pos); onClose() }}
+            onClick={() => { onCommentOpen?.(objectId); onClose() }}
             label="Add comment"
           />
         </>
       )}
       {!isLocked && isApiObject && (
         <MenuItem
-          onClick={() => { onApiObjectOpen?.(objectId); onClose() }}
+          onClick={() => { onApiObjectClick?.(objectId); onClose() }}
           label="Configure API"
         />
       )}

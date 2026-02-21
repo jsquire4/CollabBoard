@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import type React from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { RealtimeChannel } from '@supabase/supabase-js'
 import { BoardObject } from '@/types/board'
@@ -18,7 +19,14 @@ import { createBoardLogger } from '@/lib/logger'
 export { coalesceBroadcastQueue } from '@/hooks/board/useBroadcast'
 export type { BoardChange } from '@/hooks/board/useBroadcast'
 
-export function useBoardState(userId: string, boardId: string, userRole: BoardRole = 'viewer', channel?: RealtimeChannel | null, onlineUsers?: OnlineUser[]) {
+interface UseBoardStateOpts {
+  isDraggingRef?: React.MutableRefObject<boolean>
+  getDragCursorPos?: () => { x: number; y: number } | null
+  onRemoteCursor?: (userId: string, pos: { x: number; y: number }) => void
+  dragPositionsRef?: React.MutableRefObject<Map<string, Partial<BoardObject>>>
+}
+
+export function useBoardState(userId: string, boardId: string, userRole: BoardRole = 'viewer', channel?: RealtimeChannel | null, onlineUsers?: OnlineUser[], opts?: UseBoardStateOpts) {
   const [objects, setObjects] = useState<Map<string, BoardObject>>(new Map())
   const objectsRef = useRef<Map<string, BoardObject>>(objects)
   objectsRef.current = objects
@@ -124,6 +132,9 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
   // Broadcast batching + CRDT stamping (extracted to useBroadcast)
   const { queueBroadcast, stampChange, stampCreate } = useBroadcast({
     channel, userId, setObjects, fieldClocksRef, hlcRef,
+    isDraggingRef: opts?.isDraggingRef,
+    getDragCursorPos: opts?.getDragCursorPos,
+    onRemoteCursor: opts?.onRemoteCursor,
   })
 
   const notify = useCallback((msg: string) => toast.error(msg), [])
@@ -142,6 +153,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     queueBroadcast, stampChange, stampCreate,
     fieldClocksRef, hlcRef,
     notify, log,
+    dragPositionsRef: opts?.dragPositionsRef,
   })
 
   // Load on mount

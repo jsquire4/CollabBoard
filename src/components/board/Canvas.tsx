@@ -115,6 +115,7 @@ export function Canvas() {
     recentColors, colors, selectedColor,
     onEndpointDragMove, onEndpointDragEnd,
     onCursorMove, onCursorUpdate,
+    isDraggingRef, lastDragCursorPosRef, sendCursorDirect,
     onEditingChange,
     anySelectedLocked, onLock, onUnlock, canLock, canUnlock,
     vertexEditId, onEditVertices, onExitVertexEdit, onVertexDragEnd, onVertexInsert,
@@ -139,6 +140,7 @@ export function Canvas() {
     gridSize, gridSubdivisions, gridVisible,
     snapToGrid: snapToGridEnabled,
     gridStyle, canvasColor, gridColor, subdivisionColor,
+    dragPositionsRef,
   } = useBoardContext()
   const { stagePos, setStagePos, stageScale, handleWheel, zoomIn, zoomOut, resetZoom } = useCanvas()
   const stageRef = useRef<Konva.Stage>(null)
@@ -183,6 +185,7 @@ export function Canvas() {
     objectsRef,
     onDragStart: onDragStartProp, onDragEnd, onDragMove,
     onMoveGroupChildren, onCheckFrameContainment, onCursorMove,
+    isDraggingRef, lastDragCursorPosRef, dragPositionsRef, sendCursorDirect,
   })
 
   const {
@@ -605,7 +608,15 @@ export function Canvas() {
           )}
 
           {/* Render visible objects sorted by z_index (viewport culled) */}
-          {visibleObjects.map(obj => renderShape(obj, shapeState, shapeCallbacks))}
+          {/* dragPositionsRef overlay prevents snap-back to pre-drag React state during in-flight drags */}
+          {visibleObjects.map(obj => {
+            const dragOverride = dragPositionsRef.current.get(obj.id)
+            return renderShape(
+              dragOverride ? { ...obj, ...dragOverride } as typeof obj : obj,
+              shapeState,
+              shapeCallbacks,
+            )
+          })}
 
           {/* Lock icon overlays for locked shapes */}
           <LockIconOverlay visibleObjects={visibleObjects} isObjectLocked={isObjectLocked} />

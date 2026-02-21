@@ -20,6 +20,7 @@ export interface BoardChange {
 // ── Constants ───────────────────────────────────────────────────────
 
 const BROADCAST_IDLE_MS = 5    // flush quickly if no burst follows
+const DRAG_BROADCAST_MS = 33   // ~30Hz idle window during drag (reduces rate from ~47/s to ~30/s)
 const BROADCAST_MAX_MS = 50    // ceiling for burst batching
 const BROADCAST_WARN_BYTES = 50 * 1024  // warn when payload exceeds 50KB
 const BROADCAST_MAX_BYTES = 64 * 1024   // Supabase Realtime limit ~64KB
@@ -79,11 +80,14 @@ export interface UseBroadcastDeps {
   setObjects: React.Dispatch<React.SetStateAction<Map<string, BoardObject>>>
   fieldClocksRef: React.RefObject<Map<string, FieldClocks>>
   hlcRef: React.MutableRefObject<HLC>
+  isDraggingRef?: React.MutableRefObject<boolean>
+  getDragCursorPos?: () => { x: number; y: number } | null
+  onRemoteCursor?: (userId: string, pos: { x: number; y: number }) => void
 }
 
 // ── Hook ────────────────────────────────────────────────────────────
 
-export function useBroadcast({ channel, userId, setObjects, fieldClocksRef, hlcRef }: UseBroadcastDeps) {
+export function useBroadcast({ channel, userId, setObjects, fieldClocksRef, hlcRef, isDraggingRef, getDragCursorPos, onRemoteCursor }: UseBroadcastDeps) {
   // ── Outbound batching refs ──
   const pendingBroadcastRef = useRef<BoardChange[]>([])
   const broadcastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -92,6 +96,12 @@ export function useBroadcast({ channel, userId, setObjects, fieldClocksRef, hlcR
   // ── Inbound batching refs ──
   const incomingBatchRef = useRef<BoardChange[]>([])
   const incomingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // ── Stable callback refs (avoid stale closures in useCallback) ──
+  const getDragCursorPosRef = useRef(getDragCursorPos)
+  getDragCursorPosRef.current = getDragCursorPos
+  const onRemoteCursorRef = useRef(onRemoteCursor)
+  onRemoteCursorRef.current = onRemoteCursor
 
   // ── Send to channel (with chunking) ──
   const broadcastChanges = useCallback((changes: BoardChange[]) => {
@@ -102,7 +112,9 @@ export function useBroadcast({ channel, userId, setObjects, fieldClocksRef, hlcR
       return
     }
 
-    const payload = { changes, sender_id: userId }
+    const cursorPos = getDragCursorPosRef.current?.()
+    const payload: { changes: BoardChange[]; sender_id: string; cursor_pos?: { x: number; y: number } } = { changes, sender_id: userId }
+    if (cursorPos) payload.cursor_pos = cursorPos
     const serialized = JSON.stringify(payload)
     const byteSize = new TextEncoder().encode(serialized).byteLength
 
@@ -165,8 +177,9 @@ export function useBroadcast({ channel, userId, setObjects, fieldClocksRef, hlcR
       broadcastTimerRef.current = setTimeout(flushBroadcast, BROADCAST_MAX_MS)
     }
 
-    broadcastIdleTimerRef.current = setTimeout(flushBroadcast, BROADCAST_IDLE_MS)
-  }, [flushBroadcast])
+    const idleMs = isDraggingRef?.current ? DRAG_BROADCAST_MS : BROADCAST_IDLE_MS
+    broadcastIdleTimerRef.current = setTimeout(flushBroadcast, idleMs)
+  }, [flushBroadcast, isDraggingRef])
 
   // ── CRDT stamp helpers ──
   const stampChange = useCallback((objectId: string, changedFields: string[]): FieldClocks | undefined => {
@@ -252,9 +265,14 @@ export function useBroadcast({ channel, userId, setObjects, fieldClocksRef, hlcR
     if (!channel) return
     let active = true
 
-    const handler = ({ payload }: { payload: { changes: BoardChange[]; sender_id: string } }) => {
+    const handler = ({ payload }: { payload: { changes: BoardChange[]; sender_id: string; cursor_pos?: { x: number; y: number } } }) => {
       if (!active) return
       if (payload.sender_id === userId) return
+
+      // Piggyback: extract cursor position from board:sync payload if present
+      if (payload.cursor_pos) {
+        onRemoteCursorRef.current?.(payload.sender_id, payload.cursor_pos)
+      }
 
       // Advance local HLC from any remote clocks
       if (CRDT_ENABLED) {

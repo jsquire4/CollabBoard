@@ -82,7 +82,13 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const channel = useRealtimeChannel(boardId)
   const { onlineUsers, trackPresence, updatePresence } = usePresence(channel, userId, userRole, displayName)
   const userCount = onlineUsers.length + 1 // include self
-  const { sendCursor, onCursorUpdate } = useCursors(channel, userId, userCount)
+
+  // Drag state refs — shared across useCursors, useBroadcast, usePersistenceDrag, useShapeDrag, Canvas
+  const isDraggingRef = useRef(false)
+  const lastDragCursorPosRef = useRef<{ x: number; y: number } | null>(null)
+  const dragPositionsRef = useRef<Map<string, Partial<import('@/types/board').BoardObject>>>(new Map())
+
+  const { sendCursor, sendCursorDirect, getDragCursorPos, receiveCursorFromBroadcast, onCursorUpdate } = useCursors(channel, userId, userCount, isDraggingRef)
   const lastActivityRef = useRef(Date.now())
   const idleCheckRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -128,7 +134,12 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     deleteObject, getZOrderSet, addObjectWithId, duplicateObject,
     isObjectLocked, lockObject, unlockObject,
     waitForPersist,
-  } = useBoardState(userId, boardId, userRole, channel, onlineUsers)
+  } = useBoardState(userId, boardId, userRole, channel, onlineUsers, {
+    isDraggingRef,
+    getDragCursorPos,
+    onRemoteCursor: receiveCursorFromBroadcast,
+    dragPositionsRef,
+  })
   // Expose object count for E2E performance tests (no cleanup — survives hot-reload)
   useEffect(() => {
     (window as unknown as Record<string, unknown>).__boardObjectCount = objects.size
@@ -355,6 +366,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
 
   const handleDragStart = useCallback((id: string) => {
     if (!canEdit) return
+    isDraggingRef.current = true
     markActivity()
     const obj = objects.get(id)
     if (!obj) return
@@ -391,6 +403,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
 
   const handleDragEnd = useCallback((id: string, x: number, y: number) => {
     if (!canEdit) return
+    isDraggingRef.current = false
     markActivity()
     updateObjectDragEnd(id, { x, y })
     const obj = objects.get(id)
@@ -529,6 +542,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     gridSize, gridSubdivisions, gridVisible, snapToGrid, gridStyle,
     canvasColor, gridColor, subdivisionColor, uiDarkMode,
     commentCounts: emptyCommentCounts,
+    dragPositionsRef,
   }), [
     objects, selectedIds, activeGroupId, sortedObjects, remoteSelections,
     getChildren, getDescendants,
@@ -539,6 +553,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     gridSize, gridSubdivisions, gridVisible, snapToGrid, gridStyle,
     canvasColor, gridColor, subdivisionColor, uiDarkMode,
     emptyCommentCounts,
+    dragPositionsRef,
   ])
 
   // ── Mutations context (all callbacks for Canvas + child components) ──
@@ -634,6 +649,9 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     onEndpointDragEnd: handleEndpointDragEnd,
     onCursorMove: sendCursorWithActivity,
     onCursorUpdate,
+    isDraggingRef,
+    lastDragCursorPosRef,
+    sendCursorDirect,
     onEditingChange: setIsEditingText,
     anySelectedLocked,
     onLock: handleLockSelected,
@@ -682,7 +700,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     checkFrameContainment, moveGroupChildren,
     recentColors, selectedColor,
     handleEndpointDragMove, handleEndpointDragEnd,
-    sendCursorWithActivity, onCursorUpdate,
+    sendCursorWithActivity, onCursorUpdate, sendCursorDirect,
     anySelectedLocked,
     handleLockSelected, handleUnlockSelected, selectedCanLock, selectedCanUnlock,
     vertexEditId, handleEditVertices, handleExitVertexEdit, handleVertexDragEnd, handleVertexInsert,

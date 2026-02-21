@@ -32,6 +32,7 @@ function makeContextValue(overrides?: Partial<BoardContextValue>): BoardContextV
     subdivisionColor: '#b4becd',
     uiDarkMode: false,
     commentCounts: new Map(),
+    dragPositionsRef: { current: new Map() },
     ...overrides,
   }
 }

@@ -29,6 +29,7 @@ const defaultBoardValue: BoardContextValue = {
   subdivisionColor: '#b4becd',
   uiDarkMode: false,
   commentCounts: new Map(),
+  dragPositionsRef: { current: new Map() },
 }
 
 function noop() {}
@@ -77,6 +78,9 @@ const defaultMutationsValue: BoardMutationsContextValue = {
   onDrawLineFromAnchor: noop,
   onCursorMove: noop,
   onCursorUpdate: noop,
+  isDraggingRef: { current: false },
+  lastDragCursorPosRef: { current: null },
+  sendCursorDirect: noop,
   onEditingChange: noop,
   anySelectedLocked: false,
   onLock: vi.fn(),

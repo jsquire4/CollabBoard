@@ -52,10 +52,12 @@ type CursorListener = (cursors: Map<string, RemoteCursorData>) => void
 export function useCursors(
   channel: RealtimeChannel | null,
   userId: string,
-  userCount: number = 1
+  userCount: number = 1,
+  isDraggingRef?: React.MutableRefObject<boolean>
 ) {
   const cursorStatesRef = useRef<Map<string, CursorState>>(new Map())
   const lastSendRef = useRef(0)
+  const lastPosRef = useRef<{ x: number; y: number } | null>(null)
   const staleTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const rafId = useRef(0)
   const listenerRef = useRef<CursorListener | null>(null)
@@ -122,49 +124,49 @@ export function useCursors(
     return () => cancelAnimationFrame(rafId.current)
   }, [])
 
+  // Update cursor state from an incoming position — shared by channel handler and piggybacked payloads
+  const receiveCursorFromBroadcast = useCallback((remoteUserId: string, pos: { x: number; y: number }) => {
+    const now = performance.now()
+    const existing = cursorStatesRef.current.get(remoteUserId)
+
+    if (existing) {
+      const interval = now - existing.targetTime
+      existing.start = { x: existing.rendered.x, y: existing.rendered.y }
+      existing.target = { x: pos.x, y: pos.y }
+      existing.duration = Math.min(MAX_DURATION, Math.max(MIN_DURATION, interval))
+      existing.targetTime = now
+    } else {
+      cursorStatesRef.current.set(remoteUserId, {
+        user_id: remoteUserId,
+        start: { x: pos.x, y: pos.y },
+        target: { x: pos.x, y: pos.y },
+        targetTime: now,
+        duration: MIN_DURATION,
+        rendered: { x: pos.x, y: pos.y },
+      })
+      dirtyRef.current = true
+    }
+
+    // Reset stale timer
+    const existingTimer = staleTimers.current.get(remoteUserId)
+    if (existingTimer) clearTimeout(existingTimer)
+    staleTimers.current.set(
+      remoteUserId,
+      setTimeout(() => {
+        cursorStatesRef.current.delete(remoteUserId)
+        staleTimers.current.delete(remoteUserId)
+        dirtyRef.current = true
+      }, STALE_TIMEOUT_MS)
+    )
+  }, [])
+
   // Listen for incoming cursor broadcasts — updates chase target, no React state
   useEffect(() => {
     if (!channel) return
 
     const handler = ({ payload }: { payload: RemoteCursorData }) => {
       if (payload.user_id === userId) return
-
-      const now = performance.now()
-      const existing = cursorStatesRef.current.get(payload.user_id)
-
-      if (existing) {
-        // Start interpolating from current rendered position toward the new target.
-        // Duration is capped so delayed messages don't cause slow-motion movement.
-        // If a message arrives late, the cursor moves at normal speed and "catches up."
-        const interval = now - existing.targetTime
-        existing.start = { x: existing.rendered.x, y: existing.rendered.y }
-        existing.target = { x: payload.x, y: payload.y }
-        existing.duration = Math.min(MAX_DURATION, Math.max(MIN_DURATION, interval))
-        existing.targetTime = now
-      } else {
-        // First sample — snap to position and mark dirty so rAF emits immediately
-        cursorStatesRef.current.set(payload.user_id, {
-          user_id: payload.user_id,
-          start: { x: payload.x, y: payload.y },
-          target: { x: payload.x, y: payload.y },
-          targetTime: now,
-          duration: MIN_DURATION,
-          rendered: { x: payload.x, y: payload.y },
-        })
-        dirtyRef.current = true
-      }
-
-      // Reset stale timer
-      const existingTimer = staleTimers.current.get(payload.user_id)
-      if (existingTimer) clearTimeout(existingTimer)
-      staleTimers.current.set(
-        payload.user_id,
-        setTimeout(() => {
-          cursorStatesRef.current.delete(payload.user_id)
-          staleTimers.current.delete(payload.user_id)
-          dirtyRef.current = true // trigger emission so Canvas removes the node
-        }, STALE_TIMEOUT_MS)
-      )
+      receiveCursorFromBroadcast(payload.user_id, { x: payload.x, y: payload.y })
     }
 
     channel.on('broadcast', { event: 'cursor' }, handler)
@@ -175,12 +177,34 @@ export function useCursors(
       }
       staleTimers.current.clear()
     }
-  }, [channel, userId])
+  }, [channel, userId, receiveCursorFromBroadcast])
 
   // Send cursor position (adaptive throttle).
   // Only send when the WebSocket channel is joined — otherwise channel.send()
   // falls back to REST API, flooding the server with HTTP requests.
   const sendCursor = useCallback((x: number, y: number) => {
+    // Always track position (used by keepalive and cursor piggybacking during drag)
+    lastPosRef.current = { x, y }
+
+    // Suppress standalone cursor sends during drag — position is piggybacked on board:sync
+    if (isDraggingRef?.current) return
+
+    if (!channel) return
+    if ((channel as unknown as { state: string }).state !== 'joined') return
+
+    const now = Date.now()
+    if (now - lastSendRef.current < throttleMsRef.current) return
+    lastSendRef.current = now
+
+    channel.send({
+      type: 'broadcast',
+      event: 'cursor',
+      payload: { x, y, user_id: userId },
+    })
+  }, [channel, userId, isDraggingRef])
+
+  // Send cursor position bypassing the drag suppression check (for keepalive during held drag)
+  const sendCursorDirect = useCallback((x: number, y: number) => {
     if (!channel) return
     if ((channel as unknown as { state: string }).state !== 'joined') return
 
@@ -195,5 +219,7 @@ export function useCursors(
     })
   }, [channel, userId])
 
-  return { sendCursor, onCursorUpdate }
+  const getDragCursorPos = useCallback(() => lastPosRef.current, [])
+
+  return { sendCursor, sendCursorDirect, getDragCursorPos, receiveCursorFromBroadcast, onCursorUpdate }
 }

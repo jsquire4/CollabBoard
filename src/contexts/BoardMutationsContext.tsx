@@ -79,6 +79,9 @@ export interface BoardMutationsContextValue {
   // Cursor
   onCursorMove: (x: number, y: number) => void
   onCursorUpdate: (fn: (cursors: Map<string, RemoteCursorData>) => void) => void
+  isDraggingRef: React.MutableRefObject<boolean>
+  lastDragCursorPosRef: React.MutableRefObject<{ x: number; y: number } | null>
+  sendCursorDirect: (x: number, y: number) => void
 
   // Editing state
   onEditingChange: (isEditing: boolean) => void

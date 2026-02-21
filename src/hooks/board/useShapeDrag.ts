@@ -19,6 +19,10 @@ interface UseShapeDragDeps {
   onMoveGroupChildren: (parentId: string, dx: number, dy: number, skipDb?: boolean) => void
   onCheckFrameContainment: (id: string) => void
   onCursorMove?: (x: number, y: number) => void
+  isDraggingRef?: React.MutableRefObject<boolean>
+  lastDragCursorPosRef?: React.MutableRefObject<{ x: number; y: number } | null>
+  dragPositionsRef?: React.MutableRefObject<Map<string, Partial<BoardObject>>>
+  sendCursorDirect?: (x: number, y: number) => void
 }
 
 export function useShapeDrag({
@@ -26,8 +30,12 @@ export function useShapeDrag({
   objectsRef,
   onDragStart: onDragStartProp, onDragEnd, onDragMove, onMoveGroupChildren,
   onCheckFrameContainment, onCursorMove,
+  isDraggingRef, lastDragCursorPosRef, dragPositionsRef, sendCursorDirect,
 }: UseShapeDragDeps) {
   const { canEdit, snapToGrid: snapToGridEnabled, gridSize, gridSubdivisions } = useBoardContext()
+
+  // Keepalive interval ref — sends cursor position every 4s if mouse is held still during drag
+  const keepaliveRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Grid snap dragBoundFunc — passed to shapes for Konva-level drag constraint
   const shapeDragBoundFunc = useMemo(() => {
@@ -38,12 +46,19 @@ export function useShapeDrag({
     })
   }, [snapToGridEnabled, gridSize, gridSubdivisions])
 
-  // Handle drag start: notify parent for undo capture
+  // Handle drag start: notify parent for undo capture, set drag flags, start cursor keepalive
   const handleShapeDragStart = useCallback((id: string) => {
+    if (isDraggingRef) isDraggingRef.current = true
+    if (keepaliveRef.current) clearInterval(keepaliveRef.current)
+    keepaliveRef.current = setInterval(() => {
+      if (isDraggingRef?.current && lastDragCursorPosRef?.current) {
+        sendCursorDirect?.(lastDragCursorPosRef.current.x, lastDragCursorPosRef.current.y)
+      }
+    }, 4000)
     onDragStartProp?.(id)
-  }, [onDragStartProp])
+  }, [onDragStartProp, isDraggingRef, lastDragCursorPosRef, sendCursorDirect])
 
-  // Handle drag move: update local state + broadcast, no DB write
+  // Handle drag move: update drag overlay + broadcast, no DB write, no React re-render
   const handleShapeDragMove = useCallback((id: string, x: number, y: number) => {
     if (!canEdit || !onDragMove) return
     const obj = objectsRef.current.get(id)
@@ -69,7 +84,7 @@ export function useShapeDrag({
 
     onDragMove(id, finalX, finalY)
 
-    // Broadcast cursor position during drag — stage onMouseMove doesn't fire
+    // Track and broadcast cursor position during drag — stage onMouseMove doesn't fire
     // while Konva is handling a shape drag, so we push the pointer position here.
     if (onCursorMove) {
       const stage = stageRef.current
@@ -77,6 +92,8 @@ export function useShapeDrag({
       if (pos) {
         const canvasX = (pos.x - stagePos.x) / stageScale
         const canvasY = (pos.y - stagePos.y) / stageScale
+        // Capture for keepalive and piggybacking before suppression in sendCursor
+        if (lastDragCursorPosRef) lastDragCursorPosRef.current = { x: canvasX, y: canvasY }
         onCursorMove(canvasX, canvasY)
       }
     }
@@ -85,7 +102,7 @@ export function useShapeDrag({
     if (obj.type === 'frame') {
       onMoveGroupChildren(id, dx, dy, true)
     }
-  }, [canEdit, objectsRef, onDragMove, onMoveGroupChildren, onCursorMove, stagePos, stageScale, snapToGridEnabled, gridSize, gridSubdivisions, shapeRefs, stageRef])
+  }, [canEdit, objectsRef, onDragMove, onMoveGroupChildren, onCursorMove, stagePos, stageScale, snapToGridEnabled, gridSize, gridSubdivisions, shapeRefs, stageRef, lastDragCursorPosRef])
 
   // Timeout ref for deferred frame-containment check — cleared on unmount
   const dragEndTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -93,6 +110,10 @@ export function useShapeDrag({
     return () => {
       if (dragEndTimeoutRef.current !== null) {
         clearTimeout(dragEndTimeoutRef.current)
+      }
+      if (keepaliveRef.current !== null) {
+        clearInterval(keepaliveRef.current)
+        keepaliveRef.current = null
       }
     }
   }, [])
@@ -118,6 +139,12 @@ export function useShapeDrag({
       onMoveGroupChildren(id, dx, dy, false)
     }
 
+    // Clear drag state — dragPositionsRef cleared AFTER onDragEnd/onMoveGroupChildren have
+    // queued their setObjects calls; React 18 batches the updates and renders fresh positions.
+    if (isDraggingRef) isDraggingRef.current = false
+    if (keepaliveRef.current) { clearInterval(keepaliveRef.current); keepaliveRef.current = null }
+    if (dragPositionsRef) dragPositionsRef.current.clear()
+
     // Check frame containment for non-frame objects
     if (obj.type !== 'frame' && obj.type !== 'group') {
       if (dragEndTimeoutRef.current !== null) {
@@ -128,7 +155,7 @@ export function useShapeDrag({
         onCheckFrameContainment(id)
       }, 0)
     }
-  }, [canEdit, objectsRef, onDragEnd, onMoveGroupChildren, onCheckFrameContainment, snapToGridEnabled, gridSize, gridSubdivisions])
+  }, [canEdit, objectsRef, onDragEnd, onMoveGroupChildren, onCheckFrameContainment, snapToGridEnabled, gridSize, gridSubdivisions, isDraggingRef, dragPositionsRef])
 
   return { handleShapeDragStart, handleShapeDragMove, handleShapeDragEnd, shapeDragBoundFunc }
 }

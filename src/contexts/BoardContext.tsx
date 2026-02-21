@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext } from 'react'
+import type React from 'react'
 import { BoardObject, BoardObjectType } from '@/types/board'
 import { BoardRole } from '@/types/sharing'
 import { OnlineUser } from '@/hooks/usePresence'
@@ -45,6 +46,9 @@ export interface BoardContextValue {
   subdivisionColor: string
   uiDarkMode: boolean
   commentCounts: Map<string, number>
+
+  // Drag overlay (ref-based, no re-render cost)
+  dragPositionsRef: React.MutableRefObject<Map<string, Partial<BoardObject>>>
 }
 
 // ── Context ──────────────────────────────────────────────────────────

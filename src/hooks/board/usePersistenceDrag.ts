@@ -20,6 +20,7 @@ export interface UsePersistenceDragDeps {
   fieldClocksRef: React.RefObject<Map<string, FieldClocks>>
   notify: (msg: string) => void
   log: BoardLogger
+  dragPositionsRef?: React.MutableRefObject<Map<string, Partial<BoardObject>>>
 }
 
 export function usePersistenceDrag({
@@ -29,6 +30,7 @@ export function usePersistenceDrag({
   queueBroadcast, stampChange,
   fieldClocksRef,
   notify, log,
+  dragPositionsRef,
 }: UsePersistenceDragDeps) {
 
   // ── Drag (no DB) ──────────────────────────────────────────────
@@ -37,18 +39,27 @@ export function usePersistenceDrag({
     if (!canEdit) return
     if (checkLocked(objectsRef, id)) return
 
-    setObjects(prev => {
-      const existing = prev.get(id)
-      if (!existing) return prev
-      const next = new Map(prev)
-      next.set(id, { ...existing, ...updates, updated_at: new Date().toISOString() })
-      return next
-    })
+    if (dragPositionsRef) {
+      // Ref-based drag: skip React re-render, write to overlay ref instead
+      dragPositionsRef.current.set(id, {
+        ...(dragPositionsRef.current.get(id) ?? {}),
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+    } else {
+      setObjects(prev => {
+        const existing = prev.get(id)
+        if (!existing) return prev
+        const next = new Map(prev)
+        next.set(id, { ...existing, ...updates, updated_at: new Date().toISOString() })
+        return next
+      })
+    }
 
     const changedFields = Object.keys(updates).filter(k => k !== 'updated_at')
     const clocks = stampChange(id, changedFields)
     queueBroadcast([{ action: 'update', object: { id, ...updates }, clocks }])
-  }, [canEdit, queueBroadcast, stampChange])
+  }, [canEdit, queueBroadcast, stampChange, dragPositionsRef])
 
   // ── Drag end (with DB) ────────────────────────────────────────
 
@@ -127,20 +138,32 @@ export function usePersistenceDrag({
       changes.push({ action: 'update', object: update, clocks })
     }
 
-    setObjects(prev => {
-      const next = new Map(prev)
-      for (const d of descendants) {
-        const existing = next.get(d.id)
-        if (existing) {
-          const updated = { ...existing, x: existing.x + dx, y: existing.y + dy, updated_at: now }
-          if (existing.x2 != null) updated.x2 = existing.x2 + dx
-          if (existing.y2 != null) updated.y2 = existing.y2 + dy
-          if (existing.waypoints) updated.waypoints = translateWaypoints(existing.waypoints)
-          next.set(d.id, updated)
-        }
+    if (skipDb && dragPositionsRef) {
+      // During drag: write to overlay ref to avoid O(N×M) React re-renders
+      for (const c of changes) {
+        const update = c.object as Partial<BoardObject>
+        dragPositionsRef.current.set(c.object.id, {
+          ...(dragPositionsRef.current.get(c.object.id) ?? {}),
+          ...update,
+          updated_at: now,
+        })
       }
-      return next
-    })
+    } else {
+      setObjects(prev => {
+        const next = new Map(prev)
+        for (const d of descendants) {
+          const existing = next.get(d.id)
+          if (existing) {
+            const updated = { ...existing, x: existing.x + dx, y: existing.y + dy, updated_at: now }
+            if (existing.x2 != null) updated.x2 = existing.x2 + dx
+            if (existing.y2 != null) updated.y2 = existing.y2 + dy
+            if (existing.waypoints) updated.waypoints = translateWaypoints(existing.waypoints)
+            next.set(d.id, updated)
+          }
+        }
+        return next
+      })
+    }
 
     queueBroadcast(changes)
 
@@ -179,7 +202,7 @@ export function usePersistenceDrag({
         }
       })
     }
-  }, [canEdit, getDescendants, queueBroadcast, stampChange, notify, log])
+  }, [canEdit, getDescendants, queueBroadcast, stampChange, notify, log, dragPositionsRef])
 
   return {
     updateObjectDrag,

@@ -1,5 +1,6 @@
 'use client'
 
+import type React from 'react'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { BoardObject } from '@/types/board'
 import { HLC } from '@/lib/crdt/hlc'
@@ -34,6 +35,7 @@ export interface UsePersistenceDeps {
   hlcRef: React.MutableRefObject<HLC>
   notify: (msg: string) => void
   log: BoardLogger
+  dragPositionsRef?: React.MutableRefObject<Map<string, Partial<BoardObject>>>
 }
 
 // ── Orchestrator hook ────────────────────────────────────────────────
@@ -45,6 +47,7 @@ export function usePersistence({
   queueBroadcast, stampChange, stampCreate,
   fieldClocksRef, hlcRef,
   notify, log,
+  dragPositionsRef,
 }: UsePersistenceDeps) {
 
   // Core: owns persistPromisesRef, provides loadObjects + reconcileOnReconnect + waitForPersist
@@ -72,6 +75,7 @@ export function usePersistence({
     queueBroadcast, stampChange,
     fieldClocksRef,
     notify, log,
+    dragPositionsRef,
   })
 
   // Composite: duplicateObject, persistZIndexBatch

@@ -111,17 +111,28 @@ function ScrubInput({ label, value, onChange, disabled, min, max, step = 1 }: Sc
   const startValRef = useRef<number>(0)
   const draggingRef = useRef<boolean>(false)
 
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!draggingRef.current) return
-      const delta = e.clientX - startXRef.current
-      let next = Math.round(startValRef.current + delta * step)
-      if (min !== undefined) next = Math.max(min, next)
-      if (max !== undefined) next = Math.min(max, next)
-      onChange(next)
-    },
-    [onChange, min, max, step]
-  )
+  // Keep latest values in refs so stable listeners can read them
+  const onChangeRef = useRef(onChange)
+  const minRef = useRef(min)
+  const maxRef = useRef(max)
+  const stepRef = useRef(step)
+
+  useEffect(() => {
+    onChangeRef.current = onChange
+    minRef.current = min
+    maxRef.current = max
+    stepRef.current = step
+  })  // no dep array — always sync
+
+  // Stable listener: created once, reads from refs
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!draggingRef.current) return
+    const delta = e.clientX - startXRef.current
+    let next = Math.round(startValRef.current + delta * (stepRef.current ?? 1))
+    if (minRef.current !== undefined) next = Math.max(minRef.current, next)
+    if (maxRef.current !== undefined) next = Math.min(maxRef.current, next)
+    onChangeRef.current(next)
+  }, [])  // empty deps — stable forever
 
   const handleMouseUp = useCallback(() => {
     draggingRef.current = false
@@ -129,7 +140,7 @@ function ScrubInput({ label, value, onChange, disabled, min, max, step = 1 }: Sc
     document.removeEventListener('mouseup', handleMouseUp)
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
-  }, [handleMouseMove])
+  }, [handleMouseMove])  // handleMouseMove is stable, so this is too
 
   const handleLabelMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -143,7 +154,7 @@ function ScrubInput({ label, value, onChange, disabled, min, max, step = 1 }: Sc
       document.addEventListener('mousemove', handleMouseMove)
       document.addEventListener('mouseup', handleMouseUp)
     },
-    [disabled, value, handleMouseMove, handleMouseUp]
+    [disabled, value, handleMouseMove, handleMouseUp]  // handleMouseMove/Up are stable
   )
 
   useEffect(() => {
@@ -153,7 +164,7 @@ function ScrubInput({ label, value, onChange, disabled, min, max, step = 1 }: Sc
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
-  }, [handleMouseMove, handleMouseUp])
+  }, [handleMouseMove, handleMouseUp])  // stable, so effect runs once
 
   return (
     <div className="flex items-center gap-1.5">

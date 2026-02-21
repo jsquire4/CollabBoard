@@ -9,7 +9,6 @@ interface ContextMenuProps {
   position: { x: number; y: number }
   objectId: string
   onClose: () => void
-  recentColors?: string[]
 }
 
 // ─── Icon components (stroke-based inline SVGs) ───────────────────────────────
@@ -201,7 +200,6 @@ export function ContextMenu({
   position,
   objectId,
   onClose,
-  recentColors: _recentColors,
 }: ContextMenuProps) {
   const {
     onDelete,

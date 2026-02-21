@@ -127,6 +127,8 @@ export function Canvas() {
     onAddRowAt, onDeleteRowAt, onAddColumnAt, onDeleteColumnAt,
     onAgentClick,
     onApiConfigChange,
+    onCut,
+    onCommentOpen,
   } = useBoardMutations()
   // ── Read shared state from context ──────────────────────────────
   const {
@@ -286,6 +288,8 @@ export function Canvas() {
   }, [richTextEditing.editor, onEditorReady])
 
   // Keyboard shortcuts (delegated to extracted hook)
+  const firstSelectedId = selectedIds.size > 0 ? selectedIds.values().next().value as string : null
+
   useKeyboardShortcuts({
     editingId, canEdit, selectedIds, activeGroupId, activeTool,
     vertexEditId, anySelectedLocked,
@@ -293,6 +297,7 @@ export function Canvas() {
     onClearSelection, onExitGroup, onCancelTool, onUndo, onRedo,
     onExitVertexEdit,
     onBringToFront, onBringForward, onSendBackward, onSendToBack,
+    onCut, onLock, onUnlock, onCommentOpen, firstSelectedId,
     onCancelDraw: () => {
       isDrawing.current = false
       drawStart.current = null
@@ -780,7 +785,6 @@ export function Canvas() {
         resetZoom={resetZoom}
         contextMenu={contextMenu}
         setContextMenu={setContextMenu}
-        recentColors={recentColors}
         onCellKeyDown={handleCellKeyDown}
         boardId={boardId}
         onApiConfigChange={onApiConfigChange}

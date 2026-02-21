@@ -36,7 +36,6 @@ interface CanvasOverlaysProps {
   // Context menu
   contextMenu: ContextMenuState | null
   setContextMenu: (m: ContextMenuState | null) => void
-  recentColors?: string[]
   onCellKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
 
   // API object overlays
@@ -49,7 +48,7 @@ export function CanvasOverlays({
   handleFinishEdit, onUpdateText, onUpdateTitle, objects,
   connectorHint, stageScale, stagePos, connectorDrawingRefs,
   zoomIn, zoomOut, resetZoom,
-  contextMenu, setContextMenu, recentColors,
+  contextMenu, setContextMenu,
   onCellKeyDown,
   boardId, onApiConfigChange,
 }: CanvasOverlaysProps) {
@@ -158,7 +157,6 @@ export function CanvasOverlays({
           position={{ x: contextMenu.x, y: contextMenu.y }}
           objectId={contextMenu.objectId}
           onClose={() => setContextMenu(null)}
-          recentColors={recentColors}
         />
       )}
     </>

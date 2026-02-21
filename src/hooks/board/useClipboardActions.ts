@@ -6,6 +6,7 @@ interface UseClipboardActionsDeps {
   objects: Map<string, BoardObject>
   selectedIds: Set<string>
   canEdit: boolean
+  addObject: (type: BoardObject['type'], x: number, y: number, overrides?: Partial<BoardObject>) => BoardObject | null
   deleteSelected: () => void
   duplicateSelected: () => string[]
   duplicateObject: (id: string) => BoardObject | null
@@ -20,6 +21,7 @@ export function useClipboardActions({
   objects,
   selectedIds,
   canEdit,
+  addObject,
   deleteSelected,
   duplicateSelected,
   duplicateObject,
@@ -28,6 +30,7 @@ export function useClipboardActions({
   markActivity,
 }: UseClipboardActionsDeps) {
   const clipboardRef = useRef<string[]>([])
+  const cutSnapshotsRef = useRef<Map<string, BoardObject>>(new Map())
 
   const handleDelete = useCallback(() => {
     if (!canEdit) return
@@ -60,6 +63,7 @@ export function useClipboardActions({
     if (selectedIds.size === 0) return
     markActivity()
     clipboardRef.current = Array.from(selectedIds)
+    cutSnapshotsRef.current = new Map()
   }, [selectedIds, markActivity])
 
   const handleCut = useCallback(() => {
@@ -67,14 +71,17 @@ export function useClipboardActions({
     markActivity()
     clipboardRef.current = Array.from(selectedIds)
     const snapshots: BoardObject[] = []
+    const cutSnapshotsMap = new Map<string, BoardObject>()
     for (const id of selectedIds) {
       const obj = objects.get(id)
       if (!obj) continue
       snapshots.push({ ...obj })
+      cutSnapshotsMap.set(id, { ...obj })
       for (const d of getDescendants(id)) {
         snapshots.push({ ...d })
       }
     }
+    cutSnapshotsRef.current = cutSnapshotsMap
     if (snapshots.length > 0) {
       undoStack.push({ type: 'delete', objects: snapshots })
     }
@@ -87,12 +94,21 @@ export function useClipboardActions({
     const newIds: string[] = []
     for (const id of clipboardRef.current) {
       const newObj = duplicateObject(id)
-      if (newObj) newIds.push(newObj.id)
+      if (newObj) {
+        newIds.push(newObj.id)
+      } else {
+        const snapshot = cutSnapshotsRef.current.get(id)
+        if (snapshot) {
+          const restored = addObject(snapshot.type, snapshot.x + 20, snapshot.y + 20, { ...snapshot })
+          if (restored) newIds.push(restored.id)
+        }
+      }
     }
+    cutSnapshotsRef.current = new Map()
     if (newIds.length > 0) {
       undoStack.push({ type: 'duplicate', ids: newIds })
     }
-  }, [canEdit, duplicateObject, undoStack, markActivity])
+  }, [canEdit, addObject, duplicateObject, undoStack, markActivity])
 
   return {
     handleDelete,

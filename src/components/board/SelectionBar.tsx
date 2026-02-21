@@ -6,7 +6,7 @@ import { useBoardMutations } from '@/contexts/BoardMutationsContext'
 import { selectionBBox } from '@/lib/geometry/bbox'
 
 // ── Text-bearing types that show the TextColor button ─────────────────
-// Mirrors the TEXT_TYPES set used in BoardClient for font controls.
+// Must stay in sync with TEXT_TYPES in PropertiesPanel.tsx.
 const TEXT_COLOR_TYPES = new Set([
   'sticky_note',
   'text',
@@ -17,6 +17,10 @@ const TEXT_COLOR_TYPES = new Set([
   'parallelogram',
   'ngon',
   'frame',
+  'status_badge',
+  'section_header',
+  'metric_card',
+  'checklist',
 ])
 
 // ── Vector types that have no fill color ──────────────────────────────

@@ -2,6 +2,7 @@
 
 interface NewBoardCardProps {
   isCreating: boolean
+  isSubmitting?: boolean
   newName: string
   onNameChange: (value: string) => void
   onCreate: () => void
@@ -11,6 +12,7 @@ interface NewBoardCardProps {
 
 export function NewBoardCard({
   isCreating,
+  isSubmitting = false,
   newName,
   onNameChange,
   onCreate,
@@ -39,10 +41,10 @@ export function NewBoardCard({
           <button
             type="button"
             onClick={onCreate}
-            disabled={isCreating}
+            disabled={isSubmitting}
             className="rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white transition hover:bg-navy/90 disabled:cursor-wait disabled:opacity-70"
           >
-            {isCreating ? 'Creating…' : 'Create'}
+            {isSubmitting ? 'Creating…' : 'Create'}
           </button>
           <button
             type="button"

@@ -76,8 +76,8 @@ export async function duplicateBoard(
         try {
           await supabase.from('board_objects').delete().eq('board_id', newBoard.id)
           await supabase.from('boards').delete().eq('id', newBoard.id)
-        } catch {
-          // Cleanup failed — orphaned board may remain
+        } catch (rollbackErr) {
+          console.error('[boardDuplication] rollback failed — orphaned board may remain:', rollbackErr)
         }
         return null
       }

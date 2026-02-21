@@ -197,8 +197,16 @@ describe('NewBoardCard', () => {
     )
     expect(screen.getByPlaceholderText('Board name')).toBeInTheDocument()
     expect(screen.getByText('Cancel')).toBeInTheDocument()
-    // Button text is "Creating…" when isCreating is true
+    // Button text is "Create" when form is open but no async in flight
+    expect(screen.getByText('Create')).toBeInTheDocument()
+  })
+
+  it('shows Creating… and disables button when isSubmitting', () => {
+    render(
+      <NewBoardCard isCreating={true} isSubmitting={true} newName="" onNameChange={noop} onCreate={noop} onCancel={noop} onClick={noop} />
+    )
     expect(screen.getByText('Creating…')).toBeInTheDocument()
+    expect(screen.getByText('Creating…').closest('button')).toBeDisabled()
   })
 
   it('calls onCreate on Enter key in input', async () => {

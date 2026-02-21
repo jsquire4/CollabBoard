@@ -51,7 +51,7 @@ export function StylePanel({
   const btnRef = useRef<HTMLButtonElement>(null)
   const [popoverPos, setPopoverPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
 
-  useClickOutside(popoverRef, showPopover && !!compact, () => setShowPopover(false))
+  useClickOutside([popoverRef, btnRef], showPopover && !!compact, () => setShowPopover(false))
 
   useEffect(() => {
     if (!compact || !showPopover || !btnRef.current) return
@@ -215,11 +215,11 @@ export function StylePanel({
 
   if (compact) {
     return (
-      <div ref={popoverRef}>
+      <div>
         <button
           ref={btnRef}
           type="button"
-          onClick={() => setShowPopover(!showPopover)}
+          onClick={() => setShowPopover(prev => !prev)}
           aria-label="Style options"
           aria-expanded={showPopover}
           aria-haspopup="dialog"
@@ -232,6 +232,7 @@ export function StylePanel({
         </button>
         {showPopover && (
           <div
+            ref={popoverRef}
             role="dialog"
             aria-label="Style options"
             className="fixed z-[200] rounded-xl border shadow-lg ring-1 ring-black/10 dark:ring-white/10 border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#1E293B]"

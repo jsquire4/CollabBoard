@@ -96,7 +96,6 @@ export function ContextMenu({
   const isLocked = isObjectLocked(objectId)
   const currentColor = selectedColor ?? ctxObj?.color
   const currentStrokeWidth = ctxObj?.stroke_width
-  const currentStrokeDash = ctxObj?.stroke_dash
   const currentStrokeColor = ctxObj?.stroke_color
   const currentOpacity = ctxObj?.opacity ?? 1
   const currentMarkerStart = ctxObj?.marker_start ?? (ctxObj?.type === 'arrow' ? 'arrow' : 'none')
@@ -128,10 +127,13 @@ export function ContextMenu({
         onClose()
       }
     }
-    requestAnimationFrame(() => {
+    const rafId = requestAnimationFrame(() => {
       window.addEventListener('mousedown', handleClickOutside)
     })
-    return () => window.removeEventListener('mousedown', handleClickOutside)
+    return () => {
+      cancelAnimationFrame(rafId)
+      window.removeEventListener('mousedown', handleClickOutside)
+    }
   }, [onClose])
 
   // Clamp position so menu stays within viewport

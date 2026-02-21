@@ -19,6 +19,7 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
   const [sharedBoards, setSharedBoards] = useState<BoardWithRole[]>(initialSharedBoards)
   const [newName, setNewName] = useState('')
   const [showNameInput, setShowNameInput] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const router = useRouter()
@@ -30,6 +31,7 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
+    setIsSubmitting(true)
     const { data, error } = await supabase
       .from('boards')
       .insert({ name, created_by: user.id })
@@ -38,8 +40,10 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
 
     if (error) {
       toast.error('Failed to create board')
+      setIsSubmitting(false)
       return
     }
+    setIsSubmitting(false)
     setNewName('')
     setShowNameInput(false)
     router.push(`/board/${data.id}`)
@@ -61,6 +65,7 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
       toast.error('Failed to rename board')
     } else {
       setMyBoards(prev => prev.map(b => b.id === id ? { ...b, name } : b))
+      setSharedBoards(prev => prev.map(b => b.id === id ? { ...b, name } : b))
     }
     setEditingId(null)
   }
@@ -120,6 +125,7 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <NewBoardCard
             isCreating={showNameInput}
+            isSubmitting={isSubmitting}
             newName={newName}
             onNameChange={setNewName}
             onCreate={handleCreate}

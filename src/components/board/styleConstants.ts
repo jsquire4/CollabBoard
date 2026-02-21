@@ -3,9 +3,9 @@
 
 /** Width-only presets for the stroke Weight row. Dash style is controlled separately via DASH_PRESETS. */
 export const STROKE_PRESETS = [
-  { stroke_width: 1, stroke_dash: '[]', label: 'Thin' },
-  { stroke_width: 2, stroke_dash: '[]', label: 'Medium' },
-  { stroke_width: 4, stroke_dash: '[]', label: 'Thick' },
+  { stroke_width: 1, label: 'Thin' },
+  { stroke_width: 2, label: 'Medium' },
+  { stroke_width: 4, label: 'Thick' },
 ]
 
 /** Stroke color swatches shown in both context menu and style panel. */

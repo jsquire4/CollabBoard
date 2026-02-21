@@ -92,7 +92,7 @@ export function runAgentLoop(
         while (stepCount < MAX_STEPS) {
           stepCount++
 
-          const createParams: Parameters<typeof openai.chat.completions.create>[0] = {
+          const createParams: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
             model,
             messages,
             tools: tools.length > 0 ? tools : undefined,

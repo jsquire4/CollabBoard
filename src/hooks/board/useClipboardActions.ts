@@ -62,6 +62,25 @@ export function useClipboardActions({
     clipboardRef.current = Array.from(selectedIds)
   }, [selectedIds, markActivity])
 
+  const handleCut = useCallback(() => {
+    if (!canEdit || selectedIds.size === 0) return
+    markActivity()
+    clipboardRef.current = Array.from(selectedIds)
+    const snapshots: BoardObject[] = []
+    for (const id of selectedIds) {
+      const obj = objects.get(id)
+      if (!obj) continue
+      snapshots.push({ ...obj })
+      for (const d of getDescendants(id)) {
+        snapshots.push({ ...d })
+      }
+    }
+    if (snapshots.length > 0) {
+      undoStack.push({ type: 'delete', objects: snapshots })
+    }
+    deleteSelected()
+  }, [canEdit, selectedIds, objects, getDescendants, deleteSelected, undoStack, markActivity])
+
   const handlePaste = useCallback(() => {
     if (!canEdit || clipboardRef.current.length === 0) return
     markActivity()
@@ -79,6 +98,7 @@ export function useClipboardActions({
     handleDelete,
     handleDuplicate,
     handleCopy,
+    handleCut,
     handlePaste,
   }
 }

@@ -36,6 +36,7 @@ export interface BoardMutationsContextValue {
   onDelete: () => void
   onDuplicate: () => void
   onCopy: () => void
+  onCut: () => void
   onPaste: () => void
 
   // Style

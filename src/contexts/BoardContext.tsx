@@ -44,6 +44,7 @@ export interface BoardContextValue {
   gridColor: string
   subdivisionColor: string
   uiDarkMode: boolean
+  commentCounts: Map<string, number>
 }
 
 // ── Context ──────────────────────────────────────────────────────────

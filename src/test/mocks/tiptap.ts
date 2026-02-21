@@ -19,6 +19,7 @@ export function createMockEditor() {
       toggleStrike: vi.fn(),
       toggleHighlight: vi.fn(),
       setColor: vi.fn(),
+      setTextAlign: vi.fn(),
       toggleBulletList: vi.fn(),
       toggleOrderedList: vi.fn(),
       toggleTaskList: vi.fn(),

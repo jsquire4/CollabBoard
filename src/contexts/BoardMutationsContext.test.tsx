@@ -22,6 +22,7 @@ function makeMutationsValue(overrides?: Record<string, unknown>) {
     onDelete: noop,
     onDuplicate: noop,
     onCopy: noop,
+    onCut: noop,
     onPaste: noop,
     onColorChange: noop,
     onStrokeStyleChange: noop,

@@ -54,7 +54,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
     `rounded-lg px-4 py-2 text-sm font-medium transition ${
       tab === t
         ? 'bg-navy text-parchment'
-        : 'bg-transparent text-charcoal/70 hover:bg-parchment-dark dark:text-parchment/40 dark:hover:bg-white/10'
+        : 'bg-transparent text-charcoal/70 hover:bg-parchment-dark dark:text-parchment/90 dark:hover:bg-white/15'
     }`
 
   const getRoleOptions = () => {
@@ -79,13 +79,13 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-charcoal/70 transition hover:bg-parchment-dark hover:text-charcoal dark:text-parchment/40 dark:hover:bg-white/10"
+            className="rounded p-1 text-charcoal/70 transition hover:bg-parchment-dark hover:text-charcoal dark:text-parchment/90 dark:hover:bg-white/15 dark:hover:text-parchment"
           >
             ×
           </button>
         </div>
 
-        <div className="mb-5 flex gap-1 rounded-lg bg-parchment-dark p-1">
+        <div className="mb-5 flex gap-1 rounded-lg bg-parchment-dark dark:bg-white/10 p-1">
           <button type="button" className={tabClasses('members')} onClick={() => setTab('members')}>
             Members
           </button>
@@ -212,7 +212,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                   type="button"
                   onClick={handleInvite}
                   disabled={!inviteEmail.trim()}
-                  className="w-full rounded-lg bg-navy py-2.5 text-sm font-medium text-parchment transition hover:bg-navy/90 disabled:cursor-not-allowed disabled:bg-parchment-dark disabled:text-charcoal/30"
+                  className="w-full rounded-lg bg-navy py-2.5 text-sm font-medium text-parchment transition hover:bg-navy/90 disabled:cursor-not-allowed disabled:bg-parchment-dark disabled:text-charcoal/30 dark:disabled:bg-white/10 dark:disabled:text-parchment/40"
                 >
                   Send Invite
                 </button>
@@ -293,7 +293,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                 <button
                   type="button"
                   onClick={() => setTransferTarget(null)}
-                  className="rounded-lg border border-parchment-border px-4 py-2 text-sm transition hover:bg-parchment-dark dark:border-white/10 dark:text-parchment dark:hover:bg-white/10"
+                  className="rounded-lg border border-parchment-border px-4 py-2 text-sm transition hover:bg-parchment-dark dark:border-white/20 dark:bg-white/5 dark:text-parchment dark:hover:bg-white/15"
                 >
                   Cancel
                 </button>

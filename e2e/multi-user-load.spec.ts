@@ -202,12 +202,12 @@ async function addShapeViaFlyout(
   }
   const group = groupMap[type] ?? 'Shapes'
   const label = labelMap[type] ?? type
-  const groupBtn = page.getByRole('button', { name: new RegExp(group, 'i') }).first()
+  const groupBtn = page.locator(`button[title="${group}"]`).first()
   if (await groupBtn.isVisible().catch(() => false)) {
     await groupBtn.click().catch(() => {})
     await page.waitForTimeout(100)
   }
-  const presetBtn = page.getByRole('button', { name: new RegExp(label, 'i') }).first()
+  const presetBtn = page.locator(`button[title="${label}"]`).first()
   if (await presetBtn.isVisible().catch(() => false)) {
     await presetBtn.click().catch(() => {})
   }
@@ -271,7 +271,7 @@ test.describe('Multi-user load', () => {
           await page.goto(`/board/${BOARD_ID}`, { waitUntil: 'domcontentloaded', timeout: 20000 })
           await Promise.race([
             page.locator('canvas').first().waitFor({ state: 'visible', timeout: 15000 }),
-            page.getByRole('button', { name: /share|logout/i }).waitFor({ state: 'visible', timeout: 15000 }),
+            page.getByRole('button', { name: /logout/i }).waitFor({ state: 'visible', timeout: 15000 }),
           ])
 
           await page.evaluate(START_FPS)
@@ -338,10 +338,10 @@ test.describe('Multi-user load', () => {
                   await canvas.dragTo(canvas, { sourcePosition: { x: tx + 80, y: ty + 20 }, targetPosition: { x: tx + 120, y: ty + 20 }, force: true }).catch(() => {})
                 } else {
                   await canvas.click({ button: 'right', position: { x: tx, y: ty }, force: true })
-                  if (action === 'table_add_row') await page.getByRole('menuitem', { name: /add row/i }).click().catch(() => {})
-                  else if (action === 'table_add_col') await page.getByRole('menuitem', { name: /add column/i }).click().catch(() => {})
-                  else if (action === 'table_del_row') await page.getByRole('menuitem', { name: /delete row/i }).click().catch(() => {})
-                  else if (action === 'table_del_col') await page.getByRole('menuitem', { name: /delete column/i }).click().catch(() => {})
+                  if (action === 'table_add_row') await page.getByRole('button', { name: /add row/i }).click().catch(() => {})
+                  else if (action === 'table_add_col') await page.getByRole('button', { name: /add column/i }).click().catch(() => {})
+                  else if (action === 'table_del_row') await page.getByRole('button', { name: /delete row/i }).click().catch(() => {})
+                  else if (action === 'table_del_col') await page.getByRole('button', { name: /delete column/i }).click().catch(() => {})
                 }
               } else if (action === 'text_edit') {
                 await canvas.dblclick({ position: { x: 200 + Math.random() * 200, y: 200 + Math.random() * 200 }, force: true })
@@ -351,7 +351,12 @@ test.describe('Multi-user load', () => {
                 const from = { x: 200 + Math.random() * 200, y: 200 + Math.random() * 200 }
                 await canvas.dragTo(canvas, { sourcePosition: from, targetPosition: { x: from.x + 50, y: from.y + 30 }, force: true }).catch(() => {})
               } else if (action === 'connector') {
-                const lineBtn = page.getByRole('button', { name: /line|arrow/i }).first()
+                const linesGroupBtn = page.locator('button[title="Lines"]').first()
+                if (await linesGroupBtn.isVisible().catch(() => false)) {
+                  await linesGroupBtn.click().catch(() => {})
+                  await page.waitForTimeout(100)
+                }
+                const lineBtn = page.locator('button[title="Line"]').first()
                 if (await lineBtn.isVisible().catch(() => false)) {
                   await lineBtn.click()
                   await canvas.click({ position: { x: 150, y: 150 }, force: true })

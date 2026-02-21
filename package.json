@@ -10,8 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:stress": "vitest run --reporter=verbose --config vitest.stress.config.ts",
-    "test:e2e": "playwright test --project=chromium",
-
+    "test:e2e": "playwright test --project=chromium --project=functional",
+    "test:e2e:smoke": "playwright test --project=chromium",
+    "test:e2e:functional": "playwright test --project=functional",
     "test:e2e:stress": "playwright test --project=performance",
     "test:e2e:load": "playwright test --project=performance e2e/multi-user-load.spec.ts --reporter=list",
     "test:all": "npm run test && npm run test:stress && npm run test:e2e && npm run test:e2e:stress",

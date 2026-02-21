@@ -16,7 +16,16 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /smoke\.spec\.ts/,
+    },
+    {
+      name: 'functional',
+      use: { ...devices['Desktop Chrome'], storageState: '.auth/user.json' },
+      testMatch: /board-functional\.spec\.ts/,
+    },
     {
       name: 'performance',
       use: { ...devices['Desktop Chrome'], storageState: '.auth/user.json' },

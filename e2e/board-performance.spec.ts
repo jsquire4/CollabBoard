@@ -37,7 +37,7 @@ function flushWarnings() {
 async function waitForBoard(page: import('@playwright/test').Page) {
   await Promise.race([
     page.locator('canvas').first().waitFor({ state: 'visible', timeout: 15000 }),
-    page.getByRole('button', { name: /share|logout/i }).waitFor({ state: 'visible', timeout: 15000 }),
+    page.getByRole('button', { name: /logout/i }).waitFor({ state: 'visible', timeout: 15000 }),
   ])
 }
 
@@ -142,12 +142,12 @@ test.describe('Board performance', () => {
 
     for (let i = 0; i < 50; i++) {
       // Click the Shapes group to open flyout
-      const shapesBtn = page.getByRole('button', { name: /Shapes/i }).first()
+      const shapesBtn = page.locator('button[title="Shapes"]').first()
       if (await shapesBtn.isVisible().catch(() => false)) {
         await shapesBtn.click().catch(() => {})
         await page.waitForTimeout(50)
       }
-      const rectBtn = page.getByRole('button', { name: /Rectangle/i }).first()
+      const rectBtn = page.locator('button[title="Rectangle"]').first()
       if (await rectBtn.isVisible().catch(() => false)) {
         await rectBtn.click().catch(() => {})
       }

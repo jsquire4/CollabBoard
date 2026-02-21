@@ -48,7 +48,6 @@ import { FileLibraryPanel } from './FileLibraryPanel'
 import { FilmstripPanel } from './FilmstripPanel'
 import { CommentThread } from './CommentThread'
 import { FileDropZone } from './FileDropZone'
-import { PropertiesPanel } from './PropertiesPanel'
 
 // Konva is client-only — must disable SSR
 const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canvas })), {
@@ -786,8 +785,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
             </CanvasErrorBoundary>
           </div>
         </FileDropZone>
-        {/* Properties panel — fixed right sidebar, slides in when objects are selected */}
-        <PropertiesPanel />
       </div>
       {shareOpen && (
         <ShareDialog

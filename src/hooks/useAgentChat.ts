@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 
 export interface ChatMessage {
   id: string
@@ -248,7 +247,8 @@ export function useAgentChat({ boardId, mode, enabled = true, viewportCenter }: 
         return
       }
 
-      // Global mode: load history from API
+      // Global mode: load recent history from the OpenAI thread via our API.
+      // The Assistants API thread is the single source of truth — no Supabase fallback needed.
       try {
         const res = await fetch(`/api/agent/${boardId}/global/history`, {
           signal: abortController.signal,
@@ -266,36 +266,11 @@ export function useAgentChat({ boardId, mode, enabled = true, viewportCenter }: 
             }))
             messageIdRef.current = loaded.length
             setMessages(loaded)
-            return
           }
         }
       } catch (err) {
         if ((err as Error).name === 'AbortError') return
-        // Fall through — show empty state
-      }
-
-      // Global mode fallback: load from board_messages directly
-      const supabase = createClient()
-      const { data } = await supabase
-        .from('board_messages')
-        .select('id, role, content, tool_calls, user_display_name, created_at')
-        .eq('board_id', boardId)
-        .is('agent_object_id', null)
-        .order('created_at', { ascending: true })
-        .limit(200)
-
-      if (abortController.signal.aborted) return
-
-      if (data && data.length > 0) {
-        const loaded: ChatMessage[] = data.map(row => ({
-          id: row.id,
-          role: row.role as 'user' | 'assistant' | 'system',
-          content: row.content,
-          user_display_name: row.user_display_name,
-          toolCalls: row.tool_calls as ChatMessage['toolCalls'],
-        }))
-        messageIdRef.current = loaded.length
-        setMessages(loaded)
+        // Show empty state — thread history will accumulate as user chats
       }
     }
 

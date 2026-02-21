@@ -72,6 +72,7 @@ vi.mock('@/lib/agent/boardState', () => ({
 vi.mock('@/lib/agent/tools', () => ({
   createTools: vi.fn().mockReturnValue({ definitions: [], executors: new Map() }),
   createToolContext: vi.fn().mockReturnValue({}),
+  getToolDefinitions: vi.fn().mockReturnValue([]),
 }))
 
 vi.mock('@/lib/userUtils', () => ({

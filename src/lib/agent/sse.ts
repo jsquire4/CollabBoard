@@ -228,6 +228,8 @@ export interface AssistantsLoopConfig {
   executors: Map<string, (args: unknown) => Promise<unknown>>
   /** Optional LangSmith trace metadata (boardId, userId, agentType) */
   traceMetadata?: TraceMetadata
+  /** Extra parameters forwarded to threads.runs.stream (e.g. truncation_strategy, max_prompt_tokens) */
+  runOptions?: Record<string, unknown>
   onDone(content: string): Promise<void>
   onError(err: Error): Promise<void>
 }
@@ -259,6 +261,7 @@ export function runAssistantsLoop(
           ...(config.additionalInstructions
             ? { additional_instructions: config.additionalInstructions }
             : {}),
+          ...(config.runOptions ?? {}),
         })
 
         // Label needed so `continue` after tool output submission targets

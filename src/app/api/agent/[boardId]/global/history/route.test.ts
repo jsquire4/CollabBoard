@@ -171,7 +171,7 @@ describe('GET /api/agent/[boardId]/global/history', () => {
     expect(body[0]).toMatchObject({ id: 'msg_1', role: 'user', content: 'Hello' })
     expect(body[1]).toMatchObject({ id: 'msg_2', role: 'assistant', content: 'Hi there' })
     expect(mockMessagesList).toHaveBeenCalledWith('thread_abc', {
-      limit: 50,
+      limit: 30,
       order: 'asc',
     })
   })

@@ -2,7 +2,7 @@
  * GET /api/agent/[boardId]/global/history — fetch global agent conversation history.
  *
  * Reads messages from the OpenAI thread stored in `boards.global_agent_thread_id`.
- * Falls back to empty array if no thread exists yet.
+ * Returns the last 30 messages (aligned with the 20-message truncation window on runs).
  */
 
 import { NextRequest } from 'next/server'
@@ -26,9 +26,16 @@ export async function GET(
     return Response.json({ error: 'OPENAI_API_KEY not configured' }, { status: 500 })
   }
 
-  // ── Auth ──────────────────────────────────────────────────
+  // ── Auth + thread ID (parallel) ─────────────────────────────
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  const admin = createAdminClient()
+
+  const [authResult, boardResult] = await Promise.all([
+    supabase.auth.getUser(),
+    admin.from('boards').select('global_agent_thread_id').eq('id', boardId).single(),
+  ])
+
+  const { data: { user }, error: authError } = authResult
   if (authError || !user) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -44,30 +51,20 @@ export async function GET(
     return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const openai = getOpenAI()
+  if (!boardResult.data?.global_agent_thread_id) {
+    return Response.json([])
+  }
+
+  const threadId = boardResult.data.global_agent_thread_id
 
   try {
-    // Read-only: don't create a thread as a side effect of fetching history
-    const admin = createAdminClient()
-    const { data: board } = await admin
-      .from('boards')
-      .select('global_agent_thread_id')
-      .eq('id', boardId)
-      .single()
-
-    if (!board?.global_agent_thread_id) {
-      return Response.json([])
-    }
-
-    const threadId = board.global_agent_thread_id
-
+    const openai = getOpenAI()
     const response = await openai.beta.threads.messages.list(threadId, {
-      limit: 50,
+      limit: 30,
       order: 'asc',
     })
 
     const messages = response.data.map(msg => {
-      // Extract text content from message content blocks
       const textContent = msg.content
         .filter((block): block is OpenAI.Beta.Threads.Messages.TextContentBlock => block.type === 'text')
         .map(block => block.text.value)

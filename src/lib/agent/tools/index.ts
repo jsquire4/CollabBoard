@@ -34,6 +34,44 @@ function openaiTool(name: string, description: string, parameters: Record<string
   }
 }
 
+// ── All tool arrays (shared across factory and definitions cache) ─────────────
+
+const allToolDefs = [
+  ...createObjectTools,
+  ...editObjectTools,
+  ...queryObjectTools,
+  ...layoutObjectTools,
+  ...fileTools,
+]
+
+// ── Cached definitions (static — schemas don't change at runtime) ────────────
+
+const _defsCache = new Map<string, OpenAI.Chat.ChatCompletionTool[]>()
+
+/**
+ * Return tool definitions for a given exclude set.
+ * Definitions are schema-only (no executors, no board state) and can be cached
+ * at module level so callers like `ensureAssistant` don't block on board state.
+ */
+export function getToolDefinitions(excludeTools?: string[]): OpenAI.Chat.ChatCompletionTool[] {
+  const key = excludeTools ? excludeTools.sort().join(',') : ''
+  const cached = _defsCache.get(key)
+  if (cached) return cached
+
+  const excludeSet = new Set(excludeTools ?? [])
+  const defs: OpenAI.Chat.ChatCompletionTool[] = []
+  for (const tool of allToolDefs) {
+    if (excludeSet.has(tool.name)) continue
+    defs.push(openaiTool(
+      tool.name,
+      tool.description,
+      TOOL_SCHEMAS[tool.name] ?? { type: 'object', properties: {} },
+    ))
+  }
+  _defsCache.set(key, defs)
+  return defs
+}
+
 // ── Tool factory ──────────────────────────────────────────────────────────────
 
 export interface CreateToolsOptions {
@@ -45,25 +83,12 @@ export function createTools(ctx: ToolContext, options?: CreateToolsOptions): {
   definitions: OpenAI.Chat.ChatCompletionTool[]
   executors: Map<string, (args: unknown) => Promise<unknown>>
 } {
-  const definitions: OpenAI.Chat.ChatCompletionTool[] = []
+  const definitions = getToolDefinitions(options?.excludeTools)
   const executors = new Map<string, (args: unknown) => Promise<unknown>>()
   const excludeSet = new Set(options?.excludeTools ?? [])
 
-  const allTools = [
-    ...createObjectTools,
-    ...editObjectTools,
-    ...queryObjectTools,
-    ...layoutObjectTools,
-    ...fileTools,
-  ]
-
-  for (const tool of allTools) {
+  for (const tool of allToolDefs) {
     if (excludeSet.has(tool.name)) continue
-    definitions.push(openaiTool(
-      tool.name,
-      tool.description,
-      TOOL_SCHEMAS[tool.name] ?? { type: 'object', properties: {} },
-    ))
     executors.set(tool.name, (rawArgs: unknown) => tool.executor(ctx, rawArgs))
   }
 

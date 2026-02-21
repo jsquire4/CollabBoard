@@ -712,6 +712,27 @@ describe('queryObjects', () => {
       expect(returned.title).toBeUndefined()
       expect(returned.parent_id).toBeUndefined()
     })
+
+    it('filters to connected objects only when agentObjectId is set', async () => {
+      const agentObj = makeBoardObject({ id: 'agent-1', type: 'agent_output' })
+      const connector = makeBoardObject({ id: 'dc-1', type: 'data_connector', connect_start_id: 'agent-1', connect_end_id: 'rect-1', deleted_at: null } as unknown as Partial<BoardObject>)
+      const connectedRect = makeBoardObject({ id: 'rect-1', type: 'rectangle' })
+      const unconnectedObj = makeBoardObject({ id: 'other-1', type: 'rectangle' })
+      const freshState = {
+        boardId: 'board-1',
+        objects: new Map([['agent-1', agentObj], ['dc-1', connector], ['rect-1', connectedRect], ['other-1', unconnectedObj]]),
+        fieldClocks: new Map(),
+      }
+      mockLoadBoardState.mockResolvedValue(freshState)
+
+      const ctx = makeCtx()
+      ctx.agentObjectId = 'agent-1'
+      const result = await getTool(queryObjectTools, 'getConnectedObjects').executor(ctx, {}) as { objectCount: number; objects: Array<{ id: string }> }
+
+      expect(result.objectCount).toBe(3) // agent-1 + dc-1 + rect-1 (connected via data_connector)
+      expect(result.objects.map(o => o.id)).toEqual(expect.arrayContaining(['agent-1', 'dc-1', 'rect-1']))
+      expect(result.objects.find(o => o.id === 'other-1')).toBeUndefined()
+    })
   })
 
   describe('getFrameObjects', () => {
@@ -771,6 +792,15 @@ describe('queryObjects', () => {
       const ctx = makeCtx()
       const result = await getTool(queryObjectTools, 'getFrameObjects').executor(ctx, {})
       expect((result as { error: string }).error).toMatch(/Invalid arguments/)
+    })
+
+    it('returns error when agentObjectId is set and frame not connected', async () => {
+      const frame = makeBoardObject({ id: 'frame-1', type: 'frame' })
+      const agentObj = makeBoardObject({ id: 'agent-1', type: 'agent_output' })
+      const ctx = makeCtx(new Map([['frame-1', frame], ['agent-1', agentObj]]))
+      ctx.agentObjectId = 'agent-1'
+      const result = await getTool(queryObjectTools, 'getFrameObjects').executor(ctx, { frameId: 'frame-1' })
+      expect(result).toMatchObject({ error: 'Object not connected to this agent' })
     })
   })
 })

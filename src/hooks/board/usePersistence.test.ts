@@ -418,6 +418,26 @@ describe('usePersistence', () => {
     expect(chain.update).toHaveBeenCalledTimes(2)
   })
 
+  it('persistZIndexBatch notifies and logs on DB failure', async () => {
+    const chain = chainMock({ error: { message: 'db fail' } })
+    mockFrom.mockReturnValue(chain)
+    const notify = vi.fn()
+    const logMock = { error: vi.fn(), warn: vi.fn(), info: vi.fn() }
+    const { result } = renderHook(() => usePersistence(makeDeps({ notify, log: logMock })))
+
+    act(() => {
+      result.current.persistZIndexBatch(
+        [{ id: 'a', z_index: 10 }],
+        new Date().toISOString()
+      )
+    })
+
+    await act(async () => {})
+
+    expect(notify).toHaveBeenCalledWith('Failed to update layer order')
+    expect(logMock.warn).toHaveBeenCalled()
+  })
+
   it('updateObjectDrag updates state and broadcasts but skips DB', () => {
     const chain = chainMock({ error: null })
     mockFrom.mockReturnValue(chain)

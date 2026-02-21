@@ -101,6 +101,9 @@ function createMockSupabaseRef() {
           data: { subscription: { unsubscribe: vi.fn() } },
         })),
       },
+      realtime: {
+        disconnect: vi.fn(),
+      },
     } as unknown as SupabaseClient,
   }
   return ref

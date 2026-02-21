@@ -57,11 +57,16 @@ export function useConnectionManager({
       console.warn(`${LOG_PREFIX} Reconnect attempt ${attempt}/${MAX_RECONNECT_ATTEMPTS} in ${delay}ms (trigger: ${triggerEvent})`)
       reconnectTimerRef.current = setTimeout(() => {
         reconnectTimerRef.current = null
-        // Bug 1 fix: unsubscribe first to transition 'errored' → 'closed' before re-subscribing
-        // Bug 5 fix: flag intentional unsubscribe to ignore the synchronous CLOSED callback
-        isIntentionalUnsubRef.current = true
-        channel.unsubscribe()
-        isIntentionalUnsubRef.current = false
+        // Use disconnect() rather than unsubscribe() to force a clean WebSocket
+        // teardown before re-subscribing. After a server-initiated CLOSED event,
+        // channel.unsubscribe() + channel.subscribe() can silently no-op if the
+        // channel's internal state machine isn't in exactly 'closed' — the
+        // subscribe() call is swallowed and no further status callbacks fire,
+        // leaving the UI stuck at 'reconnecting' indefinitely. disconnect() tears
+        // down the transport cleanly without firing per-channel CLOSED callbacks
+        // (so isIntentionalUnsubRef is not needed here), and the subsequent
+        // subscribe() auto-connects a fresh WebSocket.
+        supabaseRef.current.realtime.disconnect()
         connectStartRef.current = Date.now()
         channel.subscribe()
       }, delay)

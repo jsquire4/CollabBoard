@@ -31,6 +31,9 @@ function createMockSupabase(): { client: SupabaseClient; emitAuthEvent: (event: 
         }
       }),
     },
+    realtime: {
+      disconnect: vi.fn(),
+    },
   } as unknown as SupabaseClient
 
   return {

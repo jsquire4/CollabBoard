@@ -124,4 +124,58 @@ describe('shapeRegistry', () => {
     expect(shapeRegistry.has('frame')).toBe(false)
     expect(shapeRegistry.has('line')).toBe(false)
   })
+
+  it('status_badge has rect strategy and konvaProps', () => {
+    const def = shapeRegistry.get('status_badge')!
+    expect(def.strategy).toBe('rect')
+    expect(def.konvaProps!(makeObject({ type: 'status_badge', corner_radius: 8 }))).toEqual({ cornerRadius: 8 })
+    expect(def.konvaProps!(makeObject({ type: 'status_badge', corner_radius: null }))).toEqual({ cornerRadius: 16 })
+  })
+
+  it('section_header has cornerRadius 0', () => {
+    const def = shapeRegistry.get('section_header')!
+    expect(def.konvaProps!(makeObject({ type: 'section_header' }))).toEqual({ cornerRadius: 0 })
+  })
+
+  it('metric_card has rect strategy', () => {
+    const def = shapeRegistry.get('metric_card')!
+    expect(def.strategy).toBe('rect')
+    expect(def.konvaProps!(makeObject({ type: 'metric_card', corner_radius: 4 }))).toEqual({ cornerRadius: 4 })
+    expect(def.konvaProps!(makeObject({ type: 'metric_card' }))).toEqual({ cornerRadius: 8 })
+  })
+
+  it('checklist has rect strategy', () => {
+    const def = shapeRegistry.get('checklist')!
+    expect(def.strategy).toBe('rect')
+    expect(def.getTextInset(200, 160, 8)).toEqual({ x: 8, y: 8, width: 184, height: 144 })
+  })
+
+  it('api_object has rect strategy', () => {
+    const def = shapeRegistry.get('api_object')!
+    expect(def.strategy).toBe('rect')
+    expect(def.defaultColor).toBe('#F0EBE3')
+  })
+
+  it('context_object has rect strategy', () => {
+    const def = shapeRegistry.get('context_object')!
+    expect(def.strategy).toBe('rect')
+    expect(def.defaultColor).toBe('#FAF8F4')
+  })
+
+  it('text has transparent fill and stroke', () => {
+    const def = shapeRegistry.get('text')!
+    expect(def.konvaProps!(makeObject({ type: 'text' }))).toEqual({
+      fill: 'transparent',
+      stroke: 'transparent',
+      strokeWidth: 0,
+      cornerRadius: 0,
+    })
+  })
+
+  it('agent_output has rect strategy', () => {
+    const def = shapeRegistry.get('agent_output')!
+    expect(def.strategy).toBe('rect')
+    expect(def.defaultColor).toBe('#EAF4EE')
+    expect(def.konvaProps!(makeObject({ type: 'agent_output' }))).toEqual({ cornerRadius: 8 })
+  })
 })

@@ -8,8 +8,14 @@ import { NextRequest } from 'next/server'
 const mockGetUser = vi.fn()
 
 vi.mock('@supabase/ssr', () => ({
-  createServerClient: vi.fn(() => ({
-    auth: { getUser: mockGetUser },
+  createServerClient: vi.fn((_url: string, _key: string, options: { cookies: { setAll: (c: { name: string; value: string; options?: unknown }[]) => void } }) => ({
+    auth: {
+      getUser: async () => {
+        // Simulate Supabase calling setAll when refreshing session (exercises cookie path)
+        options.cookies.setAll([{ name: 'sb-test', value: 'refreshed', options: {} }])
+        return mockGetUser()
+      },
+    },
   })),
 }))
 

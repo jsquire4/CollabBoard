@@ -3,7 +3,7 @@
  * Pattern: mock useAgentChat + child components, render with RTL.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, act, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 // ── Hook + child component mocks ─────────────────────────────────────────────
@@ -21,8 +21,8 @@ vi.mock('./ChatMessage', () => ({
 vi.mock('./ChatInput', () => ({
   ChatInput: ({ onSend, isLoading, onCancel }: { onSend: (msg: string) => void; isLoading: boolean; onCancel?: () => void }) => (
     <div data-testid="chat-input">
-      <button onClick={() => onSend('test msg')} disabled={isLoading}>Send</button>
-      {onCancel && <button onClick={onCancel}>Cancel</button>}
+      <button type="button" onClick={() => onSend('test msg')} disabled={isLoading}>Send</button>
+      {onCancel && <button type="button" onClick={onCancel}>Cancel</button>}
       <span data-testid="loading-state">{isLoading ? 'loading' : 'idle'}</span>
     </div>
   ),
@@ -172,5 +172,47 @@ describe('ChatPanel', () => {
 
     rerender(<ChatPanel boardId={BOARD_ID} isOpen={true} onClose={noop} />)
     expect(screen.queryByTestId('board-files-list')).not.toBeInTheDocument()
+  })
+
+  it('drag header updates panel position', async () => {
+    render(<ChatPanel boardId={BOARD_ID} isOpen={true} onClose={noop} />)
+
+    const header = screen.getByText('AI Assistant').closest('.cursor-move')
+    expect(header).toBeInTheDocument()
+    if (!header) throw new Error('header not found')
+
+    const panel = header.parentElement as HTMLElement
+    const initialLeft = panel.style.left
+
+    await act(async () => {
+      fireEvent.mouseDown(header, { clientX: 100, clientY: 200 })
+      fireEvent.mouseMove(window, { clientX: 150, clientY: 250 })
+      fireEvent.mouseUp(window)
+    })
+
+    await waitFor(() => {
+      expect(panel.style.left).not.toBe(initialLeft)
+    })
+  })
+
+  it('resize handle updates panel size', async () => {
+    render(<ChatPanel boardId={BOARD_ID} isOpen={true} onClose={noop} />)
+
+    const resizeHandle = document.querySelector('.cursor-nesw-resize')
+    expect(resizeHandle).toBeInTheDocument()
+    if (!resizeHandle) throw new Error('resizeHandle not found')
+
+    const panel = resizeHandle.closest('.flex') as HTMLElement
+    const initialWidth = panel.style.width
+
+    await act(async () => {
+      fireEvent.mouseDown(resizeHandle, { clientX: 200, clientY: 600 })
+      fireEvent.mouseMove(window, { clientX: 250, clientY: 650 })
+      // Don't fire mouseUp - it clears resizeRef before setPos callback runs
+    })
+
+    await waitFor(() => {
+      expect(panel.style.width).not.toBe(initialWidth)
+    })
   })
 })

@@ -53,7 +53,7 @@ export function getShapeAnchors(obj: BoardObject): AnchorPoint[] {
     } else if (def?.strategy === 'circle') {
       // 4 cardinal points
       localPoints = [w / 2, 0, w, h / 2, w / 2, h, 0, h / 2]
-    } else if (obj.type === 'sticky_note' || obj.type === 'frame' || obj.type === 'table') {
+    } else if (obj.type === 'sticky_note' || obj.type === 'frame' || obj.type === 'table' || obj.type === 'agent') {
       // Edge midpoints
       localPoints = [w / 2, 0, w, h / 2, w / 2, h, 0, h / 2]
     }

@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Group, Rect, Circle, Text } from 'react-konva'
+import { Group, Circle, Text } from 'react-konva'
 import Konva from 'konva'
 import { AgentObject } from '@/types/boardObject'
 import { ShapeProps, getOutlineProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
@@ -33,12 +33,13 @@ export const AgentShape = memo(function AgentShape({
 }: AgentShapeProps) {
   const w = object.width
   const h = object.height
+  const r = Math.min(w, h) / 2
 
   const outline = getOutlineProps(object, isSelected)
   const shadow = getShadowProps(object)
 
   const stateColor = AGENT_STATE_COLORS[object.agent_state ?? 'idle']
-  const ringRadius = Math.max(0, Math.min(w, h) / 2 - 8)
+  const ringRadius = Math.max(0, r - 8)
 
   const handleClick = () => {
     onSelect(object.id)
@@ -55,21 +56,6 @@ export const AgentShape = memo(function AgentShape({
     onDragMove?.(object.id, e.target.x(), e.target.y())
   }
 
-  const handleTransformEnd = (e: Konva.KonvaEventObject<Event>) => {
-    const node = e.target
-    const scaleX = node.scaleX()
-    const scaleY = node.scaleY()
-    node.scaleX(1)
-    node.scaleY(1)
-    onTransformEnd(object.id, {
-      x: node.x(),
-      y: node.y(),
-      width: Math.max(5, w * scaleX),
-      height: Math.max(5, h * scaleY),
-      rotation: node.rotation(),
-    })
-  }
-
   return (
     <Group
       ref={(node) => shapeRef(object.id, node)}
@@ -84,7 +70,6 @@ export const AgentShape = memo(function AgentShape({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragMove={handleDragMove}
-      onTransformEnd={handleTransformEnd}
       onDblClick={() => onDoubleClick?.(object.id)}
       onDblTap={() => onDoubleClick?.(object.id)}
       onContextMenu={(e) => {
@@ -92,22 +77,22 @@ export const AgentShape = memo(function AgentShape({
         onContextMenu(object.id, e.evt.clientX, e.evt.clientY)
       }}
     >
-      {/* Background rect */}
-      <Rect
-        width={w}
-        height={h}
+      {/* Circular background */}
+      <Circle
+        x={r}
+        y={r}
+        radius={r}
         fill={object.color}
-        cornerRadius={8}
         stroke={outline.stroke}
         strokeWidth={outline.strokeWidth}
         dash={outline.dash}
         {...shadow}
       />
 
-      {/* State ring centered in the shape */}
+      {/* State ring centered in the circle */}
       <Circle
-        x={w / 2}
-        y={h / 2}
+        x={r}
+        y={r}
         radius={ringRadius}
         fill={undefined}
         stroke={stateColor}
@@ -125,7 +110,7 @@ export const AgentShape = memo(function AgentShape({
         align="center"
         verticalAlign="middle"
         fill={object.text_color ?? '#000000'}
-        fontSize={object.font_size ?? 16}
+        fontSize={object.font_size ?? 14}
         fontFamily={object.font_family ?? 'sans-serif'}
         fontStyle={object.font_style ?? 'normal'}
         wrap="word"

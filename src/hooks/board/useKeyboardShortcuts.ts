@@ -108,6 +108,15 @@ export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept keys when the user is typing in a DOM text input
+      // (chat textarea, search box, etc.). editingId only covers Konva text editing.
+      const active = document.activeElement
+      if (
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        active?.getAttribute('contenteditable') === 'true'
+      ) return
+
       const action = resolveKeyboardAction(e, {
         editingId,
         canEdit,

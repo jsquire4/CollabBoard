@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef } from 'react'
 import { useAgentChat, type ChatMessage } from '@/hooks/useAgentChat'
 import { AgentChatLayout } from './AgentChatLayout'
 
@@ -14,6 +14,8 @@ export interface AgentChatPanelProps {
   agentName?: string
   viewportCenter?: { x: number; y: number }
 }
+
+const PANEL_WIDTH = 320
 
 const TOOL_LABELS: Record<string, string> = {
   createStickyNote: 'Creating sticky note...',
@@ -86,6 +88,8 @@ export function AgentChatPanel({
   viewportCenter,
 }: AgentChatPanelProps) {
   const [input, setInput] = useState('')
+  const [dragOffset, setDragOffset] = useState<{ dx: number; dy: number }>({ dx: 0, dy: 0 })
+  const dragRef = useRef<{ startX: number; startY: number; origDx: number; origDy: number } | null>(null)
 
   const mode = useMemo(() => ({ type: 'agent' as const, agentObjectId }), [agentObjectId])
   const { messages, isLoading, error, sendMessage } = useAgentChat({
@@ -102,13 +106,45 @@ export function AgentChatPanel({
     setInput('')
   }, [input, isLoading, sendMessage])
 
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origDx: dragOffset.dx, origDy: dragOffset.dy }
+
+    const handleMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return
+      const dx = ev.clientX - dragRef.current.startX
+      const dy = ev.clientY - dragRef.current.startY
+      const newX = position.x + dragRef.current.origDx + dx
+      const newY = position.y + dragRef.current.origDy + dy
+      setDragOffset({
+        dx: Math.max(-position.x, Math.min(window.innerWidth - PANEL_WIDTH - position.x, dragRef.current.origDx + dx)),
+        dy: Math.max(-position.y, Math.min(window.innerHeight - 40 - position.y, dragRef.current.origDy + dy)),
+      })
+    }
+    const handleUp = () => {
+      dragRef.current = null
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }, [dragOffset, position])
+
   if (!isOpen) return null
 
   const isThinking = agentState === 'thinking' || isLoading
 
   const header = (
-    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50 shrink-0">
+    <div
+      className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50 shrink-0 cursor-move select-none rounded-t-lg"
+      onMouseDown={handleDragStart}
+    >
       <div className="flex items-center gap-2">
+        <div className="flex gap-0.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+        </div>
         <StateIndicator agentState={agentState} />
         <span className="text-sm font-semibold text-slate-700">{agentName}</span>
         {isThinking && (
@@ -119,6 +155,7 @@ export function AgentChatPanel({
         onClick={onClose}
         className="text-slate-400 hover:text-slate-600 transition-colors"
         aria-label="Close"
+        onMouseDown={e => e.stopPropagation()}
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -130,7 +167,7 @@ export function AgentChatPanel({
   return (
     <AgentChatLayout
       className="fixed z-50 w-80 rounded-lg bg-white shadow-xl border border-slate-200"
-      style={{ left: position.x, top: position.y, maxHeight: '70vh' }}
+      style={{ left: position.x + dragOffset.dx, top: position.y + dragOffset.dy, maxHeight: '70vh' }}
       header={header}
       messages={messages}
       renderMessage={msg => <MessageBubble key={msg.id} msg={msg} />}

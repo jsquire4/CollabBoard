@@ -42,7 +42,6 @@ import { BoardProvider, BoardContextValue } from '@/contexts/BoardContext'
 import { BoardMutationsProvider, BoardMutationsContextValue } from '@/contexts/BoardMutationsContext'
 import { BoardToolProvider, BoardToolContextValue } from '@/contexts/BoardToolContext'
 import { ConnectionBanner } from '@/components/ui/ConnectionBanner'
-import { ChatPanel } from './ChatPanel'
 import { AgentChatPanel } from './AgentChatPanel'
 import { GlobalAgentPanel } from './GlobalAgentPanel'
 import { FileLibraryPanel } from './FileLibraryPanel'
@@ -135,7 +134,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   }, [objects.size])
 
   const [shareOpen, setShareOpen] = useState(false)
-  const [chatOpen, setChatOpen] = useState(false)
   const [agentChatPanel, setAgentChatPanel] = useState<{ objectId: string; position: { x: number; y: number } } | null>(null)
   const [globalAgentOpen, setGlobalAgentOpen] = useState(false)
   const [fileLibraryOpen, setFileLibraryOpen] = useState(false)
@@ -771,20 +769,10 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           onDismiss={() => setShapePalette(null)}
         />
       )}
-      {/* AI Chat toggle button — positioned above zoom controls */}
-      <button
-        onClick={() => setChatOpen(prev => !prev)}
-        className="fixed bottom-16 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-navy text-white shadow-lg hover:bg-navy/90"
-        aria-label="Toggle AI chat"
-      >
-        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-        </svg>
-      </button>
       {/* Global Agent toggle button */}
       <button
         onClick={() => setGlobalAgentOpen(prev => !prev)}
-        className="fixed bottom-28 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-navy text-parchment shadow-lg hover:bg-navy/80 border border-transparent dark:border-white/10"
+        className="fixed bottom-16 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-navy text-parchment shadow-lg hover:bg-navy/80 border border-transparent dark:border-white/10"
         aria-label="Toggle global board assistant (Cmd+G)"
         title="Board Assistant (⌘G)"
       >
@@ -825,7 +813,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
         </svg>
       </button>
-      <ChatPanel boardId={boardId} isOpen={chatOpen} onClose={() => setChatOpen(false)} />
       {agentChatPanel && (
         <AgentChatPanel
           agentObjectId={agentChatPanel.objectId}

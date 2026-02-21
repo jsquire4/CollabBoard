@@ -455,7 +455,7 @@ export const SHAPE_GROUPS: ShapeGroup[] = [
 // ── Agent presets ────────────────────────────────────────────
 
 export const AGENT_PRESETS: ShapePreset[] = [
-  { id: 'agent', label: 'Agent', dbType: 'agent', defaultWidth: 200, defaultHeight: 140,
+  { id: 'agent', label: 'Agent', dbType: 'agent', defaultWidth: 120, defaultHeight: 120,
     iconPath: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
     overrides: { color: '#F0EBE3', agent_state: 'idle' } },
   { id: 'agent_output', label: 'Output', dbType: 'agent_output', defaultWidth: 240, defaultHeight: 160,

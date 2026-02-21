@@ -35,7 +35,6 @@ export function usePresence(
   displayName: string
 ) {
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([])
-  const trackedRef = useRef(false)
 
   // Register presence sync listener
   useEffect(() => {
@@ -86,16 +85,16 @@ export function usePresence(
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
-      trackedRef.current = false
     }
   }, [channel, userId])
 
   const presencePayloadRef = useRef<OnlineUser | null>(null)
 
-  // trackPresence — called by BoardClient once the channel is confirmed SUBSCRIBED
+  // trackPresence — called by useConnectionManager on every SUBSCRIBED event
+  // (initial + reconnections). channel.track() is idempotent so safe to call repeatedly.
   const trackPresence = useCallback(() => {
-    if (!channel || trackedRef.current) return
-    trackedRef.current = true
+    if (!channel) return
+    if ((channel as unknown as { state: string }).state !== 'joined') return
 
     const color = getColorForUser(userId)
     const payload: OnlineUser = {
@@ -103,11 +102,9 @@ export function usePresence(
       display_name: displayName,
       color,
       role: userRole,
-      status: 'active',
+      status: presencePayloadRef.current?.status ?? 'active',
     }
     presencePayloadRef.current = payload
-
-    if ((channel as unknown as { state: string }).state !== 'joined') return
     channel.track(payload)
   }, [channel, userId, displayName, userRole])
 

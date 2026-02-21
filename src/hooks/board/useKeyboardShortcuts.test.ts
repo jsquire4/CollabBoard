@@ -534,6 +534,96 @@ describe('useKeyboardShortcuts (hook integration)', () => {
     })
   })
 
+  describe('DOM text input guard', () => {
+    it('does not fire Delete when focus is in a textarea (e.g., agent chat)', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+
+      const textarea = document.createElement('textarea')
+      document.body.appendChild(textarea)
+      textarea.focus()
+
+      dispatchKeyDown({ key: 'Delete' })
+      expect(deps.onDelete).not.toHaveBeenCalled()
+
+      dispatchKeyDown({ key: 'Backspace' })
+      expect(deps.onDelete).not.toHaveBeenCalled()
+
+      document.body.removeChild(textarea)
+    })
+
+    it('does not fire Delete when focus is in an input element', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+
+      const input = document.createElement('input')
+      document.body.appendChild(input)
+      input.focus()
+
+      dispatchKeyDown({ key: 'Delete' })
+      expect(deps.onDelete).not.toHaveBeenCalled()
+
+      document.body.removeChild(input)
+    })
+
+    it('does not fire Ctrl+D when focus is in a textarea', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+
+      const textarea = document.createElement('textarea')
+      document.body.appendChild(textarea)
+      textarea.focus()
+
+      dispatchKeyDown({ key: 'd', ctrlKey: true })
+      expect(deps.onDuplicate).not.toHaveBeenCalled()
+
+      document.body.removeChild(textarea)
+    })
+
+    it('does not fire Ctrl+Z when focus is in an input', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+
+      const input = document.createElement('input')
+      document.body.appendChild(input)
+      input.focus()
+
+      dispatchKeyDown({ key: 'z', ctrlKey: true })
+      expect(deps.onUndo).not.toHaveBeenCalled()
+
+      document.body.removeChild(input)
+    })
+
+    it('does not fire shortcuts when focus is in a contenteditable element', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+
+      const div = document.createElement('div')
+      div.setAttribute('contenteditable', 'true')
+      document.body.appendChild(div)
+      div.focus()
+
+      dispatchKeyDown({ key: 'Delete' })
+      expect(deps.onDelete).not.toHaveBeenCalled()
+
+      dispatchKeyDown({ key: 'd', ctrlKey: true })
+      expect(deps.onDuplicate).not.toHaveBeenCalled()
+
+      document.body.removeChild(div)
+    })
+
+    it('fires shortcuts normally when focus is on body (canvas)', () => {
+      const deps = makeDeps()
+      renderHook(() => useKeyboardShortcuts(deps))
+
+      // Ensure focus is not on a text input
+      ;(document.activeElement as HTMLElement)?.blur?.()
+
+      dispatchKeyDown({ key: 'Delete' })
+      expect(deps.onDelete).toHaveBeenCalledTimes(1)
+    })
+  })
+
   describe('cleanup', () => {
     it('removes listener on unmount', () => {
       const deps = makeDeps()

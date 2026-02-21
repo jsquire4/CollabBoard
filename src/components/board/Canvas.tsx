@@ -205,7 +205,7 @@ export function Canvas() {
         for (const d of getDescendants(id)) {
           if (d.type !== 'group' && !isVectorType(d.type)) ids.add(d.id)
         }
-      } else if (obj && !isVectorType(obj.type)) {
+      } else if (obj && !isVectorType(obj.type) && obj.type !== 'agent' && obj.type !== 'context_object' && obj.type !== 'agent_output') {
         ids.add(id)
       }
     }

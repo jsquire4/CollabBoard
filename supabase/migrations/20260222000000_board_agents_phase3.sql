@@ -1,6 +1,18 @@
 -- Phase 3: Comment persistence + API object formula field + board_messages tool_calls
 
 -- ── Comments table ──────────────────────────────────────────────────────────
+-- Phase 1 created a stub comments table; drop it and recreate with full schema.
+
+-- Safety: refuse to drop if the table has data (protects production)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'comments' AND table_schema = 'public') THEN
+    IF EXISTS (SELECT 1 FROM comments LIMIT 1) THEN
+      RAISE EXCEPTION 'comments table is not empty — refusing to drop. Migrate data first.';
+    END IF;
+  END IF;
+END $$;
+
+DROP TABLE IF EXISTS comments CASCADE;
 
 CREATE TABLE comments (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),

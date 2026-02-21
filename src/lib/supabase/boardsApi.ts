@@ -89,6 +89,7 @@ async function acceptPendingInvites(userId: string, email: string) {
         user_id: userId,
         role: invite.role,
         added_by: invite.invited_by,
+        can_use_agents: invite.role !== 'viewer',
       }, { onConflict: 'board_id,user_id' })
     if (upsertError) {
       logger.warn({ message: 'Failed to accept invite', operation: 'acceptPendingInvites', userId, error: upsertError })

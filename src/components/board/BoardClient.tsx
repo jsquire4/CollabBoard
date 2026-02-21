@@ -331,7 +331,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         if (scaled) overrides.custom_points = scaled
       }
     }
-    if (type === 'line' || type === 'arrow') {
+    if (type === 'line' || type === 'arrow' || type === 'data_connector') {
       overrides.x2 = x + (width || 120)
       overrides.y2 = y + (height || 40)
     }
@@ -499,23 +499,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
       textAlign: obj?.text_align ?? 'center',
       textVerticalAlign: obj?.text_vertical_align ?? 'middle',
       textColor: obj?.text_color ?? '#000000',
-    }
-  }, [selectedIds, objects])
-
-  const selectedStyleInfo = useMemo(() => {
-    const firstId = selectedIds.values().next().value
-    if (!firstId) return {}
-    const obj = objects.get(firstId)
-    if (!obj) return {}
-    return {
-      strokeColor: obj.stroke_color,
-      strokeWidth: obj.stroke_width,
-      strokeDash: obj.stroke_dash,
-      opacity: obj.opacity ?? 1,
-      shadowBlur: obj.shadow_blur ?? 6,
-      cornerRadius: obj.corner_radius ?? (obj.type === 'rectangle' ? 6 : 0),
-      isRectangle: obj.type === 'rectangle',
-      isLine: obj.type === 'line' || obj.type === 'arrow',
     }
   }, [selectedIds, objects])
 

@@ -31,6 +31,7 @@ export interface UseShareDialogReturn {
   // Handlers
   handleInvite: () => Promise<void>
   handleRoleChange: (memberId: string, newRole: BoardRole) => Promise<void>
+  handleAgentToggle: (memberId: string, value: boolean) => Promise<void>
   handleRemoveMember: (memberId: string) => Promise<void>
   handleDeleteInvite: (inviteId: string) => Promise<void>
   handleGenerateLink: () => Promise<void>
@@ -109,6 +110,7 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
           board_id: boardId,
           user_id: userId,
           role: inviteRole,
+          can_use_agents: inviteRole !== 'viewer',
         }, { onConflict: 'board_id,user_id' })
 
       if (error) {
@@ -143,6 +145,22 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
     }
   }
 
+  async function handleAgentToggle(memberId: string, value: boolean) {
+    if (userRole !== 'owner' && userRole !== 'manager') return
+
+    const { error } = await supabase
+      .from('board_members')
+      .update({ can_use_agents: value })
+      .eq('id', memberId)
+      .eq('board_id', boardId)
+
+    if (error) {
+      toast.error('Failed to update agent access')
+    } else {
+      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, can_use_agents: value } : m))
+    }
+  }
+
   async function handleRoleChange(memberId: string, newRole: BoardRole) {
     if (userRole !== 'owner' && userRole !== 'manager') return
     if (newRole === 'owner') {
@@ -150,15 +168,16 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
       return
     }
 
+    const canUseAgents = newRole !== 'viewer'
     const { error } = await supabase
       .from('board_members')
-      .update({ role: newRole })
+      .update({ role: newRole, can_use_agents: canUseAgents })
       .eq('id', memberId)
 
     if (error) {
       toast.error('Failed to change role')
     } else {
-      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: newRole } : m))
+      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: newRole, can_use_agents: canUseAgents } : m))
     }
   }
 
@@ -274,6 +293,7 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
     setTransferTarget,
     handleInvite,
     handleRoleChange,
+    handleAgentToggle,
     handleRemoveMember,
     handleDeleteInvite,
     handleGenerateLink,

@@ -9,6 +9,7 @@ export interface BoardMember {
   added_at: string
   email?: string // populated via RPC lookup
   display_name?: string // populated via RPC lookup
+  can_use_agents: boolean
 }
 
 export interface BoardInvite {

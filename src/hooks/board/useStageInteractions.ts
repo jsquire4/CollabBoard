@@ -114,7 +114,7 @@ export function useStageInteractions({
     if (!stage) return
 
     const isOnStage = e.target === e.target.getStage()
-    const isLineTool = activeTool === 'line' || activeTool === 'arrow'
+    const isLineTool = isVectorType(activeTool ?? '')
     if (!isOnStage && !isLineTool) return
 
     const pos = stage.getPointerPosition()
@@ -128,7 +128,7 @@ export function useStageInteractions({
       let sy = snapToGridEnabledRef.current ? snapToGrid(canvasY, gridSizeRef.current, gridSubdivisionsRef.current) : canvasY
 
       drawSnapStartRef.current = null
-      if ((activeTool === 'line' || activeTool === 'arrow') && hoveredAnchorsRef.current) {
+      if (isVectorType(activeTool ?? '') && hoveredAnchorsRef.current) {
         const nearest = findNearestAnchor(hoveredAnchorsRef.current, canvasX, canvasY, 20)
         if (nearest) {
           for (const [objId, obj] of objectsRef.current) {
@@ -146,7 +146,7 @@ export function useStageInteractions({
 
       drawStart.current = { x: sx, y: sy }
       isDrawing.current = true
-      drawIsLineRef.current = (activeTool === 'line' || activeTool === 'arrow')
+      drawIsLineRef.current = isVectorType(activeTool ?? '')
       setDrawPreview({ x: sx, y: sy, width: 0, height: 0 })
       return
     }
@@ -177,7 +177,7 @@ export function useStageInteractions({
     }
 
     // Line/arrow tool: show anchor dots on hovered shape
-    const isLineTool = activeToolRef.current === 'line' || activeToolRef.current === 'arrow'
+    const isLineTool = isVectorType(activeToolRef.current ?? '')
     if (isLineTool && !isDrawing.current) {
       const hoverDx = pos.x - lastHoverCheckRef.current.x
       const hoverDy = pos.y - lastHoverCheckRef.current.y
@@ -283,7 +283,7 @@ export function useStageInteractions({
         const canvasY = snapToGridEnabledRef.current ? snapToGrid(rawY, gridSizeRef.current, gridSubdivisionsRef.current) : rawY
 
         const snap = drawSnapStartRef.current
-        if (snap && onDrawLineFromAnchor && (effectiveTool === 'line' || effectiveTool === 'arrow')) {
+        if (snap && onDrawLineFromAnchor && isVectorType(effectiveTool ?? '')) {
           const screenEndX = canvasX * stageScale + stagePos.x
           const screenEndY = canvasY * stageScale + stagePos.y
           onDrawLineFromAnchor(effectiveTool, snap.shapeId, snap.anchorId, snap.x, snap.y, canvasX, canvasY, screenEndX, screenEndY)

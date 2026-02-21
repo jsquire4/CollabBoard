@@ -72,7 +72,7 @@ export function usePersistenceWrite({
     }
 
     // For vector types, compute x2/y2 from x + default width/height
-    if (type === 'line' || type === 'arrow') {
+    if (type === 'line' || type === 'arrow' || type === 'data_connector') {
       const dw = defaults[type]?.width ?? 120
       const dh = defaults[type]?.height ?? 0
       defaults[type] = { ...defaults[type], x2: x + dw, y2: y + dh }

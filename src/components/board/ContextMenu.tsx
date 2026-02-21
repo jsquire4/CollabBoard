@@ -5,6 +5,7 @@ import { MarkerIcon, MARKER_TYPES, MARKER_LABELS } from './lineMarkers'
 import { useBoardMutations } from '@/contexts/BoardMutationsContext'
 import { useBoardContext } from '@/contexts/BoardContext'
 import { STROKE_PRESETS, STROKE_COLOR_SWATCHES } from './styleConstants'
+import { isVectorType } from './shapeUtils'
 
 interface ContextMenuProps {
   position: { x: number; y: number }
@@ -89,7 +90,7 @@ export function ContextMenu({
   const { objects, isObjectLocked, activeGroupId } = useBoardContext()
 
   const ctxObj = objects.get(objectId)
-  const isLine = ctxObj?.type === 'line' || ctxObj?.type === 'arrow'
+  const isLine = isVectorType(ctxObj?.type ?? '')
   const isTable = ctxObj?.type === 'table'
   const isDataConnector = ctxObj?.type === 'data_connector'
   const isApiObject = ctxObj?.type === 'api_object'

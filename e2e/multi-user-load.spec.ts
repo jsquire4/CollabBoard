@@ -18,6 +18,31 @@ import * as path from 'path'
  */
 const BOARD_ID = process.env.E2E_TEST_BOARD_ID
 const USER_COUNT = parseInt(process.env.MULTI_USER_COUNT ?? '50', 10) || 50
+
+let loadWarnings: string[] = []
+
+/** Log a warning without failing the test */
+function warn(condition: boolean, msg: string) {
+  if (condition) {
+    loadWarnings.push(`⚠ WARNING: ${msg}`)
+  }
+}
+
+/** Flush accumulated warnings to the console */
+function flushLoadWarnings() {
+  if (loadWarnings.length > 0) {
+    console.log('┌─────────────────────────────────────────────────────────────────────────┐')
+    console.log('│  WARNINGS                                                                │')
+    console.log('├─────────────────────────────────────────────────────────────────────────┤')
+    for (const w of loadWarnings) {
+      console.log(`│  ${w.padEnd(71)} │`)
+    }
+    console.log('└─────────────────────────────────────────────────────────────────────────┘')
+    console.log('')
+  }
+  loadWarnings = []
+}
+
 const DURATION_SEC = parseInt(process.env.MULTI_USER_DURATION_SEC ?? '60', 10) || 60
 /** Cursor position broadcast interval (ms). User requested 5ms for stress. */
 const CURSOR_POLL_MS = parseInt(process.env.CURSOR_POLL_MS ?? '5', 10) || 5
@@ -193,6 +218,10 @@ async function addShapeViaFlyout(
 
 test.describe('Multi-user load', () => {
   test.skip(!BOARD_ID || !process.env.E2E_TEST_EMAIL, 'Set E2E_TEST_BOARD_ID and E2E_TEST_EMAIL to run multi-user load tests')
+
+  test.afterEach(() => {
+    flushLoadWarnings()
+  })
 
   test(`${USER_COUNT} users: full action set, join/leave, errors`, async ({ browser }) => {
     test.setTimeout((DURATION_SEC + 120) * 1000)
@@ -459,14 +488,27 @@ ${report.users.map((u: UserReport) => `<tr><td>${u.userId}</td><td>${u.fps.avgFp
     await test.info().attach('load-test-report', { path: reportPath, contentType: 'application/json' })
     await test.info().attach('load-test-html', { path: htmlPath, contentType: 'text/html' })
 
-    // Real assertions with meaningful thresholds
+    // Warnings (soft)
+    warn(report.summary.avgFpsAcrossUsers < 45, `Avg FPS ${report.summary.avgFpsAcrossUsers.toFixed(1)} < 45 warning threshold`)
+    warn(p95Lat > 1000, `p95 latency ${p95Lat}ms > 1000ms warning threshold`)
+    warn(totalDipsBelow30 > USER_COUNT * 3, `Dips <30fps: ${totalDipsBelow30} > ${USER_COUNT * 3} warning threshold`)
+    warn(totalDipsBelow10 > 0, `Critical dips <10fps: ${totalDipsBelow10} > 0 warning threshold`)
+    warn(allErrors.length > 0, `Errors: ${allErrors.length} > 0 warning threshold`)
+
+    // Hard-fail assertions (tightened)
     expect(report.summary.totalActions).toBeGreaterThan(USER_COUNT) // at least 1 action per user
     if (report.summary.avgFpsAcrossUsers > 0) {
-      expect(report.summary.avgFpsAcrossUsers).toBeGreaterThan(10) // avg FPS should stay above 10
+      expect(report.summary.avgFpsAcrossUsers).toBeGreaterThan(20)
     }
     if (p95Lat > 0) {
-      expect(p95Lat).toBeLessThan(10000) // p95 action latency < 10s
+      expect(p95Lat).toBeLessThan(5000)
     }
+    // Degradation: dips <30fps should not exceed users*8
+    expect(totalDipsBelow30).toBeLessThan(USER_COUNT * 8)
+    // Critical dips <10fps should not exceed users*2
+    expect(totalDipsBelow10).toBeLessThan(USER_COUNT * 2)
+    // Error count should not exceed users*5
+    expect(allErrors.length).toBeLessThan(USER_COUNT * 5)
     // No data loss: total actions should be reasonable for duration
     const expectedMinActions = USER_COUNT * Math.max(1, DURATION_SEC / 10)
     expect(report.summary.totalActions).toBeGreaterThan(expectedMinActions * 0.5)
@@ -501,5 +543,7 @@ ${report.users.map((u: UserReport) => `<tr><td>${u.userId}</td><td>${u.fps.avgFp
     console.log(`│  HTML: performance-reports/multi-user-load-${ts}.html`)
     console.log('└─────────────────────────────────────────────────────────────────────────┘')
     console.log('')
+
+    flushLoadWarnings()
   })
 })

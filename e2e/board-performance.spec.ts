@@ -10,6 +10,29 @@ import { test, expect } from '@playwright/test'
  */
 const BOARD_ID = process.env.E2E_TEST_BOARD_ID
 
+let warnings: string[] = []
+
+/** Log a warning without failing the test */
+function warn(condition: boolean, msg: string) {
+  if (condition) {
+    warnings.push(`⚠ WARNING: ${msg}`)
+  }
+}
+
+/** Flush accumulated warnings to the console summary table */
+function flushWarnings() {
+  if (warnings.length > 0) {
+    console.log('┌─────────────────────────────────────────────────────────┐')
+    console.log('│  WARNINGS                                               │')
+    console.log('├─────────────────────────────────────────────────────────┤')
+    for (const w of warnings) {
+      console.log(`│  ${w.padEnd(55)} │`)
+    }
+    console.log('└─────────────────────────────────────────────────────────┘')
+  }
+  warnings = []
+}
+
 /** Wait for board to fully load */
 async function waitForBoard(page: import('@playwright/test').Page) {
   await Promise.race([
@@ -55,6 +78,10 @@ const GET_FPS = `
 test.describe('Board performance', () => {
   test.skip(!BOARD_ID || !process.env.E2E_TEST_EMAIL, 'Set E2E_TEST_BOARD_ID and E2E_TEST_EMAIL to run board performance tests')
 
+  test.afterEach(() => {
+    flushWarnings()
+  })
+
   test('board load: navigation timing within budget', async ({ page }) => {
     await page.goto(`/board/${BOARD_ID}`)
     await waitForBoard(page)
@@ -72,8 +99,14 @@ test.describe('Board performance', () => {
 
     expect(navTiming).not.toBeNull()
     if (navTiming) {
-      expect(navTiming.domComplete).toBeLessThan(5000)
-      expect(navTiming.duration).toBeLessThan(6000)
+      // Warnings (soft)
+      warn(navTiming.domComplete > 2000, `domComplete ${navTiming.domComplete}ms > 2000ms warning threshold`)
+      warn(navTiming.duration > 3000, `duration ${navTiming.duration}ms > 3000ms warning threshold`)
+
+      // Hard-fail (tightened)
+      expect(navTiming.domComplete).toBeLessThan(3500)
+      expect(navTiming.duration).toBeLessThan(4500)
+
       await test.info().attach('navigation-timing', {
         body: JSON.stringify(navTiming, null, 2),
         contentType: 'application/json',
@@ -87,8 +120,11 @@ test.describe('Board performance', () => {
     })
 
     if (paintTiming.firstContentfulPaint != null) {
-      expect(paintTiming.firstContentfulPaint).toBeLessThan(2500)
+      warn(paintTiming.firstContentfulPaint > 1000, `FCP ${paintTiming.firstContentfulPaint}ms > 1000ms warning threshold`)
+      expect(paintTiming.firstContentfulPaint).toBeLessThan(1800)
     }
+
+    flushWarnings()
   })
 
   test('rapid shape addition: 50 shapes via toolbar, measure degradation', async ({ page }) => {
@@ -154,25 +190,36 @@ test.describe('Board performance', () => {
       contentType: 'application/json',
     })
 
-    // Assertions: real thresholds
-    expect(avgAddTime).toBeLessThan(2000)
-    expect(shapesAdded).toBeGreaterThanOrEqual(20) // at least some shapes were added
+    // Warnings (soft)
+    warn(shapesAdded < 40, `Shapes added ${shapesAdded} < 40 warning threshold`)
+    warn(avgAddTime > 500, `Avg add time ${avgAddTime}ms > 500ms warning threshold`)
     if (fps.samples > 10) {
-      expect(fps.avgFps).toBeGreaterThan(15) // should stay above 15 FPS average
+      warn(fps.avgFps < 45, `Avg FPS ${fps.avgFps} < 45 warning threshold`)
+    }
+
+    // Hard-fail assertions (tightened)
+    expect(avgAddTime).toBeLessThan(1000)
+    expect(shapesAdded).toBeGreaterThanOrEqual(30)
+    if (fps.samples > 10) {
+      expect(fps.avgFps).toBeGreaterThan(25)
     }
 
     // Print summary
+    const status = (pass: boolean, warnCond: boolean) => warnCond ? '⚠ WARN  ' : pass ? '✓ PASS  ' : '✗ FAIL  '
+
     console.log('')
     console.log('┌─────────────────────────┬──────────────┬──────────┐')
     console.log('│ Metric                  │ Value        │ Status   │')
     console.log('├─────────────────────────┼──────────────┼──────────┤')
-    console.log(`│ Shapes added            │ ${String(shapesAdded).padEnd(12)} │ ${shapesAdded >= 20 ? '✓ PASS  ' : '✗ FAIL  '} │`)
-    console.log(`│ Avg add time            │ ${String(avgAddTime + 'ms').padEnd(12)} │ ${avgAddTime < 2000 ? '✓ PASS  ' : '✗ FAIL  '} │`)
-    console.log(`│ Max add time            │ ${String(maxAddTime + 'ms').padEnd(12)} │ ${maxAddTime < 5000 ? '✓ PASS  ' : '✗ FAIL  '} │`)
-    console.log(`│ Avg FPS                 │ ${String(fps.avgFps).padEnd(12)} │ ${fps.avgFps > 15 ? '✓ PASS  ' : '✗ FAIL  '} │`)
+    console.log(`│ Shapes added            │ ${String(shapesAdded).padEnd(12)} │ ${status(shapesAdded >= 30, shapesAdded < 40)} │`)
+    console.log(`│ Avg add time            │ ${String(avgAddTime + 'ms').padEnd(12)} │ ${status(avgAddTime < 1000, avgAddTime > 500)} │`)
+    console.log(`│ Max add time            │ ${String(maxAddTime + 'ms').padEnd(12)} │ ${maxAddTime < 3000 ? '✓ PASS  ' : '✗ FAIL  '} │`)
+    console.log(`│ Avg FPS                 │ ${String(fps.avgFps).padEnd(12)} │ ${status(fps.avgFps > 25, fps.avgFps < 45)} │`)
     console.log(`│ Min FPS                 │ ${String(fps.minFps).padEnd(12)} │ ${fps.minFps > 5 ? '✓ PASS  ' : '✗ FAIL  '} │`)
     console.log('└─────────────────────────┴──────────────┴──────────┘')
     console.log('')
+
+    flushWarnings()
   })
 
   test('interaction responsiveness: canvas click latency', async ({ page }) => {
@@ -196,13 +243,20 @@ test.describe('Board performance', () => {
     const avgLatency = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
     const maxLatency = Math.max(...latencies)
 
-    expect(avgLatency).toBeLessThan(500)
-    expect(maxLatency).toBeLessThan(1000)
+    // Warnings (soft)
+    warn(avgLatency > 150, `Click avg latency ${avgLatency}ms > 150ms warning threshold`)
+    warn(maxLatency > 500, `Click max latency ${maxLatency}ms > 500ms warning threshold`)
+
+    // Hard-fail (tightened)
+    expect(avgLatency).toBeLessThan(300)
+    expect(maxLatency).toBeLessThan(800)
 
     await test.info().attach('click-latencies', {
       body: JSON.stringify({ avgMs: avgLatency, maxMs: maxLatency, all: latencies }, null, 2),
       contentType: 'application/json',
     })
+
+    flushWarnings()
   })
 
   test('board with shapes: object count reflects real state', async ({ page }) => {
@@ -233,7 +287,10 @@ test.describe('Board performance', () => {
     const hasInstrumentation = await page.evaluate(() => '__boardObjectCount' in window)
     expect(hasInstrumentation).toBe(true)
     if (loadMetrics.domComplete != null) {
-      expect(loadMetrics.domComplete).toBeLessThan(8000)
+      warn(loadMetrics.domComplete > 3000, `Board-with-shapes domComplete ${loadMetrics.domComplete}ms > 3000ms warning threshold`)
+      expect(loadMetrics.domComplete).toBeLessThan(5000)
     }
+
+    flushWarnings()
   })
 })

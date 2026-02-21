@@ -38,6 +38,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
     setTransferTarget,
     handleInvite,
     handleRoleChange,
+    handleAgentToggle,
     handleRemoveMember,
     handleDeleteInvite,
     handleGenerateLink,
@@ -47,6 +48,7 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
   } = useShareDialog(boardId, userRole)
 
   const isOwner = userRole === 'owner'
+  const canManage = userRole === 'owner' || userRole === 'manager'
 
   const tabClasses = (t: Tab) =>
     `rounded-lg px-4 py-2 text-sm font-medium transition ${
@@ -129,6 +131,20 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                               <option key={opt.value} value={opt.value}>{opt.label}</option>
                             ))}
                           </select>
+                          {canManage && member.role === 'editor' && (
+                            <label
+                              className="flex items-center gap-1 text-xs text-charcoal/70 dark:text-parchment/60"
+                              title="Allow agent access"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={member.can_use_agents}
+                                onChange={e => handleAgentToggle(member.id, e.target.checked)}
+                                className="accent-navy"
+                              />
+                              AI
+                            </label>
+                          )}
                           <button
                             type="button"
                             onClick={() => handleRemoveMember(member.id)}

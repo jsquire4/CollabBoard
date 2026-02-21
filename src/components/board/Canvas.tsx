@@ -33,6 +33,72 @@ import { RICH_TEXT_ENABLED } from '@/lib/richText'
 // Shape types that support triple-click text editing (all registry shapes)
 const TRIPLE_CLICK_TEXT_TYPES = new Set(shapeRegistry.keys())
 
+// ── VertexEditHandles ────────────────────────────────────────────────────────
+// Renders draggable vertex handles and midpoint "insert vertex" handles for the
+// shape currently in vertex-edit mode. Placed after the Transformer in the layer
+// so it sits on top of resize anchors.
+
+interface VertexEditHandlesProps {
+  vertexEditId: string
+  vObj: { x: number; y: number; rotation?: number; custom_points?: string | null }
+  pts: number[]
+  stageScale: number
+  onVertexInsert?: (id: string, index: number) => void
+  onVertexDragEnd?: (id: string, index: number, x: number, y: number) => void
+}
+
+function VertexEditHandles({
+  vertexEditId,
+  vObj,
+  pts,
+  stageScale,
+  onVertexInsert,
+  onVertexDragEnd,
+}: VertexEditHandlesProps) {
+  const numVerts = pts.length / 2
+  return (
+    <KonvaGroup x={vObj.x} y={vObj.y} rotation={vObj.rotation}>
+      {/* Midpoint "add vertex" handles — click to insert a new vertex on this edge */}
+      {Array.from({ length: numVerts }, (_, i) => {
+        const j = (i + 1) % numVerts
+        const mx = (pts[i * 2] + pts[j * 2]) / 2
+        const my = (pts[i * 2 + 1] + pts[j * 2 + 1]) / 2
+        return (
+          <KonvaCircle
+            key={`mid-${i}`}
+            x={mx}
+            y={my}
+            radius={4 / stageScale}
+            fill="#FAF8F4"
+            stroke="#1B3A6B"
+            strokeWidth={1.5 / stageScale}
+            hitStrokeWidth={12 / stageScale}
+            onClick={() => onVertexInsert?.(vertexEditId, i)}
+            onTap={() => onVertexInsert?.(vertexEditId, i)}
+          />
+        )
+      })}
+      {/* Vertex handles — draggable */}
+      {Array.from({ length: numVerts }, (_, i) => (
+        <KonvaCircle
+          key={`vtx-${i}`}
+          x={pts[i * 2]}
+          y={pts[i * 2 + 1]}
+          radius={6 / stageScale}
+          fill="white"
+          stroke="#1E4330"
+          strokeWidth={2 / stageScale}
+          draggable
+          onDragEnd={(e) => {
+            const node = e.target
+            onVertexDragEnd?.(vertexEditId, i, node.x(), node.y())
+          }}
+        />
+      ))}
+    </KonvaGroup>
+  )
+}
+
 export function Canvas() {
   // ── Read mutations from context (formerly 75+ props from BoardClient) ──
   const {
@@ -392,6 +458,61 @@ export function Canvas() {
     onAgentClick,
   ])
 
+  // ── RICH_TEXT_ENABLED — centralised flag checks ──────────────────────────────
+  //
+  // The flag is checked in several structurally distinct places:
+  //   • Hook arguments (plainTextEditing / richTextEditing setup, lines ~187-208):
+  //     each hook receives complementary subsets of pendingEditId/onPendingEditConsumed,
+  //     so each ternary is load-bearing and cannot be collapsed further.
+  //   • useEffect guards (editor-ready notification, line ~215; transformingIds reset,
+  //     line ~343): both are single conditional statements, already minimal.
+  //   • Transformer event handlers (onTransformStart / onTransform / onTransformEnd):
+  //     three adjacent ternaries that all guard rich-text–specific side effects —
+  //     consolidated below into richTextTransformHandlers and spread onto Transformer.
+  //   • JSX gate for RichTextStaticLayer + TipTapEditorOverlay (line ~729):
+  //     already a single block-level check, no further reduction possible.
+  //
+  // Net reduction: 3 scattered ternaries → 1 object literal checked once.
+
+  const richTextTransformHandlers = RICH_TEXT_ENABLED
+    ? {
+        onTransformStart: () => {
+          const tr = trRef.current
+          if (!tr) return
+          const ids = new Set<string>()
+          for (const node of tr.nodes()) {
+            const id = reverseShapeRefs.current.get(node)
+            if (id) ids.add(id)
+          }
+          if (ids.size > 0) setTransformingIds(ids)
+        },
+        onTransform: () => {
+          // For rich text shapes: reset scale to 1 and convert to width/height
+          // so the DOM text overlay reflows at the new dimensions after resize.
+          const tr = trRef.current
+          if (!tr) return
+          const nodes = tr.nodes()
+          for (const node of nodes) {
+            const scaleX = node.scaleX()
+            const scaleY = node.scaleY()
+            if (scaleX === 1 && scaleY === 1) continue
+            const id = reverseShapeRefs.current.get(node)
+            if (!id) continue
+            const obj = objectsRef.current.get(id)
+            if (!obj?.rich_text) continue
+            // Convert scale into width/height
+            node.width(Math.max(5, node.width() * scaleX))
+            node.height(Math.max(5, node.height() * scaleY))
+            node.scaleX(1)
+            node.scaleY(1)
+          }
+        },
+        onTransformEnd: () => {
+          setTransformingIds(new Set())
+        },
+      }
+    : {}
+
   return (
     <div
       ref={containerRef}
@@ -569,40 +690,7 @@ export function Canvas() {
                 }
                 return newBox
               }}
-              onTransformStart={RICH_TEXT_ENABLED ? () => {
-                const tr = trRef.current
-                if (!tr) return
-                const ids = new Set<string>()
-                for (const node of tr.nodes()) {
-                  const id = reverseShapeRefs.current.get(node)
-                  if (id) ids.add(id)
-                }
-                if (ids.size > 0) setTransformingIds(ids)
-              } : undefined}
-              onTransform={RICH_TEXT_ENABLED ? () => {
-                // For rich text shapes: reset scale to 1 and convert to width/height
-                // so the DOM text overlay reflows at the new dimensions after resize.
-                const tr = trRef.current
-                if (!tr) return
-                const nodes = tr.nodes()
-                for (const node of nodes) {
-                  const scaleX = node.scaleX()
-                  const scaleY = node.scaleY()
-                  if (scaleX === 1 && scaleY === 1) continue
-                  const id = reverseShapeRefs.current.get(node)
-                  if (!id) continue
-                  const obj = objectsRef.current.get(id)
-                  if (!obj?.rich_text) continue
-                  // Convert scale into width/height
-                  node.width(Math.max(5, node.width() * scaleX))
-                  node.height(Math.max(5, node.height() * scaleY))
-                  node.scaleX(1)
-                  node.scaleY(1)
-                }
-              } : undefined}
-              onTransformEnd={RICH_TEXT_ENABLED ? () => {
-                setTransformingIds(new Set())
-              } : undefined}
+              {...richTextTransformHandlers}
             />
           )}
 
@@ -610,49 +698,20 @@ export function Canvas() {
           {vertexEditId && (() => {
             const vObj = objects.get(vertexEditId)
             if (!vObj) return null
-            const pts = vObj.custom_points ? (() => { try { return JSON.parse(vObj.custom_points!) as number[] } catch { return null } })() : null
+            const pts = vObj.custom_points
+              ? (() => { try { return JSON.parse(vObj.custom_points!) as number[] } catch { return null } })()
+              : null
             if (!pts || pts.length < 4) return null
-            const numVerts = pts.length / 2
             return (
-              <KonvaGroup x={vObj.x} y={vObj.y} rotation={vObj.rotation}>
-                {/* Midpoint "add vertex" handles — click to insert a new vertex on this edge */}
-                {Array.from({ length: numVerts }, (_, i) => {
-                  const j = (i + 1) % numVerts
-                  const mx = (pts[i * 2] + pts[j * 2]) / 2
-                  const my = (pts[i * 2 + 1] + pts[j * 2 + 1]) / 2
-                  return (
-                    <KonvaCircle
-                      key={`mid-${i}`}
-                      x={mx}
-                      y={my}
-                      radius={4 / stageScale}
-                      fill="#FAF8F4"
-                      stroke="#1B3A6B"
-                      strokeWidth={1.5 / stageScale}
-                      hitStrokeWidth={12 / stageScale}
-                      onClick={() => onVertexInsert?.(vertexEditId, i)}
-                      onTap={() => onVertexInsert?.(vertexEditId, i)}
-                    />
-                  )
-                })}
-                {/* Vertex handles — draggable */}
-                {Array.from({ length: numVerts }, (_, i) => (
-                  <KonvaCircle
-                    key={`vtx-${i}`}
-                    x={pts[i * 2]}
-                    y={pts[i * 2 + 1]}
-                    radius={6 / stageScale}
-                    fill="white"
-                    stroke="#1E4330"
-                    strokeWidth={2 / stageScale}
-                    draggable
-                    onDragEnd={(e) => {
-                      const node = e.target
-                      onVertexDragEnd?.(vertexEditId, i, node.x(), node.y())
-                    }}
-                  />
-                ))}
-              </KonvaGroup>
+              <VertexEditHandles
+                key={`vertex-handles-${vertexEditId}`}
+                vertexEditId={vertexEditId}
+                vObj={vObj}
+                pts={pts}
+                stageScale={stageScale}
+                onVertexInsert={onVertexInsert}
+                onVertexDragEnd={onVertexDragEnd}
+              />
             )
           })()}
         </Layer>

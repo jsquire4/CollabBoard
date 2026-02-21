@@ -25,6 +25,8 @@ import { RichTextToolbar } from './RichTextToolbar'
 import { RICH_TEXT_ENABLED } from '@/lib/richText'
 import type { Editor } from '@tiptap/react'
 
+const SUBMENU_MIN_WIDTH = { minWidth: '160px' } as const
+
 interface LeftToolbarProps {
   userRole: BoardRole
   isEditingText: boolean
@@ -123,7 +125,7 @@ export function LeftToolbar({
                 onToggle={() => setOpenGroupId(prev => prev === 'agents' ? null : 'agents')}
                 onClose={closeFlyout}
               >
-                <div style={{ minWidth: '160px' }}>
+                <div style={SUBMENU_MIN_WIDTH}>
                   <FlyoutHeader text="Agents" />
                   <div className="grid grid-cols-3 gap-1 mb-2">
                     {AGENT_PRESETS.map(preset => (
@@ -236,7 +238,7 @@ export function LeftToolbar({
                 onToggle={() => setOpenGroupId(prev => prev === 'symbols' ? null : 'symbols')}
                 onClose={closeFlyout}
               >
-                <div style={{ minWidth: '160px' }}>
+                <div style={SUBMENU_MIN_WIDTH}>
                   <FlyoutHeader text="Stars & Shapes" />
                   <div className="grid grid-cols-3 gap-1 mb-2">
                     {SYMBOL_PRESETS.map(preset => (
@@ -262,7 +264,7 @@ export function LeftToolbar({
                 onToggle={() => setOpenGroupId(prev => prev === 'content' ? null : 'content')}
                 onClose={closeFlyout}
               >
-                <div style={{ minWidth: '160px' }}>
+                <div style={SUBMENU_MIN_WIDTH}>
                   <FlyoutHeader text="Content" />
                   <div className="grid grid-cols-3 gap-1">
                     {CONTENT_PRESETS.map(preset => (

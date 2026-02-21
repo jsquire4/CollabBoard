@@ -3,58 +3,11 @@
 import { useRef, useEffect, useState } from 'react'
 import { useBoardContext } from '@/contexts/BoardContext'
 import { useBoardMutations } from '@/contexts/BoardMutationsContext'
-import type { BoardObject } from '@/types/board'
+import { objectBBox, selectionBBox } from '@/lib/geometry/bbox'
 
 interface FloatingPropertyPanelProps {
   stagePos: { x: number; y: number }
   stageScale: number
-}
-
-// ── Bounding box helpers ──────────────────────────────────────────────
-
-interface BBox {
-  minX: number
-  minY: number
-  maxX: number
-  maxY: number
-}
-
-function objectBBox(obj: BoardObject): BBox {
-  // Vector types (line, arrow, data_connector) use x2/y2
-  if (obj.x2 != null && obj.y2 != null) {
-    return {
-      minX: Math.min(obj.x, obj.x2),
-      minY: Math.min(obj.y, obj.y2),
-      maxX: Math.max(obj.x, obj.x2),
-      maxY: Math.max(obj.y, obj.y2),
-    }
-  }
-  return {
-    minX: obj.x,
-    minY: obj.y,
-    maxX: obj.x + obj.width,
-    maxY: obj.y + obj.height,
-  }
-}
-
-function selectionBBox(selectedIds: Set<string>, objects: Map<string, BoardObject>): BBox | null {
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-
-  for (const id of selectedIds) {
-    const obj = objects.get(id)
-    if (!obj) continue
-    const bb = objectBBox(obj)
-    if (bb.minX < minX) minX = bb.minX
-    if (bb.minY < minY) minY = bb.minY
-    if (bb.maxX > maxX) maxX = bb.maxX
-    if (bb.maxY > maxY) maxY = bb.maxY
-  }
-
-  if (minX === Infinity) return null
-  return { minX, minY, maxX, maxY }
 }
 
 // ── Icon SVGs ─────────────────────────────────────────────────────────

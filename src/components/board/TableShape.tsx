@@ -7,6 +7,144 @@ import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps, a
 import { parseTableData, getColumnXOffsets, getRowYOffsets, getTableWidth, getTableHeight, resizeColumn, resizeRow, serializeTableData } from '@/lib/table/tableUtils'
 import { DEFAULT_HEADER_HEIGHT, MIN_COL_WIDTH, MIN_ROW_HEIGHT, TableData } from '@/lib/table/tableTypes'
 
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+function setCursor(stage: Konva.Stage | null, cursor: string) {
+  if (stage) stage.container().style.cursor = cursor
+}
+
+interface ButtonColors {
+  btnBg: string
+  btnBorder: string
+  btnSep: string
+  btnHover: string
+}
+
+// ── RowControls ───────────────────────────────────────────────────────────────
+// Renders the add/delete row button overlay anchored to the top edge of row k.
+
+interface RowControlsProps extends ButtonColors {
+  k: number
+  panelY: number
+  hoveredBtn: string | null
+  setHoveredBtn: (btn: string | null) => void
+  objectId: string
+  onAddRowAt?: (id: string, beforeIndex: number) => void
+  onDeleteRowAt?: (id: string, rowIndex: number) => void
+}
+
+function RowControls({
+  k,
+  panelY,
+  btnBg,
+  btnBorder,
+  btnSep,
+  btnHover,
+  hoveredBtn,
+  setHoveredBtn,
+  objectId,
+  onAddRowAt,
+  onDeleteRowAt,
+}: RowControlsProps) {
+  return (
+    <Group key={`row-btn-${k}`} x={0} y={panelY} listening={true}>
+      {/* shared background */}
+      <Rect x={-28} y={-28} width={56} height={56} cornerRadius={10}
+        fill={btnBg} stroke={btnBorder} strokeWidth={1} listening={false} />
+      {/* diagonal separator: from upper-right to lower-left between the two buttons */}
+      <Line points={[10, -12, -10, 12]} stroke={btnSep} strokeWidth={1.5} listening={false} />
+
+      {/* + button — upper-left quadrant */}
+      <Group
+        onMouseEnter={(e) => { setHoveredBtn('row-add'); setCursor(e.target.getStage(), 'pointer') }}
+        onMouseLeave={(e) => { setHoveredBtn(null); setCursor(e.target.getStage(), 'default') }}
+        onClick={(e) => { e.cancelBubble = true; onAddRowAt?.(objectId, k) }}
+        listening={true}
+      >
+        <Rect x={-26} y={-26} width={26} height={26} cornerRadius={6}
+          fill={hoveredBtn === 'row-add' ? btnHover : 'transparent'} listening={true} />
+        <Line points={[-19, -13, -7, -13]} stroke="#22c55e" strokeWidth={3} lineCap="round" listening={false} />
+        <Line points={[-13, -19, -13, -7]} stroke="#22c55e" strokeWidth={3} lineCap="round" listening={false} />
+      </Group>
+
+      {/* − button — lower-right quadrant */}
+      <Group
+        onMouseEnter={(e) => { setHoveredBtn('row-del'); setCursor(e.target.getStage(), 'pointer') }}
+        onMouseLeave={(e) => { setHoveredBtn(null); setCursor(e.target.getStage(), 'default') }}
+        onClick={(e) => { e.cancelBubble = true; onDeleteRowAt?.(objectId, k) }}
+        listening={true}
+      >
+        <Rect x={0} y={0} width={26} height={26} cornerRadius={6}
+          fill={hoveredBtn === 'row-del' ? btnHover : 'transparent'} listening={true} />
+        <Line points={[7, 13, 19, 13]} stroke="#ef4444" strokeWidth={3} lineCap="round" listening={false} />
+      </Group>
+    </Group>
+  )
+}
+
+// ── ColumnControls ────────────────────────────────────────────────────────────
+// Renders the add/delete column button overlay anchored to the left edge of
+// column k (in the header row).
+
+interface ColumnControlsProps extends ButtonColors {
+  k: number
+  panelX: number
+  hoveredBtn: string | null
+  setHoveredBtn: (btn: string | null) => void
+  objectId: string
+  onAddColumnAt?: (id: string, beforeIndex: number) => void
+  onDeleteColumnAt?: (id: string, colIndex: number) => void
+}
+
+function ColumnControls({
+  k,
+  panelX,
+  btnBg,
+  btnBorder,
+  btnSep,
+  btnHover,
+  hoveredBtn,
+  setHoveredBtn,
+  objectId,
+  onAddColumnAt,
+  onDeleteColumnAt,
+}: ColumnControlsProps) {
+  return (
+    <Group key={`col-btn-${k}`} x={panelX} y={0} listening={true}>
+      {/* shared background */}
+      <Rect x={-30} y={-18} width={60} height={36} cornerRadius={8}
+        fill={btnBg} stroke={btnBorder} strokeWidth={1} listening={false} />
+      {/* vertical | separator */}
+      <Line points={[0, -10, 0, 10]} stroke={btnSep} strokeWidth={1.5} listening={false} />
+
+      {/* + button — left half */}
+      <Group
+        onMouseEnter={(e) => { setHoveredBtn('col-add'); setCursor(e.target.getStage(), 'pointer') }}
+        onMouseLeave={(e) => { setHoveredBtn(null); setCursor(e.target.getStage(), 'default') }}
+        onClick={(e) => { e.cancelBubble = true; onAddColumnAt?.(objectId, k) }}
+        listening={true}
+      >
+        <Rect x={-30} y={-16} width={28} height={32} cornerRadius={6}
+          fill={hoveredBtn === 'col-add' ? btnHover : 'transparent'} listening={true} />
+        <Line points={[-22, 0, -10, 0]} stroke="#22c55e" strokeWidth={3} lineCap="round" listening={false} />
+        <Line points={[-16, -6, -16, 6]} stroke="#22c55e" strokeWidth={3} lineCap="round" listening={false} />
+      </Group>
+
+      {/* − button — right half */}
+      <Group
+        onMouseEnter={(e) => { setHoveredBtn('col-del'); setCursor(e.target.getStage(), 'pointer') }}
+        onMouseLeave={(e) => { setHoveredBtn(null); setCursor(e.target.getStage(), 'default') }}
+        onClick={(e) => { e.cancelBubble = true; onDeleteColumnAt?.(objectId, k) }}
+        listening={true}
+      >
+        <Rect x={2} y={-16} width={28} height={32} cornerRadius={6}
+          fill={hoveredBtn === 'col-del' ? btnHover : 'transparent'} listening={true} />
+        <Line points={[10, 0, 22, 0]} stroke="#ef4444" strokeWidth={3} lineCap="round" listening={false} />
+      </Group>
+    </Group>
+  )
+}
+
 interface TableShapeProps extends Omit<ShapeProps, 'object'> {
   object: TableObject
   onStartCellEdit?: (id: string, textNode: Konva.Text, row: number, col: number) => void
@@ -292,11 +430,6 @@ export const TableShape = memo(function TableShape({
     setHoveredBtn(null)
   }, [])
 
-  // ── Shared button sub-components (inline for perf) ───────────────────────────
-  const setCursor = (stage: Konva.Stage | null, cursor: string) => {
-    if (stage) stage.container().style.cursor = cursor
-  }
-
   return (
     <Group
       ref={(node) => { groupRef.current = node; shapeRef(object.id, node) }}
@@ -415,87 +548,33 @@ export const TableShape = memo(function TableShape({
           and row k). Diagonal layout: + is upper-left, − is lower-right.
           Panel is centred on (0, rowYOffsets[k]) — the left table edge.
           + adds a row before k; − deletes row k. */}
-      {editable && !isEditing && hoveredRowBoundary !== null && data.rows[hoveredRowBoundary] && (() => {
-        const k = hoveredRowBoundary
-        const panelY = rowYOffsets[k]
-        return (
-          <Group key={`row-btn-${k}`} x={0} y={panelY} listening={true}>
-            {/* shared background */}
-            <Rect x={-28} y={-28} width={56} height={56} cornerRadius={10}
-              fill={btnBg} stroke={btnBorder} strokeWidth={1} listening={false} />
-            {/* diagonal separator: from upper-right to lower-left between the two buttons */}
-            <Line points={[10, -12, -10, 12]} stroke={btnSep} strokeWidth={1.5} listening={false} />
-
-            {/* + button — upper-left quadrant */}
-            <Group
-              onMouseEnter={(e) => { setHoveredBtn('row-add'); setCursor(e.target.getStage(), 'pointer') }}
-              onMouseLeave={(e) => { setHoveredBtn(null); setCursor(e.target.getStage(), 'default') }}
-              onClick={(e) => { e.cancelBubble = true; onAddRowAt?.(object.id, k) }}
-              listening={true}
-            >
-              <Rect x={-26} y={-26} width={26} height={26} cornerRadius={6}
-                fill={hoveredBtn === 'row-add' ? btnHover : 'transparent'} listening={true} />
-              <Line points={[-19, -13, -7, -13]} stroke="#22c55e" strokeWidth={3} lineCap="round" listening={false} />
-              <Line points={[-13, -19, -13, -7]} stroke="#22c55e" strokeWidth={3} lineCap="round" listening={false} />
-            </Group>
-
-            {/* − button — lower-right quadrant */}
-            <Group
-              onMouseEnter={(e) => { setHoveredBtn('row-del'); setCursor(e.target.getStage(), 'pointer') }}
-              onMouseLeave={(e) => { setHoveredBtn(null); setCursor(e.target.getStage(), 'default') }}
-              onClick={(e) => { e.cancelBubble = true; onDeleteRowAt?.(object.id, k) }}
-              listening={true}
-            >
-              <Rect x={0} y={0} width={26} height={26} cornerRadius={6}
-                fill={hoveredBtn === 'row-del' ? btnHover : 'transparent'} listening={true} />
-              <Line points={[7, 13, 19, 13]} stroke="#ef4444" strokeWidth={3} lineCap="round" listening={false} />
-            </Group>
-          </Group>
-        )
-      })()}
+      {editable && !isEditing && hoveredRowBoundary !== null && data.rows[hoveredRowBoundary] && (
+        <RowControls
+          k={hoveredRowBoundary}
+          panelY={rowYOffsets[hoveredRowBoundary]}
+          btnBg={btnBg} btnBorder={btnBorder} btnSep={btnSep} btnHover={btnHover}
+          hoveredBtn={hoveredBtn} setHoveredBtn={setHoveredBtn}
+          objectId={object.id}
+          onAddRowAt={onAddRowAt}
+          onDeleteRowAt={onDeleteRowAt}
+        />
+      )}
 
       {/* ── Column +/− panel ───────────────────────────────────────────────────
           Appears at the left border of the hovered column (in the header row).
           Horizontal layout: + is left, − is right, separated by |.
           Panel is centred on (colXOffsets[k], 0) — the column's left edge. */}
-      {editable && !isEditing && hoveredColBoundary !== null && data.columns[hoveredColBoundary] && (() => {
-        const k = hoveredColBoundary
-        const panelX = colXOffsets[k]
-        return (
-          <Group key={`col-btn-${k}`} x={panelX} y={0} listening={true}>
-            {/* shared background */}
-            <Rect x={-30} y={-18} width={60} height={36} cornerRadius={8}
-              fill={btnBg} stroke={btnBorder} strokeWidth={1} listening={false} />
-            {/* vertical | separator */}
-            <Line points={[0, -10, 0, 10]} stroke={btnSep} strokeWidth={1.5} listening={false} />
-
-            {/* + button — left half */}
-            <Group
-              onMouseEnter={(e) => { setHoveredBtn('col-add'); setCursor(e.target.getStage(), 'pointer') }}
-              onMouseLeave={(e) => { setHoveredBtn(null); setCursor(e.target.getStage(), 'default') }}
-              onClick={(e) => { e.cancelBubble = true; onAddColumnAt?.(object.id, k) }}
-              listening={true}
-            >
-              <Rect x={-30} y={-16} width={28} height={32} cornerRadius={6}
-                fill={hoveredBtn === 'col-add' ? btnHover : 'transparent'} listening={true} />
-              <Line points={[-22, 0, -10, 0]} stroke="#22c55e" strokeWidth={3} lineCap="round" listening={false} />
-              <Line points={[-16, -6, -16, 6]} stroke="#22c55e" strokeWidth={3} lineCap="round" listening={false} />
-            </Group>
-
-            {/* − button — right half */}
-            <Group
-              onMouseEnter={(e) => { setHoveredBtn('col-del'); setCursor(e.target.getStage(), 'pointer') }}
-              onMouseLeave={(e) => { setHoveredBtn(null); setCursor(e.target.getStage(), 'default') }}
-              onClick={(e) => { e.cancelBubble = true; onDeleteColumnAt?.(object.id, k) }}
-              listening={true}
-            >
-              <Rect x={2} y={-16} width={28} height={32} cornerRadius={6}
-                fill={hoveredBtn === 'col-del' ? btnHover : 'transparent'} listening={true} />
-              <Line points={[10, 0, 22, 0]} stroke="#ef4444" strokeWidth={3} lineCap="round" listening={false} />
-            </Group>
-          </Group>
-        )
-      })()}
+      {editable && !isEditing && hoveredColBoundary !== null && data.columns[hoveredColBoundary] && (
+        <ColumnControls
+          k={hoveredColBoundary}
+          panelX={colXOffsets[hoveredColBoundary]}
+          btnBg={btnBg} btnBorder={btnBorder} btnSep={btnSep} btnHover={btnHover}
+          hoveredBtn={hoveredBtn} setHoveredBtn={setHoveredBtn}
+          objectId={object.id}
+          onAddColumnAt={onAddColumnAt}
+          onDeleteColumnAt={onDeleteColumnAt}
+        />
+      )}
     </Group>
   )
 }, areShapePropsEqual)

@@ -3,19 +3,18 @@ import { test, expect } from '@playwright/test'
 /**
  * Board performance stress tests.
  *
- * Requires TEST_BOARD_JOIN_TOKEN env var (share link token).
- * Measures real app metrics via window.__boardObjectCount and performance API.
+ * Requires E2E_TEST_BOARD_ID env var (UUID of a board owned by the test account)
+ * and E2E_TEST_EMAIL (used by global-setup to authenticate).
  *
  * Run via: npm run test:e2e:stress
  */
-const JOIN_TOKEN = process.env.TEST_BOARD_JOIN_TOKEN
+const BOARD_ID = process.env.E2E_TEST_BOARD_ID
 
-/** Wait for board to fully load after navigating via share link */
+/** Wait for board to fully load */
 async function waitForBoard(page: import('@playwright/test').Page) {
-  await expect(page).toHaveURL(/\/board\/[a-f0-9-]+/, { timeout: 15000 })
   await Promise.race([
-    page.locator('canvas').first().waitFor({ state: 'visible', timeout: 10000 }),
-    page.getByRole('button', { name: /share|logout/i }).waitFor({ state: 'visible', timeout: 10000 }),
+    page.locator('canvas').first().waitFor({ state: 'visible', timeout: 15000 }),
+    page.getByRole('button', { name: /share|logout/i }).waitFor({ state: 'visible', timeout: 15000 }),
   ])
 }
 
@@ -54,10 +53,10 @@ const GET_FPS = `
 `
 
 test.describe('Board performance', () => {
-  test.skip(!JOIN_TOKEN, 'Set TEST_BOARD_JOIN_TOKEN to run board performance tests')
+  test.skip(!BOARD_ID || !process.env.E2E_TEST_EMAIL, 'Set E2E_TEST_BOARD_ID and E2E_TEST_EMAIL to run board performance tests')
 
   test('board load: navigation timing within budget', async ({ page }) => {
-    await page.goto(`/board/join/${JOIN_TOKEN}`)
+    await page.goto(`/board/${BOARD_ID}`)
     await waitForBoard(page)
 
     const navTiming = await page.evaluate(() => {
@@ -94,7 +93,7 @@ test.describe('Board performance', () => {
 
   test('rapid shape addition: 50 shapes via toolbar, measure degradation', async ({ page }) => {
     test.setTimeout(120_000)
-    await page.goto(`/board/join/${JOIN_TOKEN}`)
+    await page.goto(`/board/${BOARD_ID}`)
     await waitForBoard(page)
 
     const canvas = page.locator('canvas').first()
@@ -177,7 +176,7 @@ test.describe('Board performance', () => {
   })
 
   test('interaction responsiveness: canvas click latency', async ({ page }) => {
-    await page.goto(`/board/join/${JOIN_TOKEN}`)
+    await page.goto(`/board/${BOARD_ID}`)
     await waitForBoard(page)
 
     const canvas = page.locator('canvas').first()
@@ -207,7 +206,7 @@ test.describe('Board performance', () => {
   })
 
   test('board with shapes: object count reflects real state', async ({ page }) => {
-    await page.goto(`/board/join/${JOIN_TOKEN}`)
+    await page.goto(`/board/${BOARD_ID}`)
     await waitForBoard(page)
 
     // Use the real object count from the app

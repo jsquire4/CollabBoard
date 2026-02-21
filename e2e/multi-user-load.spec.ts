@@ -10,13 +10,13 @@ import * as path from 'path'
  * duplicate, color, group/ungroup. Cursor broadcast at CURSOR_POLL_MS (default 5ms).
  * Users join/leave at random; some leave mid-work and rejoin.
  *
- * Requires TEST_BOARD_JOIN_TOKEN in .env.local (share-link token from a board).
+ * Requires E2E_TEST_BOARD_ID + E2E_TEST_EMAIL in env (authenticated via global-setup).
  * Config: MULTI_USER_COUNT (default 50), MULTI_USER_DURATION_SEC (default 60),
  * CURSOR_POLL_MS (default 5), MULTI_USER_JOIN_LEAVE (default 1, set 0 to disable).
  *
  * Captures: pageerror, console errors, requestfailed, HTTP 4xx/5xx responses.
  */
-const JOIN_TOKEN = process.env.TEST_BOARD_JOIN_TOKEN
+const BOARD_ID = process.env.E2E_TEST_BOARD_ID
 const USER_COUNT = parseInt(process.env.MULTI_USER_COUNT ?? '50', 10) || 50
 const DURATION_SEC = parseInt(process.env.MULTI_USER_DURATION_SEC ?? '60', 10) || 60
 /** Cursor position broadcast interval (ms). User requested 5ms for stress. */
@@ -192,7 +192,7 @@ async function addShapeViaFlyout(
 }
 
 test.describe('Multi-user load', () => {
-  test.skip(!JOIN_TOKEN, 'Set TEST_BOARD_JOIN_TOKEN to run multi-user load tests')
+  test.skip(!BOARD_ID || !process.env.E2E_TEST_EMAIL, 'Set E2E_TEST_BOARD_ID and E2E_TEST_EMAIL to run multi-user load tests')
 
   test(`${USER_COUNT} users: full action set, join/leave, errors`, async ({ browser }) => {
     test.setTimeout((DURATION_SEC + 120) * 1000)
@@ -209,7 +209,7 @@ test.describe('Multi-user load', () => {
 
       while (Date.now() < endTime) {
         sessions++
-        const context = await browser.newContext()
+        const context = await browser.newContext({ storageState: '.auth/user.json' })
         const page = await context.newPage()
 
         page.on('pageerror', (err) => {
@@ -239,14 +239,7 @@ test.describe('Multi-user load', () => {
         })
 
         try {
-          await page.goto(`/board/join/${JOIN_TOKEN}`, { waitUntil: 'domcontentloaded', timeout: 20000 })
-          try {
-            await expect(page).toHaveURL(/\/board\/[a-f0-9-]+/, { timeout: 25000 })
-          } catch (urlErr) {
-            const errText = await page.locator('body').innerText().catch(() => '')
-            userErrors.push({ type: 'console', message: `Join failed (verify TEST_BOARD_JOIN_TOKEN): ${String(urlErr)}. Page: ${errText.slice(0, 300)}`, userId, timestamp: Date.now() })
-            throw urlErr
-          }
+          await page.goto(`/board/${BOARD_ID}`, { waitUntil: 'domcontentloaded', timeout: 20000 })
           await Promise.race([
             page.locator('canvas').first().waitFor({ state: 'visible', timeout: 15000 }),
             page.getByRole('button', { name: /share|logout/i }).waitFor({ state: 'visible', timeout: 15000 }),

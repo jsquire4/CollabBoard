@@ -136,7 +136,6 @@ export function AgentChatPanel({
       inputPlaceholder="Ask this agent… (Enter to send)"
       onSend={handleSend}
       isLoading={isLoading}
-      onClose={onClose}
     />
   )
 }

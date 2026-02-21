@@ -88,7 +88,6 @@ export function GlobalAgentPanel({ boardId, isOpen, onClose }: GlobalAgentPanelP
       inputPlaceholder="Ask the board assistant… (Enter to send)"
       onSend={handleSend}
       isLoading={isLoading}
-      onClose={onClose}
     />
   )
 }

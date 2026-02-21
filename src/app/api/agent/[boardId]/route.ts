@@ -11,7 +11,7 @@ import { loadBoardState } from '@/lib/agent/boardState'
 import { resolveConnectionGraph } from '@/lib/agent/contextResolver'
 import { createTools, createToolContext } from '@/lib/agent/tools'
 import { getUserDisplayName } from '@/lib/userUtils'
-import { runAgentLoop, sseEvent, SSE_HEADERS } from '@/lib/agent/sse'
+import { runAgentLoop, SSE_HEADERS } from '@/lib/agent/sse'
 import { capHistory } from '@/lib/agent/summarize'
 
 export const maxDuration = 60

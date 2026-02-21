@@ -29,7 +29,6 @@ export interface AgentChatLayoutProps {
   /** Actions */
   onSend: () => void
   isLoading: boolean
-  onClose: () => void
 }
 
 /**

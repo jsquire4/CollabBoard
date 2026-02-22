@@ -257,6 +257,13 @@ export function ContextMenu({
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null)
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Clear any pending hover timer on unmount to prevent setState after unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    }
+  }, [])
+
   // Click-outside handler — closes menu on mousedown outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -443,7 +450,7 @@ export function ContextMenu({
           )}
           {canUnlock && isLocked && (
             <CtxButton
-              id="lock"
+              id="unlock"
               label="Unlock"
               icon={<IconUnlock />}
               isOpen={openSubmenu === 'lock'}
@@ -454,7 +461,7 @@ export function ContextMenu({
           )}
           {isLocked && !canUnlock && (
             <CtxButton
-              id="lock"
+              id="locked-noperm"
               label="Locked (no permission)"
               icon={<IconLock />}
               disabled

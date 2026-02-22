@@ -130,7 +130,7 @@ export function useAgentChat({ boardId, mode, enabled = true, viewportCenter }: 
 
   // ── Send message ──────────────────────────────────────────
 
-  const sendMessage = useCallback(async (message: string) => {
+  const sendMessage = useCallback(async (message: string, displayText?: string) => {
     if (!message.trim() || isLoading) return
 
     setError(null)
@@ -139,7 +139,7 @@ export function useAgentChat({ boardId, mode, enabled = true, viewportCenter }: 
     const userMsg: ChatMessage = {
       id: nextId(),
       role: 'user',
-      content: message,
+      content: displayText ?? message,
     }
     const assistantId = nextId()
     const assistantMsg: ChatMessage = {

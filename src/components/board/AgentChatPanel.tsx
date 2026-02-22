@@ -61,13 +61,13 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       <div className={`max-w-[85%] ${isUser ? 'order-1' : ''}`}>
         {/* Tool progress label */}
         {!isUser && msg.isStreaming && latestTool && (
-          <p className="text-xs text-indigo-500 mb-1 px-1">{getToolProgressLabel(latestTool.toolName)}</p>
+          <p className="text-xs text-charcoal/50 mb-1 px-1">{getToolProgressLabel(latestTool.toolName)}</p>
         )}
         <div
           className={`rounded-lg px-3 py-2 text-sm ${
             isUser
-              ? 'bg-indigo-500 text-white rounded-br-sm'
-              : 'bg-slate-100 text-slate-800 rounded-bl-sm'
+              ? 'bg-navy text-parchment rounded-br-sm'
+              : 'bg-parchment-dark/60 border border-parchment-border text-charcoal rounded-bl-sm'
           }`}
         >
           {msg.content || (msg.isStreaming ? <span className="opacity-50">…</span> : '')}
@@ -136,24 +136,20 @@ export function AgentChatPanel({
 
   const header = (
     <div
-      className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50 shrink-0 cursor-move select-none rounded-t-lg"
+      className="flex items-center justify-between px-4 py-3 border-b border-parchment-border bg-parchment-dark/40 shrink-0 select-none rounded-t-lg"
+      style={{ cursor: 'grab' }}
       onMouseDown={handleDragStart}
     >
       <div className="flex items-center gap-2">
-        <div className="flex gap-0.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-        </div>
         <StateIndicator agentState={agentState} />
-        <span className="text-sm font-semibold text-slate-700">{agentName}</span>
+        <span className="text-sm font-semibold text-charcoal">{agentName}</span>
         {isThinking && (
           <span className="text-xs text-amber-500 font-medium">Thinking…</span>
         )}
       </div>
       <button
         onClick={onClose}
-        className="text-slate-400 hover:text-slate-600 transition-colors"
+        className="text-charcoal/40 hover:text-charcoal transition-colors"
         aria-label="Close"
         onMouseDown={e => e.stopPropagation()}
       >
@@ -166,8 +162,8 @@ export function AgentChatPanel({
 
   return (
     <AgentChatLayout
-      className="fixed z-50 w-80 rounded-lg bg-white shadow-xl border border-slate-200"
-      style={{ left: position.x + dragOffset.dx, top: position.y + dragOffset.dy, maxHeight: '70vh' }}
+      className="fixed z-50 w-80 rounded-lg bg-parchment border border-parchment-border overflow-hidden"
+      style={{ left: position.x + dragOffset.dx, top: position.y + dragOffset.dy, maxHeight: '70vh', boxShadow: '0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08)' }}
       header={header}
       messages={messages}
       renderMessage={msg => <MessageBubble key={msg.id} msg={msg} />}

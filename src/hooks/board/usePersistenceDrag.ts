@@ -35,25 +35,27 @@ export function usePersistenceDrag({
 
   // ── Drag (no DB) ──────────────────────────────────────────────
 
-  const updateObjectDrag = useCallback((id: string, updates: Partial<BoardObject>) => {
+  const updateObjectDrag = useCallback((id: string, updates: Partial<BoardObject>, opts?: { skipOverlay?: boolean }) => {
     if (!canEdit) return
     if (checkLocked(objectsRef, id)) return
 
-    if (dragPositionsRef) {
-      // Ref-based drag: skip React re-render, write to overlay ref instead
-      dragPositionsRef.current.set(id, {
-        ...(dragPositionsRef.current.get(id) ?? {}),
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
-    } else {
-      setObjects(prev => {
-        const existing = prev.get(id)
-        if (!existing) return prev
-        const next = new Map(prev)
-        next.set(id, { ...existing, ...updates, updated_at: new Date().toISOString() })
-        return next
-      })
+    if (!opts?.skipOverlay) {
+      if (dragPositionsRef) {
+        // Ref-based drag: skip React re-render, write to overlay ref instead
+        dragPositionsRef.current.set(id, {
+          ...(dragPositionsRef.current.get(id) ?? {}),
+          ...updates,
+          updated_at: new Date().toISOString(),
+        })
+      } else {
+        setObjects(prev => {
+          const existing = prev.get(id)
+          if (!existing) return prev
+          const next = new Map(prev)
+          next.set(id, { ...existing, ...updates, updated_at: new Date().toISOString() })
+          return next
+        })
+      }
     }
 
     const changedFields = Object.keys(updates).filter(k => k !== 'updated_at')

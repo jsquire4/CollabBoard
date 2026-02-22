@@ -47,6 +47,7 @@ function makeDeps(overrides?: Record<string, unknown>) {
     canEdit: true,
     updateObject: vi.fn(),
     updateObjectDrag: vi.fn(),
+    updateConnectorDrag: vi.fn(),
     updateObjectDragEnd: vi.fn(),
     addObject: vi.fn(() => null),
     checkFrameContainment: vi.fn(),
@@ -140,7 +141,7 @@ describe('useConnectorActions', () => {
       const deps = makeDeps({ canEdit: false })
       const { result } = renderHook(() => useConnectorActions(deps))
       act(() => result.current.handleEndpointDragMove('l1', { x: 10, y: 20 }))
-      expect(deps.updateObjectDrag).not.toHaveBeenCalled()
+      expect(deps.updateConnectorDrag).not.toHaveBeenCalled()
     })
 
     it('snaps start endpoint to nearby anchor', () => {
@@ -152,8 +153,8 @@ describe('useConnectorActions', () => {
       // Drag start endpoint near the right midpoint (100, 40) of rect
       act(() => result.current.handleEndpointDragMove('l1', { x: 105, y: 42 }))
 
-      // Should snap to (100, 40)
-      expect(deps.updateObjectDrag).toHaveBeenCalledWith('l1', expect.objectContaining({ x: 100, y: 40 }))
+      // Should snap to (100, 40) — updateConnectorDrag writes to both ref + state for re-render
+      expect(deps.updateConnectorDrag).toHaveBeenCalledWith('l1', expect.objectContaining({ x: 100, y: 40 }))
       expect(deps.setSnapIndicator).toHaveBeenCalledWith({ x: 100, y: 40 })
     })
 

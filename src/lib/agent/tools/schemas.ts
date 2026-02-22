@@ -103,6 +103,14 @@ export const createDataConnectorSchema = z.object({
 
 export const emptySchema = z.object({})
 
+export const computePlacementSchema = z.object({
+  width: z.number().positive().describe('Total width of the template area in pixels'),
+  height: z.number().positive().describe('Total height of the template area in pixels'),
+  gridRows: z.number().int().min(1).describe('Number of rows to subdivide the area into'),
+  gridCols: z.number().int().min(1).describe('Number of columns to subdivide the area into'),
+  padding: z.number().optional().default(20).describe('Gap between cells and from edges (default 20)'),
+})
+
 export const layoutObjectsSchema = z.object({
   objectIds: z.array(z.string()).optional().describe('IDs of objects to arrange. If omitted, arranges all moveable objects.'),
   layout: z.enum(['grid', 'horizontal', 'vertical']).describe('Layout strategy'),
@@ -139,6 +147,7 @@ export const TOOL_SCHEMAS: Record<string, Record<string, unknown>> = Object.from
       ['saveMemory', saveMemorySchema],
       ['createDataConnector', createDataConnectorSchema],
       ['getBoardState', emptySchema],
+      ['computePlacement', computePlacementSchema],
       ['layoutObjects', layoutObjectsSchema],
     ] as const
   ).map(([name, schema]) => {

@@ -73,7 +73,7 @@ export const FONT_FAMILIES = [
   { label: 'Impact', value: 'Impact, sans-serif' },
 ]
 
-export const FONT_SIZES = ['10', '12', '14', '16', '18', '20', '24', '28', '32', '36', '48', '64']
+export const FONT_SIZES = ['8', '9', '10', '11', '12', '13', '14', '16', '18', '20', '22', '24', '28', '32', '36', '40', '48', '56', '64', '72', '96', '128']
 
 // ── Shared button components ─────────────────────────────────────────────────
 
@@ -165,29 +165,21 @@ export function RichFontControls({ editor, active, run, applyFontSize, fontSizeI
         min={6}
         max={200}
         value={fontSizeInput}
-        onChange={(e) => setFontSizeInput(e.target.value)}
+        onChange={(e) => { setFontSizeInput(e.target.value); applyFontSize(e.target.value) }}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === 'Enter') { applyFontSize(fontSizeInput); editor?.commands.focus() }
         }}
         onBlur={() => applyFontSize(fontSizeInput)}
         placeholder="px"
-        className={`${selectCls} w-12 text-center`}
+        className={`${selectCls} w-20 text-center`}
         title="Font size"
         style={staggerStyle(revealed, 1)}
+        list="rich-font-size-presets"
       />
-
-      <select
-        value={fontSizeInput}
-        onChange={(e) => { setFontSizeInput(e.target.value); applyFontSize(e.target.value) }}
-        onMouseDown={(e) => e.stopPropagation()}
-        className={`${selectCls} w-9 px-0.5`}
-        title="Font size presets"
-        style={staggerStyle(revealed, 2)}
-      >
-        <option value="">—</option>
-        {FONT_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
-      </select>
+      <datalist id="rich-font-size-presets">
+        {FONT_SIZES.map(s => <option key={s} value={s} />)}
+      </datalist>
     </div>
   )
 }
@@ -225,11 +217,6 @@ export function RichFormatControls({ editor: _editor, active, run, revealed }: R
       >S</Btn>
 
       <Sep />
-
-      <Btn label="Highlight" isActive={active.highlight}
-        onClick={() => run(e => e.chain().focus().toggleHighlight().run())}
-        style={active.highlight ? { backgroundColor: '#fef08a', color: '#1c1c1e', ...staggerStyle(revealed, idx++) } : staggerStyle(revealed, idx++)}
-      >H</Btn>
 
       {/* Inline text color */}
       <div

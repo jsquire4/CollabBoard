@@ -42,23 +42,22 @@ describe('commentBadgePosition', () => {
   it('places badge at top-right of rectangular object bounding box', () => {
     const obj = makeObj({ x: 100, y: 50, width: 120, height: 80 })
     const pos = commentBadgePosition(obj)
-    // x should be near right edge of shape (x + width)
-    expect(pos.x).toBeGreaterThanOrEqual(100 + 120 - 5) // within 5px of right edge
-    expect(pos.x).toBeLessThanOrEqual(100 + 120 + 10) // no more than 10px beyond
-    // y should be above top edge of shape
-    expect(pos.y).toBeLessThan(50)
+    // x should be near right edge of shape (x + width - 14)
+    expect(pos.x).toBe(100 + 120 - 14)
+    // y should be above top edge of shape (y - 22)
+    expect(pos.y).toBe(50 - 22)
   })
 
   it('aligns badge x to right edge of shape bounding box', () => {
     const obj = makeObj({ x: 0, y: 0, width: 200, height: 100 })
     const pos = commentBadgePosition(obj)
-    expect(pos.x).toBe(0 + 200 - 2) // x + width - 2
+    expect(pos.x).toBe(0 + 200 - 14) // x + width - 14
   })
 
   it('places badge above the top edge of shape', () => {
     const obj = makeObj({ x: 0, y: 0, width: 200, height: 100 })
     const pos = commentBadgePosition(obj)
-    expect(pos.y).toBe(0 - 10) // y - 10
+    expect(pos.y).toBe(0 - 22) // y - 22
   })
 
   it('uses midpoint for vector types with x2/y2', () => {
@@ -72,17 +71,17 @@ describe('commentBadgePosition', () => {
       height: 80,
     })
     const pos = commentBadgePosition(obj)
-    // x midpoint = (0 + 100) / 2 + 8 = 58
-    expect(pos.x).toBe(58)
-    // y midpoint = (0 + 80) / 2 - 24 = 16
-    expect(pos.y).toBe(16)
+    // x midpoint = (0 + 100) / 2 + 4 = 54
+    expect(pos.x).toBe(54)
+    // y midpoint = (0 + 80) / 2 - 20 = 20
+    expect(pos.y).toBe(20)
   })
 
   it('handles shapes at non-zero origin correctly', () => {
     const obj = makeObj({ x: 300, y: 200, width: 50, height: 60 })
     const pos = commentBadgePosition(obj)
-    expect(pos.x).toBe(300 + 50 - 2)
-    expect(pos.y).toBe(200 - 10)
+    expect(pos.x).toBe(300 + 50 - 14)
+    expect(pos.y).toBe(200 - 22)
   })
 })
 

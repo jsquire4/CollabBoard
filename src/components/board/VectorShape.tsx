@@ -80,20 +80,22 @@ export const VectorShape = memo(function VectorShape({
   const handleLineDragStart = () => onDragStart?.(object.id)
 
   // Shared logic for whole-line drag: compute snapped offset and build updates.
-  // resetNode: only true on dragEnd — during dragMove, let Konva keep the visual offset
-  // so the line follows the cursor in real time.
+  // The Group is the draggable node so all children (Line, markers, anchors)
+  // move together.  Group starts at (object.x, object.y), so the drag offset
+  // is node.pos − object.pos.  resetNode restores the Group to its pre-drag
+  // origin on dragEnd so the state update is the sole positional driver.
   const computeLineDragUpdates = (e: Konva.KonvaEventObject<DragEvent>, resetNode: boolean): Partial<BoardObject> => {
     const node = e.target
-    let offsetX = node.x()
-    let offsetY = node.y()
+    let offsetX = node.x() - object.x
+    let offsetY = node.y() - object.y
     if (dragBoundFunc) {
       const snapped = dragBoundFunc({ x: object.x + offsetX, y: object.y + offsetY })
       offsetX = snapped.x - object.x
       offsetY = snapped.y - object.y
     }
     if (resetNode) {
-      node.x(0)
-      node.y(0)
+      node.x(object.x)
+      node.y(object.y)
     }
 
     const updates: Partial<BoardObject> = {
@@ -114,6 +116,8 @@ export const VectorShape = memo(function VectorShape({
 
   const handleLineDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!onEndpointDragMove) return
+    // Group is the draggable — Konva moves the entire Group (Line + markers +
+    // anchors) together.  Don't reset; just broadcast the new position.
     onEndpointDragMove(object.id, computeLineDragUpdates(e, false))
   }
 
@@ -178,6 +182,10 @@ export const VectorShape = memo(function VectorShape({
       ref={(node) => shapeRef(object.id, node)}
       x={object.x}
       y={object.y}
+      draggable={editable}
+      onDragStart={handleLineDragStart}
+      onDragMove={handleLineDragMove}
+      onDragEnd={handleLineDragEnd}
       onClick={handleClick}
       onTap={handleClick}
       onContextMenu={(e) => {
@@ -193,10 +201,6 @@ export const VectorShape = memo(function VectorShape({
         dash={dash}
         lineCap="round"
         lineJoin="round"
-        draggable={editable}
-        onDragStart={handleLineDragStart}
-        onDragMove={handleLineDragMove}
-        onDragEnd={handleLineDragEnd}
         {...lineShadow}
         hitStrokeWidth={40}
       />
@@ -231,6 +235,7 @@ export const VectorShape = memo(function VectorShape({
             stroke="#1B3A6B"
             strokeWidth={2}
             draggable
+            onMouseDown={(e) => { e.cancelBubble = true }}
             onDragMove={handleStartAnchorDragMove}
             onDragEnd={handleStartAnchorDragEnd}
           />
@@ -242,6 +247,7 @@ export const VectorShape = memo(function VectorShape({
             stroke="#1B3A6B"
             strokeWidth={2}
             draggable
+            onMouseDown={(e) => { e.cancelBubble = true }}
             onDragMove={handleEndAnchorDragMove}
             onDragEnd={handleEndAnchorDragEnd}
           />
@@ -262,6 +268,7 @@ export const VectorShape = memo(function VectorShape({
                 stroke="#1B3A6B"
                 strokeWidth={2}
                 draggable
+                onMouseDown={(e) => { e.cancelBubble = true }}
                 onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
                   if (!onWaypointDragEnd) return
                   const node = e.target

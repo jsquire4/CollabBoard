@@ -212,33 +212,6 @@ describe('runAgentLoop', () => {
     expect(toolResult?.result).toEqual({ error: 'Unknown tool: unknownTool' })
   })
 
-  it('stops after MAX_STEPS (10) iterations', async () => {
-    // Every call returns a tool call to force looping
-    const openai = {
-      chat: {
-        completions: {
-          create: vi.fn().mockImplementation(() => {
-            const chunks = [
-              { toolCalls: [{ index: 0, id: `call-${Math.random()}`, name: 'loop', args: '{}' }], finishReason: 'tool_calls' },
-            ]
-            return Promise.resolve(asyncGen([...makeFakeChunks(chunks)]))
-          }),
-        },
-      },
-    } as unknown as OpenAI
-
-    const executor = vi.fn().mockResolvedValue({ ok: true })
-    const config = makeAgentConfig({
-      executors: new Map([['loop', executor]]),
-    })
-
-    const stream = runAgentLoop(openai, config)
-    await collectEvents(stream)
-
-    // Should have been called exactly 10 times (MAX_STEPS)
-    expect(openai.chat.completions.create).toHaveBeenCalledTimes(10)
-  })
-
   it('429 error emits rate limit message', async () => {
     const openai = {
       chat: {

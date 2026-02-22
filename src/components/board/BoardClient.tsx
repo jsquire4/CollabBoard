@@ -44,11 +44,12 @@ import { BoardToolProvider, BoardToolContextValue } from '@/contexts/BoardToolCo
 import { ConnectionBanner } from '@/components/ui/ConnectionBanner'
 import { AgentChatPanel } from './AgentChatPanel'
 import { GlobalAgentPanel } from './GlobalAgentPanel'
-import { useFileUpload } from '@/hooks/useFileUpload'
+// import { useFileUpload } from '@/hooks/useFileUpload'
 import { FileLibraryPanel, type FileRecord } from './FileLibraryPanel'
 import { FilmstripPanel } from './FilmstripPanel'
 import { CommentThread } from './CommentThread'
-import { FileDropZone } from './FileDropZone'
+// TODO: Re-enable when drag-and-drop file upload is further developed
+// import { FileDropZone } from './FileDropZone'
 import { canvasTransform } from '@/lib/canvasTransform'
 
 // Konva is client-only — must disable SSR
@@ -226,14 +227,14 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
 
   const canEdit = userRole !== 'viewer'
 
-  // File drag-and-drop upload
-  const { uploadFile } = useFileUpload({
-    boardId,
-    canEdit,
-    supabase: supabaseRef.current,
-    addObject: addObject as (type: 'file', x: number, y: number, overrides?: Partial<BoardObject>) => BoardObject | null,
-    removeObject: deleteObject,
-  })
+  // TODO: Re-enable when drag-and-drop file upload is further developed
+  // const { uploadFile } = useFileUpload({
+  //   boardId,
+  //   canEdit,
+  //   supabase: supabaseRef.current,
+  //   addObject: addObject as (type: 'file', x: number, y: number, overrides?: Partial<BoardObject>) => BoardObject | null,
+  //   removeObject: deleteObject,
+  // })
 
   // --- Extracted domain hooks ---
   const {
@@ -305,11 +306,13 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     handleWaypointDragEnd,
     handleWaypointInsert,
     handleWaypointDelete,
-  } = useConnectorActions({ objects, canEdit, updateObject, updateObjectDrag, updateObjectDragEnd, addObject, checkFrameContainment, undoStack, markActivity, setSnapIndicator, setShapePalette, shapePalette, autoRoutePointsRef, waitForPersist })
+  } = useConnectorActions({ objects, canEdit, updateObject, updateObjectDrag, updateConnectorDrag, updateObjectDragEnd, addObject, checkFrameContainment, undoStack, markActivity, setSnapIndicator, setShapePalette, shapePalette, autoRoutePointsRef, waitForPersist })
 
-  // Wrap connectorEndpointDragEnd to inject preDragRef
+  // Wrap connectorEndpointDragEnd to inject preDragRef and clear drag overlay
   const handleEndpointDragEnd = useCallback((id: string, updates: Partial<BoardObject>) => {
     connectorEndpointDragEnd(id, updates, preDragRef)
+    // Clear drag overlay entries so stale overrides don't cause double-offset on re-render
+    dragPositionsRef.current.delete(id)
   }, [connectorEndpointDragEnd])
 
   // Wrap handleDrawLineFromAnchor to also clear tool state
@@ -716,8 +719,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     if (!canEdit) return
 
     // Handle collabboard file library drags only.
-    // Native file drops are handled by FileDropZone — the getData guard below
-    // ensures we only act on library drags (native drops have no collabboard data).
+    // Native file drop upload is disabled (FileDropZone removed) — the getData
+    // guard below ensures we only act on library drags.
     const data = e.dataTransfer.getData('application/collabboard-file')
     if (data) {
       try {
@@ -917,15 +920,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           boardId={boardId}
           onFilePick={handleFilePick}
         />
-        <FileDropZone
-          onDrop={(files) => {
-            if (!canEdit) return
-            for (const file of Array.from(files)) {
-              void uploadFile(file, 200, 200)
-            }
-          }}
-          disabled={!canEdit}
-        >
+        {/* TODO: Re-enable FileDropZone when drag-and-drop file upload is further developed */}
           <div
             className="relative flex-1 overflow-hidden"
             onDragOver={e => e.preventDefault()}
@@ -935,7 +930,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
               <Canvas />
             </CanvasErrorBoundary>
           </div>
-        </FileDropZone>
       </div>
       {shareOpen && (
         <ShareDialog

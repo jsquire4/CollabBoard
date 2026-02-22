@@ -13,7 +13,7 @@ export interface CommentThreadProps {
 }
 
 const EASING = 'cubic-bezier(.34,1.56,.64,1)'
-const SHADOW = '0 4px 16px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.3)'
+const SHADOW = '0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08)'
 
 function formatRelativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -36,26 +36,26 @@ function CommentBubble({
   return (
     <div className={`mb-3 ${isResolved ? 'opacity-50' : ''}`}>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-medium text-parchment/70">
+        <span className="text-xs font-medium text-charcoal/70">
           {comment.user_display_name ?? 'Unknown'}
         </span>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-parchment/40">{formatRelativeTime(comment.created_at)}</span>
+          <span className="text-xs text-charcoal/40">{formatRelativeTime(comment.created_at)}</span>
           {!isResolved && (
             <button
               onClick={() => onResolve(comment.id)}
-              className="text-xs text-parchment/40 hover:text-emerald-400 transition-colors"
+              className="text-xs text-charcoal/40 hover:text-emerald-600 transition-colors"
               aria-label="Resolve comment"
             >
               Resolve
             </button>
           )}
           {isResolved && (
-            <span className="text-xs text-emerald-400">Resolved</span>
+            <span className="text-xs text-emerald-600">Resolved</span>
           )}
         </div>
       </div>
-      <div className="rounded-lg bg-navy/60 border border-navy/40 px-3 py-2 text-sm text-parchment/90">
+      <div className="rounded-lg bg-parchment-dark/60 border border-parchment-border px-3 py-2 text-sm text-charcoal">
         {comment.content}
       </div>
     </div>
@@ -187,7 +187,7 @@ export function CommentThread({
 
   return (
     <div
-      className="fixed z-50 rounded-lg bg-charcoal border border-navy/40 flex flex-col overflow-hidden"
+      className="fixed z-50 rounded-lg bg-parchment border border-parchment-border flex flex-col overflow-hidden"
       style={{
         left: pos.x,
         top: pos.y,
@@ -204,14 +204,14 @@ export function CommentThread({
     >
       {/* Header — drag handle */}
       <div
-        className="flex items-center justify-between px-4 py-3 border-b border-navy/30 bg-navy/40 shrink-0 select-none"
+        className="flex items-center justify-between px-4 py-3 border-b border-parchment-border bg-parchment-dark/40 shrink-0 select-none"
         style={{ cursor: 'grab' }}
         onMouseDown={handleDragMouseDown}
       >
-        <span className="text-sm font-semibold text-parchment">Comments</span>
+        <span className="text-sm font-semibold text-charcoal">Comments</span>
         <button
           onClick={onClose}
-          className="text-parchment/50 hover:text-parchment transition-colors"
+          className="text-charcoal/40 hover:text-charcoal transition-colors"
           aria-label="Close"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -223,10 +223,10 @@ export function CommentThread({
       {/* Comments list */}
       <div className="flex-1 min-h-0 p-4 overflow-y-auto">
         {isLoading && (
-          <p className="text-xs text-parchment/40 text-center">Loading comments…</p>
+          <p className="text-xs text-charcoal/40 text-center">Loading comments…</p>
         )}
         {!isLoading && comments.length === 0 && (
-          <p className="text-xs text-parchment/40 text-center">No comments yet.</p>
+          <p className="text-xs text-charcoal/40 text-center">No comments yet.</p>
         )}
         {comments.map(comment => (
           <CommentBubble
@@ -242,9 +242,9 @@ export function CommentThread({
       </div>
 
       {/* Reply input */}
-      <div className="border-t border-navy/30 p-3 flex gap-2 shrink-0">
+      <div className="border-t border-parchment-border p-3 flex gap-2 shrink-0">
         <textarea
-          className="flex-1 resize-none rounded border border-navy/40 bg-navy/30 px-3 py-2 text-sm text-parchment placeholder-parchment/30 focus:outline-none focus:ring-1 focus:ring-leather disabled:opacity-50"
+          className="flex-1 resize-none rounded border border-parchment-border bg-white px-3 py-2 text-sm text-charcoal placeholder-charcoal/30 focus:outline-none focus:ring-1 focus:ring-navy/30 disabled:opacity-50"
           rows={2}
           placeholder="Add a comment…"
           value={input}
@@ -255,7 +255,7 @@ export function CommentThread({
         <button
           onClick={() => void handleSend()}
           disabled={!input.trim() || isLoading}
-          className="px-3 py-2 rounded bg-navy text-parchment text-sm font-medium border border-navy/40 hover:border-parchment-border hover:text-parchment disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="px-3 py-2 rounded bg-navy text-parchment text-sm font-medium border border-navy hover:bg-navy/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           Reply
         </button>
@@ -267,7 +267,7 @@ export function CommentThread({
         style={{ cursor: 'nwse-resize' }}
         onMouseDown={handleResizeMouseDown}
       >
-        <svg className="w-4 h-4 text-parchment/20" viewBox="0 0 16 16" fill="currentColor">
+        <svg className="w-4 h-4 text-charcoal/15" viewBox="0 0 16 16" fill="currentColor">
           <path d="M14 14H10L14 10V14ZM14 8L8 14H6L14 6V8Z" />
         </svg>
       </div>

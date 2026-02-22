@@ -40,9 +40,12 @@ export function TipTapEditorOverlay({
     if (!editingId || editingField === 'title') return
 
     const handleMouseDown = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        onFinish()
-      }
+      const target = e.target as Node
+      // Don't close if the click is inside the editor or inside a toolbar
+      // that's designed to work alongside the editor (e.g. SelectionBar)
+      if (wrapperRef.current?.contains(target)) return
+      if ((target as HTMLElement).closest?.('[data-keeps-rich-text-alive]')) return
+      onFinish()
     }
 
     // Delay listener to avoid capturing the double-click that started editing
@@ -63,6 +66,7 @@ export function TipTapEditorOverlay({
   return (
     <div
       ref={wrapperRef}
+      className="rich-text"
       style={overlayStyle}
       onMouseDown={(e) => {
         // Prevent blur when clicking inside editor

@@ -28,7 +28,7 @@ describe('RichTextToolbar', () => {
     const { container } = render(<RichTextToolbar editor={editor} />)
     const buttons = container.querySelectorAll('button')
     // B, I, U, S, H, •, 1., ☑, H1, H2, H3, color, align-left, align-center, align-right = 15 buttons
-    expect(buttons.length).toBe(15)
+    expect(buttons.length).toBe(14)
   })
 
   it('shows active state for bold', () => {
@@ -59,7 +59,7 @@ describe('RichTextToolbar', () => {
 
   it('renders buttons when editor is null (inactive state)', () => {
     const { container } = render(<RichTextToolbar editor={null} />)
-    expect(container.querySelectorAll('button').length).toBe(15)
+    expect(container.querySelectorAll('button').length).toBe(14)
   })
 
   it('subscribes to editor events and updates active state', () => {

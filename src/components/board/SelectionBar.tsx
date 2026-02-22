@@ -369,7 +369,7 @@ export function SelectionBar({
   }
 
   const groupPillCls = (group: ActiveGroup) =>
-    `flex h-14 w-14 flex-col items-center justify-center rounded-full border transition-colors disabled:opacity-40 ${
+    `flex h-20 w-20 flex-col items-center justify-center rounded-full border transition-colors disabled:opacity-40 ${
       activeGroup === group
         ? 'bg-navy border-leather text-parchment'
         : 'bg-navy border-navy/40 text-parchment/80 hover:border-parchment-border hover:text-parchment'
@@ -378,7 +378,7 @@ export function SelectionBar({
   // ── Sub-group pill helpers ──────────────────────────────────────────
   const hasActiveSub = activeSub !== null
   const subPillCls = (sub: string) =>
-    `flex h-12 w-12 flex-col items-center justify-center rounded-full border transition-colors disabled:opacity-40 ${
+    `flex h-20 w-20 flex-col items-center justify-center rounded-full border transition-colors disabled:opacity-40 ${
       activeSub === sub
         ? 'bg-navy border-leather text-parchment'
         : 'bg-navy border-navy/40 text-parchment/80 hover:border-parchment-border hover:text-parchment'
@@ -412,6 +412,7 @@ export function SelectionBar({
       ref={barRef}
       role="toolbar"
       aria-label="Selection properties"
+      data-keeps-rich-text-alive="true"
       className={[
         'fixed z-[150]',
         justAppeared ? 'animate-[selection-bar-in]' : '',
@@ -433,7 +434,7 @@ export function SelectionBar({
             style={groupPillStyle('text', btnIdx++)}
           >
             <IconTextColor color={activeGroup === 'text' ? textColor : 'currentColor'} />
-            <span className="text-[11px] mt-0.5 leading-tight">Text</span>
+            <span className="text-[12px] mt-0.5 leading-tight">Text</span>
           </button>
         )}
 
@@ -448,7 +449,7 @@ export function SelectionBar({
           style={groupPillStyle('format', btnIdx++)}
         >
           <IconShapeFormat fillColor={fillColor} strokeColor={strokeColor} />
-          <span className="text-[11px] mt-0.5 leading-tight">Style</span>
+          <span className="text-[12px] mt-0.5 leading-tight">Style</span>
         </button>
 
       </div>
@@ -480,10 +481,10 @@ export function SelectionBar({
                   title={sub.label}
                   style={subPillStyle(sub.id, idx++)}
                 >
-                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d={sub.icon} />
                   </svg>
-                  <span className="text-[9px] mt-0.5 leading-tight">{sub.label}</span>
+                  <span className="text-[12px] mt-0.5 leading-tight">{sub.label}</span>
                 </button>
 
                 {/* Vertical dropdown */}
@@ -491,28 +492,39 @@ export function SelectionBar({
                   <div className="absolute top-full mt-1 flex flex-col items-center gap-1.5 z-10" data-testid={`sub-dropdown-${sub.id}`}>
                     {sub.id === 'txt-color' && (() => {
                       let vi2 = 0
+                      const textColorRows: (string | null)[][] = [
+                        [null, COLOR_PRESETS[0], COLOR_PRESETS[1], COLOR_PRESETS[2]],
+                        [COLOR_PRESETS[3], COLOR_PRESETS[4], COLOR_PRESETS[5], COLOR_PRESETS[6]],
+                        [COLOR_PRESETS[7], COLOR_PRESETS[8], COLOR_PRESETS[9], COLOR_PRESETS[10]],
+                      ]
                       return (
-                        <>
-                          <ColorCircle
-                            key={`${subRevealGen}-tc`}
-                            color={textColor}
-                            onChange={onTextColorChange}
-                            label="Text color"
-                            disabled={anySelectedLocked}
-                            testId="text-color-input"
-                            style={vertStyle(vi2++)}
-                          />
-                          {RICH_TEXT_ENABLED && (
-                            <div key={`${subRevealGen}-hl`} onMouseDown={e => { e.preventDefault(); e.stopPropagation() }} style={vertStyle(vi2++)}>
-                              <RichBtn
-                                label="Highlight"
-                                isActive={richActive.highlight}
-                                onClick={() => richRun(e => e.chain().focus().toggleHighlight().run())}
-                                pillStyle={richActive.highlight ? { backgroundColor: '#fef08a', color: '#1c1c1e' } : undefined}
-                              >H</RichBtn>
+                        <div key={`${subRevealGen}-tc-presets`} className="flex flex-col gap-1" style={vertStyle(vi2++)}>
+                          {textColorRows.map((row, ri) => (
+                            <div key={ri} className="flex gap-1">
+                              {row.map((c) => c === null ? (
+                                <ColorCircle
+                                  key="custom"
+                                  compact
+                                  color={textColor}
+                                  onChange={onTextColorChange}
+                                  label="Text color"
+                                  disabled={anySelectedLocked}
+                                  testId="text-color-input"
+                                />
+                              ) : (
+                                <button
+                                  key={c}
+                                  className={`h-6 w-6 rounded-full border-2 transition-colors ${textColor.toLowerCase() === c ? 'border-leather scale-110' : 'border-transparent hover:border-parchment-border'}`}
+                                  style={{ backgroundColor: c, boxShadow: PILL_SHADOW }}
+                                  title={c}
+                                  onClick={() => onTextColorChange(c)}
+                                  disabled={anySelectedLocked}
+                                  aria-label={`Text color ${c}`}
+                                />
+                              ))}
                             </div>
-                          )}
-                        </>
+                          ))}
+                        </div>
                       )
                     })()}
 
@@ -526,88 +538,66 @@ export function SelectionBar({
                           fontSizeInput={fontSizeInput}
                           setFontSizeInput={setFontSizeInput}
                           revealed={subRevealed}
-                          vertical
                         />
                       </div>
                     )}
 
-                    {sub.id === 'txt-format' && (() => {
-                      let vi2 = 0
-                      const fmts = [
-                        { label: 'Bold (⌘B)', key: 'bold', style: { fontWeight: 'bold' } as React.CSSProperties, cmd: (e: Editor) => e.chain().focus().toggleBold().run() },
-                        { label: 'Italic (⌘I)', key: 'italic', style: { fontStyle: 'italic' } as React.CSSProperties, cmd: (e: Editor) => e.chain().focus().toggleItalic().run() },
-                        { label: 'Underline (⌘U)', key: 'underline', style: { textDecoration: 'underline' } as React.CSSProperties, cmd: (e: Editor) => e.chain().focus().toggleUnderline().run() },
-                        { label: 'Strikethrough', key: 'strike', style: { textDecoration: 'line-through' } as React.CSSProperties, cmd: (e: Editor) => e.chain().focus().toggleStrike().run() },
-                      ] as const
-                      return fmts.map(f => (
-                        <RichBtn
-                          key={`${subRevealGen}-${f.key}`}
-                          label={f.label}
-                          isActive={richActive[f.key]}
-                          onClick={() => richRun(f.cmd)}
-                          style={f.style}
-                          pillStyle={vertStyle(vi2++)}
-                        >{f.key[0].toUpperCase()}</RichBtn>
-                      ))
-                    })()}
+                    {sub.id === 'txt-format' && (
+                      <div key={`${subRevealGen}-fmt`} className="flex gap-1.5" style={vertStyle(0)} onMouseDown={e => e.preventDefault()}>
+                        {([
+                          { label: 'Bold (⌘B)', key: 'bold', style: { fontWeight: 'bold' } as React.CSSProperties, cmd: (e: Editor) => e.chain().focus().toggleBold().run() },
+                          { label: 'Italic (⌘I)', key: 'italic', style: { fontStyle: 'italic' } as React.CSSProperties, cmd: (e: Editor) => e.chain().focus().toggleItalic().run() },
+                          { label: 'Underline (⌘U)', key: 'underline', style: { textDecoration: 'underline' } as React.CSSProperties, cmd: (e: Editor) => e.chain().focus().toggleUnderline().run() },
+                          { label: 'Strikethrough', key: 'strike', style: { textDecoration: 'line-through' } as React.CSSProperties, cmd: (e: Editor) => e.chain().focus().toggleStrike().run() },
+                        ] as const).map(f => (
+                          <RichBtn key={f.key} label={f.label} isActive={richActive[f.key]} onClick={() => richRun(f.cmd)} style={f.style}>
+                            {f.key[0].toUpperCase()}
+                          </RichBtn>
+                        ))}
+                      </div>
+                    )}
 
-                    {sub.id === 'txt-heading' && (() => {
-                      let vi2 = 0
-                      const headings = [
-                        { label: 'Heading 1', key: 'h1' as const, text: 'H1', cmd: (e: Editor) => e.chain().focus().toggleHeading({ level: 1 }).run() },
-                        { label: 'Heading 2', key: 'h2' as const, text: 'H2', cmd: (e: Editor) => e.chain().focus().toggleHeading({ level: 2 }).run() },
-                        { label: 'Heading 3', key: 'h3' as const, text: 'H3', cmd: (e: Editor) => e.chain().focus().toggleHeading({ level: 3 }).run() },
-                      ] as const
-                      return headings.map(h => (
-                        <RichBtn
-                          key={`${subRevealGen}-${h.key}`}
-                          label={h.label}
-                          isActive={richActive[h.key]}
-                          onClick={() => richRun(h.cmd)}
-                          pillStyle={vertStyle(vi2++)}
-                        >{h.text}</RichBtn>
-                      ))
-                    })()}
+                    {sub.id === 'txt-heading' && (
+                      <div key={`${subRevealGen}-hdg`} className="flex gap-1.5" style={vertStyle(0)} onMouseDown={e => e.preventDefault()}>
+                        {([
+                          { label: 'Heading 1', key: 'h1' as const, text: 'H1', cmd: (e: Editor) => e.chain().focus().toggleHeading({ level: 1 }).run() },
+                          { label: 'Heading 2', key: 'h2' as const, text: 'H2', cmd: (e: Editor) => e.chain().focus().toggleHeading({ level: 2 }).run() },
+                          { label: 'Heading 3', key: 'h3' as const, text: 'H3', cmd: (e: Editor) => e.chain().focus().toggleHeading({ level: 3 }).run() },
+                        ] as const).map(h => (
+                          <RichBtn key={h.key} label={h.label} isActive={richActive[h.key]} onClick={() => richRun(h.cmd)}>
+                            {h.text}
+                          </RichBtn>
+                        ))}
+                      </div>
+                    )}
 
-                    {sub.id === 'txt-list' && (() => {
-                      let vi2 = 0
-                      const lists = [
-                        { label: 'Bullet list', key: 'bulletList' as const, icon: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', cmd: (e: Editor) => e.chain().focus().toggleBulletList().run() },
-                        { label: 'Numbered list', key: 'orderedList' as const, icon: 'M10 6h11M10 12h11M10 18h11M4 6h1v4M4 10h2', cmd: (e: Editor) => e.chain().focus().toggleOrderedList().run() },
-                        { label: 'Checklist', key: 'taskList' as const, icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11', cmd: (e: Editor) => e.chain().focus().toggleTaskList().run() },
-                      ] as const
-                      return lists.map(l => (
-                        <RichBtn
-                          key={`${subRevealGen}-${l.key}`}
-                          label={l.label}
-                          isActive={richActive[l.key]}
-                          onClick={() => richRun(l.cmd)}
-                          pillStyle={vertStyle(vi2++)}
-                        >
-                          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d={l.icon} /></svg>
-                        </RichBtn>
-                      ))
-                    })()}
+                    {sub.id === 'txt-list' && (
+                      <div key={`${subRevealGen}-lst`} className="flex gap-1.5" style={vertStyle(0)} onMouseDown={e => e.preventDefault()}>
+                        {([
+                          { label: 'Bullet list', key: 'bulletList' as const, icon: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', cmd: (e: Editor) => e.chain().focus().toggleBulletList().run() },
+                          { label: 'Numbered list', key: 'orderedList' as const, icon: 'M10 6h11M10 12h11M10 18h11M4 6h1v4M4 10h2', cmd: (e: Editor) => e.chain().focus().toggleOrderedList().run() },
+                          { label: 'Checklist', key: 'taskList' as const, icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11', cmd: (e: Editor) => e.chain().focus().toggleTaskList().run() },
+                        ] as const).map(l => (
+                          <RichBtn key={l.key} label={l.label} isActive={richActive[l.key]} onClick={() => richRun(l.cmd)}>
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d={l.icon} /></svg>
+                          </RichBtn>
+                        ))}
+                      </div>
+                    )}
 
-                    {sub.id === 'txt-align' && (() => {
-                      let vi2 = 0
-                      const aligns = [
-                        { label: 'Align left', value: 'left' as const, icon: 'M3 6h18M3 10h12M3 14h18M3 18h12' },
-                        { label: 'Align center', value: 'center' as const, icon: 'M3 6h18M6 10h12M3 14h18M6 18h12' },
-                        { label: 'Align right', value: 'right' as const, icon: 'M3 6h18M9 10h12M3 14h18M9 18h12' },
-                      ] as const
-                      return aligns.map(a => (
-                        <RichBtn
-                          key={`${subRevealGen}-align-${a.value}`}
-                          label={a.label}
-                          isActive={richActive.textAlign === a.value}
-                          onClick={() => richRun(e => e.chain().focus().setTextAlign(a.value).run())}
-                          pillStyle={vertStyle(vi2++)}
-                        >
-                          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d={a.icon} /></svg>
-                        </RichBtn>
-                      ))
-                    })()}
+                    {sub.id === 'txt-align' && (
+                      <div key={`${subRevealGen}-aln`} className="flex gap-1.5" style={vertStyle(0)} onMouseDown={e => e.preventDefault()}>
+                        {([
+                          { label: 'Align left', value: 'left' as const, icon: 'M3 6h18M3 10h12M3 14h18M3 18h12' },
+                          { label: 'Align center', value: 'center' as const, icon: 'M3 6h18M6 10h12M3 14h18M6 18h12' },
+                          { label: 'Align right', value: 'right' as const, icon: 'M3 6h18M9 10h12M3 14h18M9 18h12' },
+                        ] as const).map(a => (
+                          <RichBtn key={a.value} label={a.label} isActive={richActive.textAlign === a.value} onClick={() => richRun(e => e.chain().focus().setTextAlign(a.value).run())}>
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d={a.icon} /></svg>
+                          </RichBtn>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -644,10 +634,10 @@ export function SelectionBar({
                   title={sub.label}
                   style={subPillStyle(sub.id, idx++)}
                 >
-                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d={sub.icon} />
                   </svg>
-                  <span className="text-[9px] mt-0.5 leading-tight">{sub.label}</span>
+                  <span className="text-[12px] mt-0.5 leading-tight">{sub.label}</span>
                 </button>
 
                 {/* Vertical dropdown */}

@@ -554,27 +554,9 @@ export function Canvas() {
           }
           if (ids.size > 0) setTransformingIds(ids)
         },
-        onTransform: () => {
-          // For rich text shapes: reset scale to 1 and convert to width/height
-          // so the DOM text overlay reflows at the new dimensions after resize.
-          const tr = trRef.current
-          if (!tr) return
-          const nodes = tr.nodes()
-          for (const node of nodes) {
-            const scaleX = node.scaleX()
-            const scaleY = node.scaleY()
-            if (scaleX === 1 && scaleY === 1) continue
-            const id = reverseShapeRefs.current.get(node)
-            if (!id) continue
-            const obj = objectsRef.current.get(id)
-            if (!obj?.rich_text) continue
-            // Convert scale into width/height
-            node.width(Math.max(5, node.width() * scaleX))
-            node.height(Math.max(5, node.height() * scaleY))
-            node.scaleX(1)
-            node.scaleY(1)
-          }
-        },
+        // No onTransform override — let Konva's native scale flow work.
+        // The DOM overlay is hidden during transforms (transformingIds → opacity 0),
+        // so there's no need to reflow it mid-drag. onTransformEnd handles cleanup.
         onTransformEnd: () => {
           setTransformingIds(new Set())
         },
@@ -684,6 +666,9 @@ export function Canvas() {
             visibleObjects={visibleObjects}
             commentCounts={commentCounts}
             isObjectLocked={isObjectLocked}
+            onCommentOpen={onCommentOpen}
+            stagePos={stagePos}
+            stageScale={stageScale}
           />
 
           {/* Marquee selection rectangle */}

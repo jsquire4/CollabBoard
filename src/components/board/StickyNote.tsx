@@ -5,7 +5,7 @@ import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps, a
 import { RICH_TEXT_ENABLED } from '@/lib/richText'
 
 interface StickyNoteProps extends ShapeProps {
-  onStartEdit: (id: string, node: Konva.Text, field?: 'text' | 'title') => void
+  onStartEdit: (id: string, node: Konva.Text | null, field?: 'text' | 'title') => void
   isEditing?: boolean
   editingField?: 'text' | 'title'
 }
@@ -59,9 +59,8 @@ export const StickyNote = memo(function StickyNote({
       const group = target.findAncestor('Group') || target
       const textNodes = (group as Konva.Group).find('Text')
       const bodyNode = textNodes.find((n: Konva.Node) => n.name() === 'body') as Konva.Text | undefined
-      if (bodyNode) {
-        onStartEdit(object.id, bodyNode, 'text')
-      }
+      // bodyNode may be absent when RICH_TEXT_ENABLED and rich_text is set (Konva node hidden)
+      onStartEdit(object.id, bodyNode ?? null, 'text')
     }
   }
 

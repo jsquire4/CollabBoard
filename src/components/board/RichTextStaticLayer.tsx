@@ -74,6 +74,7 @@ const RichTextOverlay = React.memo(function RichTextOverlay({
 
   return (
     <div
+      id={`rt-overlay-${object.id}`}
       style={{
         position: 'absolute',
         left: object.x + padding,
@@ -92,6 +93,7 @@ const RichTextOverlay = React.memo(function RichTextOverlay({
         lineHeight: 1.4,
         wordBreak: 'break-word',
       }}
+      className="rich-text"
       dangerouslySetInnerHTML={{ __html: html }}
     />
   )

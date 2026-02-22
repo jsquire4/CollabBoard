@@ -15,13 +15,13 @@ export function commentBadgePosition(obj: BoardObject): { x: number; y: number }
     const ex2 = obj.x2 as number
     const ey2 = obj.y2 as number
     return {
-      x: (obj.x + ex2) / 2 + 8,
-      y: (obj.y + ey2) / 2 - 24,
+      x: (obj.x + ex2) / 2 + 4,
+      y: (obj.y + ey2) / 2 - 20,
     }
   }
   return {
-    x: obj.x + obj.width - 2,
-    y: obj.y - 10,
+    x: obj.x + obj.width - 14,
+    y: obj.y - 22,
   }
 }
 

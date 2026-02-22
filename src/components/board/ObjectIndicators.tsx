@@ -32,6 +32,9 @@ export interface ObjectIndicatorsProps {
    * spreading different prop shapes.
    */
   isObjectLocked: (id: string) => boolean
+  onCommentOpen?: (id: string, originX?: number, originY?: number) => void
+  stagePos?: { x: number; y: number }
+  stageScale?: number
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -43,11 +46,14 @@ export interface ObjectIndicatorsProps {
  *   - Comment count badges (navy pill with count + triangle pointer)
  *
  * Does NOT render lock icons — those are handled by LockIconOverlay.tsx.
- * All groups are `listening={false}` so they never intercept pointer events.
+ * Comment badges are clickable — they open the comment thread for that object.
  */
 export const ObjectIndicators = memo(function ObjectIndicators({
   visibleObjects,
   commentCounts,
+  onCommentOpen,
+  stagePos,
+  stageScale,
 }: ObjectIndicatorsProps) {
   return (
     <>
@@ -60,12 +66,22 @@ export const ObjectIndicators = memo(function ObjectIndicators({
         const { x, y } = commentBadgePosition(obj)
         const label = count > 99 ? '99+' : String(count)
 
+        const handleClick = () => {
+          if (!onCommentOpen) return
+          // Convert canvas-space badge position to screen coords for the origin animation
+          const sx = stagePos && stageScale != null ? x * stageScale + stagePos.x : undefined
+          const sy = stagePos && stageScale != null ? y * stageScale + stagePos.y : undefined
+          onCommentOpen(obj.id, sx, sy)
+        }
+
         return (
           <KonvaGroup
             key={`comment-badge-${obj.id}`}
             x={x}
             y={y}
-            listening={false}
+            listening={!!onCommentOpen}
+            onClick={handleClick}
+            onTap={handleClick}
           >
             {/* Triangle pointer — rendered behind the pill so the pill overlaps its base */}
             <KonvaLine
@@ -74,7 +90,6 @@ export const ObjectIndicators = memo(function ObjectIndicators({
               stroke={BADGE_FILL}
               strokeWidth={0}
               closed
-              listening={false}
             />
             {/* Pill background */}
             <KonvaRect
@@ -84,7 +99,7 @@ export const ObjectIndicators = memo(function ObjectIndicators({
               height={BADGE_HEIGHT}
               fill={BADGE_FILL}
               cornerRadius={BADGE_CORNER_RADIUS}
-              listening={false}
+              hitStrokeWidth={8}
             />
             {/* Count label */}
             <KonvaText

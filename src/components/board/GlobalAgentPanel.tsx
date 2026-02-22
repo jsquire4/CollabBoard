@@ -25,81 +25,88 @@ const QUICK_ACTIONS: QuickAction[] = [
   {
     id: 'swot',
     label: 'SWOT Analysis',
-    prompt: `Create a SWOT Analysis template on the board. Steps:
-1. Create a frame titled "SWOT Analysis" at (100, 100) with width 820 and height 620.
-2. Inside the frame, create 4 rectangles as quadrants:
-   - "Strengths" at (110, 140) size 390x270, color #81C784 (green)
-   - "Weaknesses" at (520, 140) size 390x270, color #E57373 (red)
-   - "Opportunities" at (110, 430) size 390x270, color #4FC3F7 (blue)
-   - "Threats" at (520, 430) size 390x270, color #FFB74D (orange)
-3. Create 4 sticky notes with placeholder text inside each quadrant:
-   - "Add strengths here..." in Strengths area
-   - "Add weaknesses here..." in Weaknesses area
-   - "Add opportunities here..." in Opportunities area
-   - "Add threats here..." in Threats area
+    prompt: `Create a SWOT Analysis template on the board.
+
+1. Call computePlacement with width=820, height=620, gridRows=2, gridCols=2, padding=20. This returns an origin and 4 cells.
+2. Create a frame titled "SWOT Analysis" (width 820, height 620) at the returned origin.
+3. Create 4 rectangles using the cell coordinates:
+   - Cell 0 (top-left): "Strengths" color #81C784
+   - Cell 1 (top-right): "Weaknesses" color #E57373
+   - Cell 2 (bottom-left): "Opportunities" color #4FC3F7
+   - Cell 3 (bottom-right): "Threats" color #FFB74D
+   Each rectangle's x, y, width, height come directly from the cell.
+4. Place one sticky note at each cell's centerX/centerY.
+
 Execute ALL steps before responding.`,
   },
   {
     id: 'journey',
     label: 'User Journey',
-    prompt: `Create a User Journey Map template on the board. Steps:
-1. Create a frame titled "User Journey Map" at (100, 100) with width 1200 and height 400.
-2. Inside the frame, create 5 rectangle columns for stages:
-   - "Awareness" at (110, 140) size 220x240, color #CE93D8
-   - "Consideration" at (340, 140) size 220x240, color #4FC3F7
-   - "Decision" at (570, 140) size 220x240, color #81C784
-   - "Onboarding" at (800, 140) size 220x240, color #FFB74D
-   - "Retention" at (1030, 140) size 220x240, color #FFEB3B
-3. Create 5 sticky notes with placeholder text, one per stage column:
-   - "User discovers product" in Awareness
-   - "User evaluates options" in Consideration
-   - "User makes a choice" in Decision
-   - "User gets started" in Onboarding
-   - "User stays engaged" in Retention
+    prompt: `Create a User Journey Map template on the board.
+
+1. Call computePlacement with width=1200, height=400, gridRows=1, gridCols=5, padding=20. This returns an origin and 5 cells.
+2. Create a frame titled "User Journey Map" (width 1200, height 400) at the returned origin.
+3. Create 5 rectangles using the cell coordinates:
+   - Cell 0: "Awareness" color #CE93D8
+   - Cell 1: "Consideration" color #4FC3F7
+   - Cell 2: "Decision" color #81C784
+   - Cell 3: "Onboarding" color #FFB74D
+   - Cell 4: "Retention" color #FFEB3B
+   Each rectangle's x, y, width, height come directly from the cell.
+4. Place one sticky note at each cell's centerX/centerY with placeholder text:
+   - "User discovers product" in cell 0
+   - "User evaluates options" in cell 1
+   - "User makes a choice" in cell 2
+   - "User gets started" in cell 3
+   - "User stays engaged" in cell 4
+
 Execute ALL steps before responding.`,
   },
   {
     id: 'retro',
     label: 'Retrospective',
-    prompt: `Create a Retrospective template on the board with 3 columns. Steps:
-1. Create 3 frames side by side:
-   - "What went well" at (100, 100) size 350x500, color #81C784
-   - "What could improve" at (470, 100) size 350x500, color #E57373
-   - "Action items" at (840, 100) size 350x500, color #4FC3F7
-2. Create 2 placeholder sticky notes in each frame (6 total):
-   - "Great teamwork on X" and "Shipped feature Y on time" in "What went well"
-   - "Slow code reviews" and "Unclear requirements" in "What could improve"
-   - "Set up review SLA" and "Write acceptance criteria template" in "Action items"
+    prompt: `Create a Retrospective template on the board with 3 columns.
+
+1. Call computePlacement with width=1090, height=500, gridRows=1, gridCols=3, padding=20. This returns an origin and 3 cells.
+2. Create 3 frames using the cell coordinates:
+   - Cell 0: "What went well" color #81C784
+   - Cell 1: "What could improve" color #E57373
+   - Cell 2: "Action items" color #4FC3F7
+   Each frame's x, y, width, height come directly from the cell.
+3. Place 2 placeholder sticky notes inside each frame (use the cell's x/y as a reference, offset down for the second note):
+   - "Great teamwork on X" and "Shipped feature Y on time" in cell 0
+   - "Slow code reviews" and "Unclear requirements" in cell 1
+   - "Set up review SLA" and "Write acceptance criteria template" in cell 2
+
 Execute ALL steps before responding.`,
   },
   {
     id: 'grid',
     label: 'Arrange in Grid',
-    prompt: `Arrange all objects on the board in a tidy grid layout. Steps:
-1. Call getBoardState to see all current objects.
-2. Call layoutObjects with layout "grid" to arrange them neatly.
-Report what was arranged.`,
+    prompt: `Arrange all objects on the board in a tidy grid layout using layoutObjects. Confirm briefly when done.`,
   },
   {
     id: 'sticky-grid',
     label: '2x3 Sticky Grid',
-    prompt: `Create a 2x3 grid of sticky notes for pros/cons analysis. Steps:
-1. Create a frame titled "Pros & Cons" at (100, 100) with width 500 and height 500.
-2. Create 6 sticky notes in a 2-column, 3-row layout inside the frame:
-   - Row 1: "Pro 1" (color #81C784) at (120, 160), "Con 1" (color #E57373) at (320, 160)
-   - Row 2: "Pro 2" (color #81C784) at (120, 300), "Con 2" (color #E57373) at (320, 300)
-   - Row 3: "Pro 3" (color #81C784) at (120, 440), "Con 3" (color #E57373) at (320, 440)
+    prompt: `Create a 2x3 grid of sticky notes for pros/cons analysis.
+
+1. Call computePlacement with width=500, height=500, gridRows=3, gridCols=2, padding=20. This returns an origin and 6 cells.
+2. Create a frame titled "Pros & Cons" (width 500, height 500) at the returned origin.
+3. Create 6 sticky notes using the cell coordinates:
+   - Cell 0 (row 0, left): "Pro 1" color #81C784
+   - Cell 1 (row 0, right): "Con 1" color #E57373
+   - Cell 2 (row 1, left): "Pro 2" color #81C784
+   - Cell 3 (row 1, right): "Con 2" color #E57373
+   - Cell 4 (row 2, left): "Pro 3" color #81C784
+   - Cell 5 (row 2, right): "Con 3" color #E57373
+   Each note placed at the cell's centerX/centerY.
+
 Execute ALL steps before responding.`,
   },
   {
     id: 'summarize',
     label: 'Summarize Board',
-    prompt: `Summarize everything on this board. Steps:
-1. Call getBoardState to read all objects.
-2. Group objects by type (frames, sticky notes, shapes, connectors, etc.).
-3. For each group, list the count and key contents (text, titles).
-4. Note any spatial organization (objects inside frames, connected items).
-Provide a clear, structured text summary.`,
+    prompt: `Give me a brief, high-level summary of what's on this board — what it's about, how it's organized, and any key content worth highlighting. Keep it short and useful.`,
   },
 ]
 
@@ -109,17 +116,17 @@ function QuickActionChips({
   onAction,
   disabled,
 }: {
-  onAction: (prompt: string) => void
+  onAction: (prompt: string, label: string) => void
   disabled: boolean
 }) {
   return (
-    <div className="flex gap-1.5 px-3 py-2 overflow-x-auto" role="group" aria-label="Quick actions">
+    <div className="flex flex-wrap gap-1.5 px-3 py-2" role="group" aria-label="Quick actions">
       {QUICK_ACTIONS.map(action => (
         <button
           key={action.id}
-          onClick={() => onAction(action.prompt)}
+          onClick={() => onAction(action.prompt, action.label)}
           disabled={disabled}
-          className="shrink-0 px-2.5 py-1 text-xs font-medium rounded-full border border-indigo-200 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+          className="px-2.5 py-1 text-xs font-medium rounded-full border border-parchment-border text-charcoal bg-parchment-dark/30 hover:bg-parchment-dark/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           data-testid={`quick-action-${action.id}`}
         >
           {action.label}
@@ -137,15 +144,15 @@ function MessageRow({ msg }: { msg: ChatMessage }) {
     <div className={`flex ${isRight ? 'justify-end' : 'justify-start'} mb-3`}>
       <div className={`max-w-[85%] ${isRight ? 'items-end' : 'items-start'} flex flex-col`}>
         {attribution && (
-          <span className={`text-xs text-slate-400 mb-1 ${isRight ? 'text-right' : 'text-left'}`}>
+          <span className={`text-xs text-charcoal/50 mb-1 ${isRight ? 'text-right' : 'text-left'}`}>
             {attribution}
           </span>
         )}
         <div
           className={`rounded-lg px-3 py-2 text-sm ${
             isRight
-              ? 'bg-indigo-500 text-white rounded-br-sm'
-              : 'bg-slate-100 text-slate-800 rounded-bl-sm'
+              ? 'bg-navy text-parchment rounded-br-sm'
+              : 'bg-parchment-dark/60 border border-parchment-border text-charcoal rounded-bl-sm'
           }`}
         >
           {msg.content || (msg.isStreaming ? <span className="opacity-50">…</span> : '')}
@@ -186,9 +193,9 @@ export function GlobalAgentPanel({ boardId, isOpen, onClose }: GlobalAgentPanelP
     setInput('')
   }, [input, isLoading, sendMessage])
 
-  const handleQuickAction = useCallback((prompt: string) => {
+  const handleQuickAction = useCallback((prompt: string, label: string) => {
     if (isLoading) return
-    sendMessage(prompt)
+    sendMessage(prompt, label)
   }, [isLoading, sendMessage])
 
   const handleDragStart = useCallback((e: React.MouseEvent) => {
@@ -218,21 +225,17 @@ export function GlobalAgentPanel({ boardId, isOpen, onClose }: GlobalAgentPanelP
 
   const header = (
     <div
-      className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-purple-50 shrink-0 cursor-move select-none rounded-t-xl"
+      className="flex items-center justify-between px-4 py-3 border-b border-parchment-border bg-parchment-dark/40 shrink-0 select-none rounded-t-lg"
+      style={{ cursor: 'grab' }}
       onMouseDown={handleDragStart}
     >
       <div className="flex items-center gap-2">
-        <div className="flex gap-0.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-        </div>
-        <span className="text-sm font-semibold text-slate-700">Board Assistant</span>
-        <span className="text-xs text-slate-400">· shared</span>
+        <span className="text-sm font-semibold text-charcoal">Board Assistant</span>
+        <span className="text-xs text-charcoal/40">· shared</span>
       </div>
       <button
         onClick={onClose}
-        className="text-slate-400 hover:text-slate-600 transition-colors"
+        className="text-charcoal/40 hover:text-charcoal transition-colors"
         aria-label="Close global agent"
         onMouseDown={e => e.stopPropagation()}
       >
@@ -245,8 +248,8 @@ export function GlobalAgentPanel({ boardId, isOpen, onClose }: GlobalAgentPanelP
 
   return (
     <AgentChatLayout
-      className="fixed z-50 w-80 rounded-xl bg-white shadow-xl border border-slate-200"
-      style={{ left: pos.x, top: pos.y, maxHeight: '70vh' }}
+      className="fixed z-50 w-80 rounded-lg bg-parchment border border-parchment-border overflow-hidden"
+      style={{ left: pos.x, top: pos.y, maxHeight: '70vh', boxShadow: '0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08)' }}
       header={header}
       quickActions={<QuickActionChips onAction={handleQuickAction} disabled={isLoading} />}
       messages={messages}

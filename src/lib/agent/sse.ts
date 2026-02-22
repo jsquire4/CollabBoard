@@ -29,9 +29,6 @@ export function getOpenAI(): OpenAI {
   return _openai
 }
 
-// Maximum tool-call steps per request
-const MAX_STEPS = 10
-
 // Maximum characters for a single tool-call argument blob (prevents huge DB writes)
 const MAX_TOOL_ARG_CHARS = 4_096
 
@@ -89,11 +86,7 @@ export function runAgentLoop(
       }
 
       try {
-        let stepCount = 0
-
-        while (stepCount < MAX_STEPS) {
-          stepCount++
-
+        while (true) {
           const createParams: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
             model,
             messages,
@@ -258,8 +251,6 @@ export function runAssistantsLoop(
       }
 
       try {
-        let stepCount = 0
-
         // Initial run
         let stream = openai.beta.threads.runs.stream(threadId, {
           assistant_id: assistantId,
@@ -271,9 +262,7 @@ export function runAssistantsLoop(
 
         // Label needed so `continue` after tool output submission targets
         // the outer while loop (not the inner for-await).
-        outer: while (stepCount < MAX_STEPS) {
-          stepCount++
-
+        outer: while (true) {
           for await (const event of stream as AsyncIterable<AssistantStreamEvent>) {
             if (event.event === 'thread.message.delta') {
               const delta = event.data.delta

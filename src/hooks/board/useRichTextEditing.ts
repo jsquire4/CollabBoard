@@ -111,7 +111,7 @@ export function useRichTextEditing({
     beforeEditRef.current = null
   }, [editor, enabled])
 
-  const handleStartEdit = useCallback((id: string, textNode: Konva.Text, field: 'text' | 'title' = 'text') => {
+  const handleStartEdit = useCallback((id: string, textNode: Konva.Text | null, field: 'text' | 'title' = 'text') => {
     if (!canEdit) return
     onActivity?.()
     if (tryEnterGroup(id)) return
@@ -136,6 +136,7 @@ export function useRichTextEditing({
 
     if (field === 'title') {
       // Title stays plain text
+      if (!textNode) return // title editing requires the Konva Text node for positioning
       const initialText = (obj.title ?? 'Note').slice(0, STICKY_TITLE_CHAR_LIMIT)
       setEditText(initialText)
 
@@ -226,6 +227,9 @@ export function useRichTextEditing({
     const textNode = (konvaNode as Konva.Group).findOne?.('Text') as Konva.Text | undefined
     if (textNode) {
       handleStartEdit(id, textNode)
+    } else if (obj.rich_text) {
+      // Shape has rich_text but Konva Text node is hidden — start rich text editing directly
+      handleStartEdit(id, null)
     } else {
       // Shape has no text yet — initialize with empty text then start editing
       onUpdateText(id, ' ')

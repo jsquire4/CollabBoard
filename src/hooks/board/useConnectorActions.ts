@@ -31,7 +31,8 @@ interface UseConnectorActionsDeps {
   objects: Map<string, BoardObject>
   canEdit: boolean
   updateObject: (id: string, updates: Partial<BoardObject>) => void
-  updateObjectDrag: (id: string, updates: Partial<BoardObject>) => void
+  updateObjectDrag: (id: string, updates: Partial<BoardObject>, opts?: { skipOverlay?: boolean }) => void
+  updateConnectorDrag: (id: string, updates: Partial<BoardObject>) => void
   updateObjectDragEnd: (id: string, updates: Partial<BoardObject>) => void
   addObject: (type: BoardObjectType, x: number, y: number, overrides?: Partial<BoardObject>) => BoardObject | null
   checkFrameContainment: (id: string) => void
@@ -51,6 +52,7 @@ export function useConnectorActions({
   canEdit,
   updateObject,
   updateObjectDrag,
+  updateConnectorDrag,
   updateObjectDragEnd,
   addObject,
   checkFrameContainment,
@@ -200,8 +202,20 @@ export function useConnectorActions({
     }
 
     setSnapIndicator(snap ? { x: snap.x, y: snap.y } : null)
-    updateObjectDrag(id, updates)
-  }, [canEdit, updateObjectDrag, computeAllAnchors, markActivity, setSnapIndicator])
+
+    if (isWholeDrag) {
+      // Whole-line drag: Konva natively moves the Line node within its Group,
+      // so all children (markers, anchors) travel with it visually.  Only
+      // broadcast + write to dragPositionsRef (no React state) to avoid a
+      // double-offset loop (Konva offset + Group state shift).
+      updateObjectDrag(id, updates)
+    } else {
+      // Endpoint drag: trigger a React re-render so the Line redraws to the
+      // new endpoint and markers follow.  Konva and React-Konva agree on the
+      // Circle position so there's no double-offset.
+      updateConnectorDrag(id, updates)
+    }
+  }, [canEdit, updateObjectDrag, updateConnectorDrag, computeAllAnchors, markActivity, setSnapIndicator])
 
   const handleEndpointDragEnd = useCallback((id: string, updates: Partial<BoardObject>, preDragRef: MutableRefObject<Map<string, { x: number; y: number; x2?: number | null; y2?: number | null; parent_id: string | null; waypoints?: string | null; connect_start_id?: string | null; connect_end_id?: string | null; connect_start_anchor?: string | null; connect_end_anchor?: string | null }>>) => {
     if (!canEdit) return

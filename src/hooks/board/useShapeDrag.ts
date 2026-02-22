@@ -84,6 +84,16 @@ export function useShapeDrag({
 
     onDragMove(id, finalX, finalY)
 
+    // Imperatively reposition rich-text DOM overlay so it stays locked to the shape
+    // during drag — avoids waiting for React state to propagate (no re-render needed).
+    const rtOverlay = document.getElementById(`rt-overlay-${id}`)
+    if (rtOverlay) {
+      const padding = obj.text_padding ?? 8
+      const topOffset = obj.type === 'sticky_note' ? 50 : 0
+      rtOverlay.style.left = `${finalX + padding}px`
+      rtOverlay.style.top = `${finalY + topOffset + padding}px`
+    }
+
     // Track and broadcast cursor position during drag — stage onMouseMove doesn't fire
     // while Konva is handling a shape drag, so we push the pointer position here.
     if (onCursorMove) {

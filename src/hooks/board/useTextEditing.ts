@@ -68,7 +68,7 @@ export function useTextEditing({
 
   // ── Callbacks ──────────────────────────────────────────────────────
 
-  const handleStartEdit = useCallback((id: string, textNode: Konva.Text, field: 'text' | 'title' = 'text') => {
+  const handleStartEdit = useCallback((id: string, textNode: Konva.Text | null, field: 'text' | 'title' = 'text') => {
     if (!canEdit) return
     onActivity?.()
     // If double-clicking a child of a selected group, enter the group instead
@@ -80,6 +80,7 @@ export function useTextEditing({
     const obj = objects.get(id)
     if (!obj) return
 
+    if (!textNode) return // plain-text editing requires a positioned Konva Text node
     const textRect = textNode.getClientRect()
 
     setEditingId(id)

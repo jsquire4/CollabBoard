@@ -11,7 +11,7 @@ export interface AgentChatLayoutProps {
   /** Header content */
   header: ReactNode
 
-  /** Optional quick-action buttons between header and messages */
+  /** Optional quick-action buttons rendered above the input row */
   quickActions?: ReactNode
 
   /** Messages to display */
@@ -75,29 +75,29 @@ export function AgentChatLayout({
       {/* Header slot */}
       {header}
 
-      {/* Quick actions slot */}
-      {quickActions && (
-        <div className="border-b border-slate-100 shrink-0">
-          {quickActions}
-        </div>
-      )}
-
       {/* Messages area */}
       <div className="flex-1 p-4 overflow-y-auto min-h-32">
         {messages.length === 0 && (
-          <p className="text-xs text-slate-400 text-center">{emptyText}</p>
+          <p className="text-xs text-charcoal/40 text-center">{emptyText}</p>
         )}
         {messages.map(msg => renderMessage(msg))}
         {error && (
-          <p className="text-xs text-red-500 text-center mt-2">{error}</p>
+          <p className="text-xs text-red-400 text-center mt-2">{error}</p>
         )}
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Quick actions — above input */}
+      {quickActions && (
+        <div className="border-t border-parchment-border shrink-0">
+          {quickActions}
+        </div>
+      )}
+
       {/* Input row */}
-      <div className="border-t border-slate-100 p-3 flex gap-2 shrink-0">
+      <div className={`${quickActions ? '' : 'border-t border-parchment-border '}p-3 flex gap-2 shrink-0`}>
         <textarea
-          className="flex-1 resize-none rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:opacity-50"
+          className="flex-1 resize-none rounded border border-parchment-border bg-white px-3 py-2 text-sm text-charcoal placeholder-charcoal/30 focus:outline-none focus:ring-1 focus:ring-navy/30 disabled:opacity-50"
           rows={2}
           placeholder={inputPlaceholder}
           value={input}
@@ -108,7 +108,7 @@ export function AgentChatLayout({
         <button
           onClick={onSend}
           disabled={isLoading || !input.trim()}
-          className="px-3 py-2 rounded bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="px-3 py-2 rounded bg-navy text-parchment text-sm font-medium border border-navy hover:bg-navy/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           Send
         </button>

@@ -127,7 +127,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     enterGroup, exitGroup,
     bringToFront, sendToBack, bringForward, sendBackward,
     groupSelected, ungroupSelected,
-    moveGroupChildren, updateObjectDrag, updateObjectDragEnd,
+    moveGroupChildren, updateObjectDrag, updateObjectDragEnd, updateConnectorDrag,
     checkFrameContainment,
     getChildren, getDescendants,
     remoteSelections,
@@ -335,13 +335,13 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     setRadialPicker({ triggerX: screenX, triggerY: screenY, canvasX, canvasY })
   }, [canEdit])
 
-  const handleRadialDraw = useCallback((type: BoardObjectType, x: number, y: number, width: number, height: number) => {
+  const handleRadialDraw = useCallback((type: BoardObjectType, x: number, y: number, width: number, height: number, presetOverrides?: Partial<BoardObject>) => {
     if (!canEdit) return
     markActivity()
-    const overrides: Partial<BoardObject> = { width, height }
+    const overrides: Partial<BoardObject> = { width, height, ...presetOverrides }
     if (type === 'line' || type === 'arrow' || type === 'data_connector') {
       overrides.x2 = x + (width || 120)
-      overrides.y2 = y + (height || 40)
+      overrides.y2 = y
     }
     const obj = addObject(type, x, y, overrides)
     if (obj) undoStack.push({ type: 'add', ids: [obj.id] })
@@ -417,9 +417,11 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     const obj = objects.get(id)
     if (obj && !isVectorType(obj.type)) {
       const anchors = getShapeAnchors({ ...obj, x, y })
-      followConnectors(id, anchors, updateObjectDrag, false)
+      // Use updateConnectorDrag (ref + state) so connectors re-render during drag —
+      // they're not Konva-dragged natively and need a React render to update visually.
+      followConnectors(id, anchors, updateConnectorDrag, false)
     }
-  }, [canEdit, updateObjectDrag, objects, followConnectors, markActivity])
+  }, [canEdit, updateObjectDrag, updateConnectorDrag, objects, followConnectors, markActivity])
 
   const handleDragEnd = useCallback((id: string, x: number, y: number) => {
     if (!canEdit) return
@@ -675,13 +677,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const handleSlideSelect = useCallback((frameId: string) => {
     selectObject(frameId)
   }, [selectObject])
-
-  const handleFilmstripOpen = useCallback(() => {
-    setFilmstripOpen(true)
-    // Thumbnails would require access to the Konva stage — set empty for now,
-    // the filmstrip will show numbered fallbacks.
-    setSlideThumbnails({})
-  }, [])
 
   const handleCanvasDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -942,17 +937,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
         </svg>
       </button>
-      {/* Filmstrip toggle button */}
-      <button
-        onClick={() => setFilmstripOpen(prev => !prev)}
-        className="fixed bottom-52 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-charcoal text-parchment shadow-lg hover:bg-charcoal/80 border border-transparent dark:border-white/10"
-        aria-label="Toggle slide filmstrip"
-        title="Slide Filmstrip"
-      >
-        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
-        </svg>
-      </button>
       {/* File Library toggle button */}
       <button
         onClick={() => setFileLibraryOpen(prev => !prev)}
@@ -964,12 +948,12 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       </button>
-      {/* Slide deck / Filmstrip toggle button */}
+      {/* Filmstrip toggle button */}
       <button
-        onClick={handleFilmstripOpen}
-        className="fixed bottom-52 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700"
-        aria-label="Toggle slide deck"
-        title="Slide Deck"
+        onClick={() => { setFilmstripOpen(prev => { if (!prev) setSlideThumbnails({}); return !prev }) }}
+        className="fixed bottom-52 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-charcoal text-parchment shadow-lg hover:bg-charcoal/80 border border-transparent dark:border-white/10"
+        aria-label="Toggle slide filmstrip"
+        title="Slide Filmstrip"
       >
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />

@@ -38,6 +38,10 @@ interface CanvasOverlaysProps {
   setContextMenu: (m: ContextMenuState | null) => void
   onCellKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
 
+  // Rich text
+  isEditingText?: boolean
+  richTextEditor?: import('@tiptap/react').Editor | null
+
   // API object overlays
   boardId?: string
   onApiConfigChange?: (id: string, formula: string) => void
@@ -50,6 +54,7 @@ export function CanvasOverlays({
   zoomIn, zoomOut, resetZoom,
   contextMenu, setContextMenu,
   onCellKeyDown,
+  isEditingText, richTextEditor,
   boardId, onApiConfigChange,
 }: CanvasOverlaysProps) {
   const { handleConnectorHintMouseDown } = useDrawInteraction({ connectorHint, connectorDrawingRefs })
@@ -116,30 +121,32 @@ export function CanvasOverlays({
         />
       )}
 
-      {/* Connector hint — floating button near shape edge */}
-      {connectorHint && (() => {
-        const hintScreenX = connectorHint.anchor.x * stageScale + stagePos.x
-        const hintScreenY = connectorHint.anchor.y * stageScale + stagePos.y
+      {/* Connector hint — dashed anchor circles on shape edges */}
+      {connectorHint && connectorHint.allAnchors.map(anchor => {
+        const dotSize = Math.max(10, 14 * stageScale)
+        const screenX = anchor.x * stageScale + stagePos.x
+        const screenY = anchor.y * stageScale + stagePos.y
         return (
-        <button
-          type="button"
-          className="pointer-events-auto absolute z-50 flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg transition hover:bg-blue-600"
-          style={{
-            left: hintScreenX - 12,
-            top: hintScreenY - 12,
-          }}
-          title="Draw connector"
-          onMouseDown={handleConnectorHintMouseDown}
-        >
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-          </svg>
-        </button>
+          <button
+            key={`hint-${anchor.id}`}
+            type="button"
+            className="pointer-events-auto absolute z-50 rounded-full transition-colors hover:bg-navy/30"
+            style={{
+              left: screenX - dotSize / 2,
+              top: screenY - dotSize / 2,
+              width: dotSize,
+              height: dotSize,
+              backgroundColor: 'rgba(120, 120, 120, 0.25)',
+              border: '1.5px dashed rgba(70, 70, 70, 0.75)',
+            }}
+            title="Draw connector"
+            onMouseDown={e => handleConnectorHintMouseDown(e, anchor)}
+          />
         )
-      })()}
+      })}
 
       {/* Selection bar (replaces FloatingPropertyPanel) */}
-      <SelectionBar stagePos={stagePos} stageScale={stageScale} />
+      <SelectionBar stagePos={stagePos} stageScale={stageScale} isEditingText={isEditingText} richTextEditor={richTextEditor} />
 
       {/* Zoom controls */}
       <div className="pointer-events-auto absolute bottom-4 right-4 z-50">

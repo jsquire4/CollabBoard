@@ -412,9 +412,15 @@ export function Canvas() {
   const autoRouteCacheRef = useRef<Map<string, { key: string; points: number[] | null }>>(new Map())
 
   const getAutoRoutePoints = useCallback((obj: BoardObject): number[] | null => {
-    // Build a cache key from the connector's relevant fields + connected shape positions
-    const startShape = obj.connect_start_id ? objects.get(obj.connect_start_id) : null
-    const endShape = obj.connect_end_id ? objects.get(obj.connect_end_id) : null
+    // Build a cache key from the connector's relevant fields + connected shape positions.
+    // Check dragPositionsRef for in-flight drag positions so auto-route updates in real time.
+    const dragOverrides = dragPositionsRef.current
+    const rawStart = obj.connect_start_id ? objects.get(obj.connect_start_id) : null
+    const rawEnd = obj.connect_end_id ? objects.get(obj.connect_end_id) : null
+    const startDrag = rawStart ? dragOverrides.get(rawStart.id) : undefined
+    const endDrag = rawEnd ? dragOverrides.get(rawEnd.id) : undefined
+    const startShape = rawStart && startDrag ? { ...rawStart, ...startDrag } as BoardObject : rawStart
+    const endShape = rawEnd && endDrag ? { ...rawEnd, ...endDrag } as BoardObject : rawEnd
     const cacheKey = [
       obj.x, obj.y, obj.x2, obj.y2,
       obj.connect_start_id, obj.connect_start_anchor,
@@ -427,10 +433,17 @@ export function Canvas() {
     const cached = autoRouteCacheRef.current.get(obj.id)
     if (cached && cached.key === cacheKey) return cached.points
 
-    const points = computeAutoRoute(obj, objects)
+    // Build an overlay map so computeAutoRoute sees drag positions for connected shapes
+    let objectsForRoute = objects
+    if (startDrag || endDrag) {
+      objectsForRoute = new Map(objects)
+      if (startShape && startDrag) objectsForRoute.set(startShape.id, startShape)
+      if (endShape && endDrag) objectsForRoute.set(endShape.id, endShape)
+    }
+    const points = computeAutoRoute(obj, objectsForRoute)
     autoRouteCacheRef.current.set(obj.id, { key: cacheKey, points })
     return points
-  }, [objects])
+  }, [objects, dragPositionsRef])
 
   // Viewport culling: only render objects within the visible canvas area (+ margin)
   const visibleObjects = useMemo(() => {
@@ -681,10 +694,11 @@ export function Canvas() {
               key={`anchor-preview-${anchor.id}`}
               x={anchor.x}
               y={anchor.y}
-              radius={5 / stageScale}
-              fill="rgba(27, 58, 107, 0.3)"
-              stroke="#1B3A6B"
+              radius={Math.max(5, 7) / stageScale}
+              fill="rgba(120, 120, 120, 0.25)"
+              stroke="rgba(70, 70, 70, 0.75)"
               strokeWidth={1.5 / stageScale}
+              dash={[3 / stageScale, 2 / stageScale]}
               listening={false}
             />
           ))}
@@ -816,6 +830,8 @@ export function Canvas() {
         contextMenu={contextMenu}
         setContextMenu={setContextMenu}
         onCellKeyDown={handleCellKeyDown}
+        isEditingText={!!editingId}
+        richTextEditor={RICH_TEXT_ENABLED ? richTextEditing.editor : null}
         boardId={boardId}
         onApiConfigChange={onApiConfigChange}
       />

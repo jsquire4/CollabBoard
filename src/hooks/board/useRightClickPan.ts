@@ -54,6 +54,7 @@ export function useRightClickPan({
       setIsPanning(true)
       panStartRef.current = { x: e.clientX, y: e.clientY }
       stagePosAtPanStartRef.current = { x: stage.x(), y: stage.y() }
+      container.style.cursor = 'grabbing'
       container.setPointerCapture(e.pointerId)
     }
 
@@ -95,6 +96,7 @@ export function useRightClickPan({
       if (!isPanningRef.current) return
       isPanningRef.current = false
       setIsPanning(false)
+      container.style.cursor = ''
       container.releasePointerCapture(e.pointerId)
       const stage = stageRef.current
       if (stage) {

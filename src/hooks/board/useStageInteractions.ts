@@ -6,6 +6,7 @@ import { BoardObjectType } from '@/types/board'
 import { useBoardContext } from '@/contexts/BoardContext'
 import { isVectorType, snapToGrid } from '@/components/board/shapeUtils'
 import { getShapeAnchors, findNearestAnchor, AnchorPoint } from '@/components/board/anchorPoints'
+import type { ConnectorHintData } from '@/hooks/board/useDrawInteraction'
 
 // ── Hook interface ──────────────────────────────────────────────────
 
@@ -66,7 +67,7 @@ export function useStageInteractions({
 
   const [hoveredAnchors, setHoveredAnchors] = useState<AnchorPoint[] | null>(null)
   const drawSnapStartRef = useRef<{ shapeId: string; anchorId: string; x: number; y: number } | null>(null)
-  const [connectorHint, setConnectorHint] = useState<{ shapeId: string; anchor: AnchorPoint } | null>(null)
+  const [connectorHint, setConnectorHint] = useState<ConnectorHintData | null>(null)
   const connectorHintDrawingRef = useRef(false)
 
   // ── Refs to avoid stale closures in handleStageMouseMove ────────
@@ -220,10 +221,17 @@ export function useStageInteractions({
         if (shapeId) {
           const obj = objectsRef.current.get(shapeId)
           if (obj && !isVectorType(obj.type) && obj.type !== 'group') {
-            const anchors = getShapeAnchors(obj).filter(a => a.id !== 'center')
+            // Only use vertex anchors — midpoint anchors can land inside the shape
+            // for non-rect types (e.g. sticky_note defines edge midpoints as vertices,
+            // so midpoints between them are interior points).
+            const allAnchors = getShapeAnchors(obj)
+            const anchors = allAnchors.filter(a => a.id.startsWith('vertex'))
             const nearest = findNearestAnchor(anchors, canvasX, canvasY, 30)
             if (nearest) {
-              setConnectorHint({ shapeId, anchor: nearest })
+              const centerAnchor = allAnchors.find(a => a.id === 'center')
+              const cx = centerAnchor ? centerAnchor.x : obj.x + obj.width / 2
+              const cy = centerAnchor ? centerAnchor.y : obj.y + obj.height / 2
+              setConnectorHint({ shapeId, anchor: nearest, allAnchors: anchors, center: { x: cx, y: cy } })
             } else {
               setConnectorHint(null)
             }

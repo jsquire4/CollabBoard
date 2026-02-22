@@ -2,7 +2,6 @@ import React, { useMemo } from 'react'
 import { BoardObject } from '@/types/board'
 import { ContextMenu } from './ContextMenu'
 import { SelectionBar } from './SelectionBar'
-import { ZoomControls } from './ZoomControls'
 import { ApiObjectOverlay } from './ApiObjectOverlay'
 import { getTextCharLimit, STICKY_TITLE_CHAR_LIMIT } from '@/hooks/board/useTextEditing'
 import { RICH_TEXT_ENABLED } from '@/lib/richText'
@@ -28,11 +27,6 @@ interface CanvasOverlaysProps {
   stagePos: { x: number; y: number }
   connectorDrawingRefs: ConnectorDrawingRefs
 
-  // Zoom
-  zoomIn: () => void
-  zoomOut: () => void
-  resetZoom: () => void
-
   // Context menu
   contextMenu: ContextMenuState | null
   setContextMenu: (m: ContextMenuState | null) => void
@@ -51,7 +45,6 @@ export function CanvasOverlays({
   editingId, editingField, editText, setEditText, textareaRef, textareaStyle,
   handleFinishEdit, onUpdateText, onUpdateTitle, objects,
   connectorHint, stageScale, stagePos, connectorDrawingRefs,
-  zoomIn, zoomOut, resetZoom,
   contextMenu, setContextMenu,
   onCellKeyDown,
   isEditingText, richTextEditor,
@@ -147,16 +140,6 @@ export function CanvasOverlays({
 
       {/* Selection bar (replaces FloatingPropertyPanel) */}
       <SelectionBar stagePos={stagePos} stageScale={stageScale} isEditingText={isEditingText} richTextEditor={richTextEditor} />
-
-      {/* Zoom controls */}
-      <div className="pointer-events-auto absolute bottom-4 right-4 z-50">
-        <ZoomControls
-          scale={stageScale}
-          onZoomIn={zoomIn}
-          onZoomOut={zoomOut}
-          onReset={resetZoom}
-        />
-      </div>
 
       {/* Right-click context menu */}
       {contextMenu && (

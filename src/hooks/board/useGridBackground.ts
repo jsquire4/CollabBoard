@@ -42,8 +42,8 @@ export function computeGridStyles({
   // Fade grid toward canvas color when zoomed out so shapes stay visible.
   // Full strength at scale >= 1, fully faded at scale <= 0.2.
   const zoomFade = Math.min(1, Math.max(0, (stageScale - 0.2) / 0.8))
-  const majorAlpha = (snapToGridEnabled ? 0.85 : 0.7) * zoomFade
-  const subAlpha = 0.55 * zoomFade
+  const majorAlpha = (snapToGridEnabled ? 1 : 0.9) * zoomFade
+  const subAlpha = 0.7 * zoomFade
 
   if (majorAlpha <= 0) return {} // fully faded — skip all patterns
 
@@ -56,14 +56,14 @@ export function computeGridStyles({
 
   // Blend grid colors toward canvas at low zoom
   const colorFade = 1 - zoomFade
-  const fadedGridColor = blendColors(gridColor, canvasColor, colorFade * 0.7)
-  const fadedSubColor = blendColors(subdivisionColor, canvasColor, colorFade * 0.7)
+  const fadedGridColor = blendColors(gridColor, canvasColor, colorFade * 0.4)
+  const fadedSubColor = blendColors(subdivisionColor, canvasColor, colorFade * 0.4)
 
   const majorHex = `${fadedGridColor}${Math.round(majorAlpha * 255).toString(16).padStart(2, '0')}`
   const subHex = `${fadedSubColor}${Math.round(subAlpha * 255).toString(16).padStart(2, '0')}`
   // Dot radii scale with zoom so they stay visible but don't overwhelm
-  const majorDotR = Math.max(1.5, Math.min(3, 1.5 * stageScale))
-  const subDotR = Math.max(1, Math.min(2, 1 * stageScale))
+  const majorDotR = Math.max(2, Math.min(3.5, 2 * stageScale))
+  const subDotR = Math.max(1.2, Math.min(2.5, 1.2 * stageScale))
 
   // Line layers share the standard position; dot layers are offset by
   // -halfTile so the center of each dot tile lands on a line intersection.

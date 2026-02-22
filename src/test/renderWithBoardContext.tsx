@@ -30,6 +30,13 @@ const defaultBoardValue: BoardContextValue = {
   uiDarkMode: false,
   commentCounts: new Map(),
   dragPositionsRef: { current: new Map() },
+  stagePos: { x: 0, y: 0 },
+  setStagePos: () => {},
+  stageScale: 1,
+  setStageScale: () => {},
+  zoomIn: () => {},
+  zoomOut: () => {},
+  resetZoom: () => {},
 }
 
 function noop() {}

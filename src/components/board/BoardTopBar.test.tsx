@@ -81,12 +81,9 @@ describe('BoardTopBar', () => {
     expect(screen.getByTitle(/alice/i)).toBeInTheDocument()
   })
 
-  it('shows dark mode toggle when onToggleDarkMode provided', async () => {
-    const onToggle = vi.fn()
-    render(<BoardTopBar {...defaultProps} onToggleDarkMode={onToggle} uiDarkMode={false} />)
-    const toggle = screen.getByRole('button', { name: /switch to dark mode/i })
-    await userEvent.click(toggle)
-    expect(onToggle).toHaveBeenCalled()
+  it('shows snap-to-grid indicator', () => {
+    render(<BoardTopBar {...defaultProps} snapToGrid={true} />)
+    expect(screen.getByTitle('Snap to grid: ON')).toBeInTheDocument()
   })
 
   it('shows GridSettingsPopover when onUpdateBoardSettings provided', () => {

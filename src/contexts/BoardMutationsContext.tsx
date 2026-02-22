@@ -134,7 +134,7 @@ export interface BoardMutationsContextValue {
   vertexEditId: string | null
   onAgentClick?: (id: string) => void
   onApiConfigChange?: (id: string, formula: string) => void
-  onCommentOpen?: (id: string) => void
+  onCommentOpen?: (id: string, originX?: number, originY?: number) => void
 
   // Empty canvas click — triggers contextual shape picker
   onEmptyCanvasClick?: (screenX: number, screenY: number, canvasX: number, canvasY: number) => void

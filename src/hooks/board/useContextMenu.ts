@@ -17,11 +17,13 @@ interface UseContextMenuDeps {
   onSendToBack: (id: string) => void
   didPanRef: React.RefObject<boolean>
   onActivity?: () => void
+  shapeRefs: React.RefObject<Map<string, Konva.Node>>
+  stageRef: React.RefObject<Konva.Stage | null>
 }
 
 export function useContextMenu({
   onSelect, onBringToFront, onBringForward, onSendBackward, onSendToBack,
-  didPanRef, onActivity,
+  didPanRef, onActivity, shapeRefs, stageRef,
 }: UseContextMenuDeps) {
   const { canEdit, objects, activeGroupId } = useBoardContext()
   const { shiftHeld, ctrlHeld } = useModifierKeys()
@@ -32,8 +34,21 @@ export function useContextMenu({
     if (!canEdit) return
     onActivity?.()
     onSelect(id, { shift: shiftHeld, ctrl: ctrlHeld })
-    setContextMenu({ x: clientX, y: clientY, objectId: id })
-  }, [onSelect, canEdit, shiftHeld, ctrlHeld, onActivity])
+
+    // Position the menu at the right edge of the shape (aligned to the shape, not the cursor)
+    let menuX = clientX
+    let menuY = clientY
+    const node = shapeRefs.current?.get(id)
+    const stage = stageRef.current
+    if (node && stage) {
+      const nodeRect = node.getClientRect()
+      const containerRect = stage.container().getBoundingClientRect()
+      menuX = containerRect.left + nodeRect.x + nodeRect.width + 8
+      menuY = containerRect.top + nodeRect.y
+    }
+
+    setContextMenu({ x: menuX, y: menuY, objectId: id })
+  }, [onSelect, canEdit, shiftHeld, ctrlHeld, onActivity, shapeRefs, stageRef])
 
   const handleStageContextMenu = useCallback((e: Konva.KonvaEventObject<PointerEvent>) => {
     e.evt.preventDefault()

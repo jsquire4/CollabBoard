@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback, type SetStateAction, type Dispatch } from 'react'
 import dynamic from 'next/dynamic'
 import { useBoardState } from '@/hooks/useBoardState'
 import { useRealtimeChannel } from '@/hooks/useRealtimeChannel'
@@ -151,7 +151,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const [globalAgentOpen, setGlobalAgentOpen] = useState(false)
   const [fileLibraryOpen, setFileLibraryOpen] = useState(false)
   const [filmstripOpen, setFilmstripOpen] = useState(false)
-  const [commentThread, setCommentThread] = useState<{ objectId: string; position: { x: number; y: number } } | null>(null)
+  const [commentThread, setCommentThread] = useState<{ objectId: string; position: { x: number; y: number }; origin?: { x: number; y: number } } | null>(null)
   const [slideThumbnails, setSlideThumbnails] = useState<Record<string, string>>({})
   const [isEditingText, setIsEditingText] = useState(false)
   const [activeTool, setActiveTool] = useState<BoardObjectType | null>(null)
@@ -169,6 +169,23 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     initialGridSize, initialGridSubdivisions, initialGridVisible, initialSnapToGrid,
     initialGridStyle, initialCanvasColor, initialGridColor, initialSubdivisionColor,
   })
+  // Canvas viewport state — lifted from useCanvas so zoom controls can live in the top bar
+  const ZOOM_SPEED = 1.1
+  const MIN_SCALE = 0.1
+  const MAX_SCALE = 5.0
+  const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
+  const [stageScale, setStageScale] = useState(1)
+  const zoomIn = useCallback(() => {
+    setStageScale(s => Math.min(s * ZOOM_SPEED, MAX_SCALE))
+  }, [])
+  const zoomOut = useCallback(() => {
+    setStageScale(s => Math.max(s / ZOOM_SPEED, MIN_SCALE))
+  }, [])
+  const resetZoom = useCallback(() => {
+    setStageScale(1)
+    setStagePos({ x: 0, y: 0 })
+  }, [])
+
   const [uiDarkMode, setUiDarkMode] = useDarkMode()
 
   const supabaseRef = useRef(createClient())
@@ -640,6 +657,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     canvasColor, gridColor, subdivisionColor, uiDarkMode,
     commentCounts,
     dragPositionsRef,
+    stagePos, setStagePos, stageScale, setStageScale,
+    zoomIn, zoomOut, resetZoom,
   }), [
     objects, selectedIds, activeGroupId, sortedObjects, remoteSelections,
     getChildren, getDescendants,
@@ -651,6 +670,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     canvasColor, gridColor, subdivisionColor, uiDarkMode,
     commentCounts,
     dragPositionsRef,
+    stagePos, stageScale, zoomIn, zoomOut, resetZoom,
   ])
 
   // ── Mutations context (all callbacks for Canvas + child components) ──
@@ -663,9 +683,22 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     updateObject(id, { formula })
   }, [canEdit, updateObject])
 
-  const handleCommentOpen = useCallback((id: string) => {
-    setCommentThread({ objectId: id, position: { x: window.innerWidth - 320, y: 80 } })
-  }, [])
+  const handleCommentOpen = useCallback((id: string, originX?: number, originY?: number) => {
+    // Position the comment thread to the right of the shape
+    const obj = objects.get(id)
+    const ct = canvasTransform
+    let x = window.innerWidth - 320
+    let y = 80
+    if (obj) {
+      x = (obj.x + (obj.width ?? 100)) * ct.scale + ct.x + 12
+      y = obj.y * ct.scale + ct.y
+      // Clamp within viewport
+      if (x + 288 > window.innerWidth) x = Math.max(8, obj.x * ct.scale + ct.x - 300)
+      if (y + 300 > window.innerHeight) y = Math.max(8, window.innerHeight - 400)
+    }
+    const origin = originX != null && originY != null ? { x: originX, y: originY } : undefined
+    setCommentThread({ objectId: id, position: { x, y }, origin })
+  }, [objects])
 
   const handleSlideReorder = useCallback((newOrder: string[]) => {
     if (!canEdit) return
@@ -863,8 +896,11 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         gridColor={gridColor}
         subdivisionColor={subdivisionColor}
         onUpdateBoardSettings={updateBoardSettings}
-        uiDarkMode={uiDarkMode}
-        onToggleDarkMode={() => setUiDarkMode(!uiDarkMode)}
+        stageScale={stageScale}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onResetZoom={resetZoom}
+        onToggleSnapToGrid={() => updateBoardSettings({ snap_to_grid: !snapToGrid })}
       />
       <ConnectionBanner status={connectionStatus} />
       {activeGroupId && (
@@ -929,15 +965,18 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
       {/* Global Agent toggle button */}
       <button
         onClick={() => setGlobalAgentOpen(prev => !prev)}
-        className="fixed bottom-16 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-navy text-parchment shadow-lg hover:bg-navy/80 border border-transparent dark:border-white/10"
+        className="fixed bottom-16 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-navy text-parchment shadow-lg hover:bg-navy/80 border border-transparent dark:border-white/10"
         aria-label="Toggle global board assistant (Cmd+G)"
         title="Board Assistant (⌘G)"
       >
-        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
         </svg>
       </button>
-      {/* File Library toggle button */}
+      {/* NOTE: File Library and Slide Filmstrip buttons are hidden while these
+          features are still in development. The panels and supporting code remain
+          intact — just uncomment the buttons below when ready to ship.
+
       <button
         onClick={() => setFileLibraryOpen(prev => !prev)}
         className="fixed bottom-40 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-charcoal text-parchment shadow-lg hover:bg-charcoal/80 border border-transparent dark:border-white/10"
@@ -948,7 +987,6 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       </button>
-      {/* Filmstrip toggle button */}
       <button
         onClick={() => { setFilmstripOpen(prev => { if (!prev) setSlideThumbnails({}); return !prev }) }}
         className="fixed bottom-52 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-charcoal text-parchment shadow-lg hover:bg-charcoal/80 border border-transparent dark:border-white/10"
@@ -959,6 +997,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
         </svg>
       </button>
+      */}
       {agentChatPanel && (
         <AgentChatPanel
           agentObjectId={agentChatPanel.objectId}
@@ -996,6 +1035,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           boardId={boardId}
           objectId={commentThread.objectId}
           position={commentThread.position}
+          origin={commentThread.origin}
           isOpen={true}
           onClose={() => setCommentThread(null)}
         />

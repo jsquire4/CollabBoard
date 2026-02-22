@@ -29,6 +29,13 @@ function makeContextValue(overrides?: Partial<BoardContextValue>): BoardContextV
     uiDarkMode: false,
     commentCounts: new Map(),
     dragPositionsRef: { current: new Map() },
+    stagePos: { x: 0, y: 0 },
+    setStagePos: () => {},
+    stageScale: 1,
+    setStageScale: () => {},
+    zoomIn: () => {},
+    zoomOut: () => {},
+    resetZoom: () => {},
     ...overrides,
   }
 }

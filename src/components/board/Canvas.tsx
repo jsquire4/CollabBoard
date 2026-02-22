@@ -3,7 +3,6 @@
 import React, { useRef, useCallback, useEffect, useMemo, useState } from 'react'
 import { Stage, Layer, Transformer, Rect as KonvaRect, Group as KonvaGroup, Line as KonvaLine, Circle as KonvaCircle } from 'react-konva'
 import Konva from 'konva'
-import { useCanvas } from '@/hooks/useCanvas'
 import { canvasTransform } from '@/lib/canvasTransform'
 import { useModifierKeys } from '@/hooks/useModifierKeys'
 import { BoardObject } from '@/types/board'
@@ -143,8 +142,35 @@ export function Canvas() {
     snapToGrid: snapToGridEnabled,
     gridStyle, canvasColor, gridColor, subdivisionColor,
     dragPositionsRef,
+    stagePos, setStagePos, stageScale, setStageScale,
+    zoomIn, zoomOut, resetZoom,
   } = useBoardContext()
-  const { stagePos, setStagePos, stageScale, handleWheel, zoomIn, zoomOut, resetZoom } = useCanvas()
+
+  // handleWheel needs Konva types so it stays in Canvas (not lifted to BoardClient)
+  const ZOOM_SPEED = 1.1
+  const MIN_SCALE = 0.1
+  const MAX_SCALE = 5.0
+  const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
+    e.evt.preventDefault()
+    const stage = e.target.getStage()
+    if (!stage) return
+    const oldScale = stage.scaleX()
+    const pointer = stage.getPointerPosition()
+    if (!pointer) return
+    const mousePointTo = {
+      x: (pointer.x - stage.x()) / oldScale,
+      y: (pointer.y - stage.y()) / oldScale,
+    }
+    const direction = e.evt.deltaY > 0 ? -1 : 1
+    const newScale = direction > 0
+      ? Math.min(oldScale * ZOOM_SPEED, MAX_SCALE)
+      : Math.max(oldScale / ZOOM_SPEED, MIN_SCALE)
+    setStageScale(newScale)
+    setStagePos({
+      x: pointer.x - mousePointTo.x * newScale,
+      y: pointer.y - mousePointTo.y * newScale,
+    })
+  }, [setStageScale, setStagePos])
   const stageRef = useRef<Konva.Stage>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const shapeRefs = useRef<Map<string, Konva.Node>>(new Map())
@@ -203,7 +229,7 @@ export function Canvas() {
     contextMenu, setContextMenu, handleContextMenu, handleStageContextMenu,
   } = useContextMenu({
     onSelect, onBringToFront, onBringForward, onSendBackward, onSendToBack,
-    didPanRef, onActivity,
+    didPanRef, onActivity, shapeRefs, stageRef,
   })
 
   const { shiftHeld, ctrlHeld } = useModifierKeys()
@@ -824,9 +850,6 @@ export function Canvas() {
           drawSnapStartRef, connectorHintDrawingRef, drawIsLineRef,
           isDrawing, drawStart, setDrawPreview, setLinePreview, setConnectorHint,
         }}
-        zoomIn={zoomIn}
-        zoomOut={zoomOut}
-        resetZoom={resetZoom}
         contextMenu={contextMenu}
         setContextMenu={setContextMenu}
         onCellKeyDown={handleCellKeyDown}

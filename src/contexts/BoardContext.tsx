@@ -49,6 +49,15 @@ export interface BoardContextValue {
 
   // Drag overlay (ref-based, no re-render cost)
   dragPositionsRef: React.MutableRefObject<Map<string, Partial<BoardObject>>>
+
+  // Canvas viewport (lifted from useCanvas so top bar can show zoom controls)
+  stagePos: { x: number; y: number }
+  setStagePos: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>
+  stageScale: number
+  setStageScale: React.Dispatch<React.SetStateAction<number>>
+  zoomIn: () => void
+  zoomOut: () => void
+  resetZoom: () => void
 }
 
 // ── Context ──────────────────────────────────────────────────────────

@@ -7,9 +7,13 @@ export interface CommentThreadProps {
   objectId: string
   boardId: string
   position: { x: number; y: number }
+  origin?: { x: number; y: number }
   isOpen: boolean
   onClose: () => void
 }
+
+const EASING = 'cubic-bezier(.34,1.56,.64,1)'
+const SHADOW = '0 4px 16px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.3)'
 
 function formatRelativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -32,41 +36,67 @@ function CommentBubble({
   return (
     <div className={`mb-3 ${isResolved ? 'opacity-50' : ''}`}>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-medium text-slate-600">
+        <span className="text-xs font-medium text-parchment/70">
           {comment.user_display_name ?? 'Unknown'}
         </span>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400">{formatRelativeTime(comment.created_at)}</span>
+          <span className="text-xs text-parchment/40">{formatRelativeTime(comment.created_at)}</span>
           {!isResolved && (
             <button
               onClick={() => onResolve(comment.id)}
-              className="text-xs text-slate-400 hover:text-emerald-600 transition-colors"
+              className="text-xs text-parchment/40 hover:text-emerald-400 transition-colors"
               aria-label="Resolve comment"
             >
               Resolve
             </button>
           )}
           {isResolved && (
-            <span className="text-xs text-emerald-500">Resolved</span>
+            <span className="text-xs text-emerald-400">Resolved</span>
           )}
         </div>
       </div>
-      <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-800">
+      <div className="rounded-lg bg-navy/60 border border-navy/40 px-3 py-2 text-sm text-parchment/90">
         {comment.content}
       </div>
     </div>
   )
 }
 
+const MIN_WIDTH = 240
+const MIN_HEIGHT = 200
+
 export function CommentThread({
   objectId,
   boardId,
   position,
+  origin,
   isOpen,
   onClose,
 }: CommentThreadProps) {
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Draggable + resizable state
+  const [pos, setPos] = useState(position)
+  const [size, setSize] = useState({ width: 288, height: 400 })
+  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
+  const resizeRef = useRef<{ startX: number; startY: number; origW: number; origH: number } | null>(null)
+
+  // Emerge animation state
+  const [emerged, setEmerged] = useState(false)
+  const rafRef = useRef(0)
+
+  useEffect(() => {
+    const raf1 = requestAnimationFrame(() => {
+      rafRef.current = requestAnimationFrame(() => setEmerged(true))
+    })
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(rafRef.current) }
+  }, [])
+
+  // Sync position when the prop changes (e.g. opening on a different shape)
+  useEffect(() => {
+    setPos(position)
+  }, [position.x, position.y]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { comments, isLoading, error, addComment, resolveComment } = useComments({
     boardId,
@@ -93,19 +123,95 @@ export function CommentThread({
     }
   }, [handleSend])
 
+  // ── Drag handling (header) ────────────────────────────────────────────────
+  const handleDragMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('button')) return
+    e.preventDefault()
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y }
+
+    const handleMouseMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return
+      const dx = ev.clientX - dragRef.current.startX
+      const dy = ev.clientY - dragRef.current.startY
+      setPos({
+        x: Math.max(0, Math.min(dragRef.current.origX + dx, window.innerWidth - 100)),
+        y: Math.max(0, Math.min(dragRef.current.origY + dy, window.innerHeight - 50)),
+      })
+    }
+    const handleMouseUp = () => {
+      dragRef.current = null
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+  }, [pos.x, pos.y])
+
+  // ── Resize handling (bottom-right corner) ─────────────────────────────────
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    resizeRef.current = { startX: e.clientX, startY: e.clientY, origW: size.width, origH: size.height }
+
+    const handleMouseMove = (ev: MouseEvent) => {
+      if (!resizeRef.current) return
+      const dx = ev.clientX - resizeRef.current.startX
+      const dy = ev.clientY - resizeRef.current.startY
+      setSize({
+        width: Math.max(MIN_WIDTH, resizeRef.current.origW + dx),
+        height: Math.max(MIN_HEIGHT, resizeRef.current.origH + dy),
+      })
+    }
+    const handleMouseUp = () => {
+      resizeRef.current = null
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+  }, [size.width, size.height])
+
   if (!isOpen) return null
+
+  // Compute emerge transform: translate from origin to final position + scale up
+  const emergeTransform = (() => {
+    if (emerged) return 'scale(1) translate(0, 0)'
+    if (origin) {
+      const dx = origin.x - pos.x
+      const dy = origin.y - pos.y
+      return `scale(0.05) translate(${dx}px, ${dy}px)`
+    }
+    return 'scale(0.05)'
+  })()
 
   return (
     <div
-      className="fixed z-50 w-72 rounded-lg bg-white shadow-xl border border-slate-200 flex flex-col overflow-hidden"
-      style={{ left: position.x, top: position.y, maxHeight: '60vh' }}
+      className="fixed z-50 rounded-lg bg-charcoal border border-navy/40 flex flex-col overflow-hidden"
+      style={{
+        left: pos.x,
+        top: pos.y,
+        width: size.width,
+        height: size.height,
+        boxShadow: SHADOW,
+        opacity: emerged ? 1 : 0,
+        transform: emergeTransform,
+        transformOrigin: origin
+          ? `${origin.x - pos.x}px ${origin.y - pos.y}px`
+          : 'top left',
+        transition: `opacity 250ms ${EASING}, transform 300ms ${EASING}`,
+      }}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50 shrink-0">
-        <span className="text-sm font-semibold text-slate-700">Comments</span>
+      {/* Header — drag handle */}
+      <div
+        className="flex items-center justify-between px-4 py-3 border-b border-navy/30 bg-navy/40 shrink-0 select-none"
+        style={{ cursor: 'grab' }}
+        onMouseDown={handleDragMouseDown}
+      >
+        <span className="text-sm font-semibold text-parchment">Comments</span>
         <button
           onClick={onClose}
-          className="text-slate-400 hover:text-slate-600 transition-colors"
+          className="text-parchment/50 hover:text-parchment transition-colors"
           aria-label="Close"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -115,12 +221,12 @@ export function CommentThread({
       </div>
 
       {/* Comments list */}
-      <div className="flex-1 min-h-24 p-4 overflow-y-auto">
+      <div className="flex-1 min-h-0 p-4 overflow-y-auto">
         {isLoading && (
-          <p className="text-xs text-slate-400 text-center">Loading comments…</p>
+          <p className="text-xs text-parchment/40 text-center">Loading comments…</p>
         )}
         {!isLoading && comments.length === 0 && (
-          <p className="text-xs text-slate-400 text-center">No comments yet.</p>
+          <p className="text-xs text-parchment/40 text-center">No comments yet.</p>
         )}
         {comments.map(comment => (
           <CommentBubble
@@ -130,15 +236,15 @@ export function CommentThread({
           />
         ))}
         {error && (
-          <p className="text-xs text-red-500 text-center mt-2">{error}</p>
+          <p className="text-xs text-red-400 text-center mt-2">{error}</p>
         )}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Reply input */}
-      <div className="border-t border-slate-100 p-3 flex gap-2 shrink-0">
+      <div className="border-t border-navy/30 p-3 flex gap-2 shrink-0">
         <textarea
-          className="flex-1 resize-none rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:opacity-50"
+          className="flex-1 resize-none rounded border border-navy/40 bg-navy/30 px-3 py-2 text-sm text-parchment placeholder-parchment/30 focus:outline-none focus:ring-1 focus:ring-leather disabled:opacity-50"
           rows={2}
           placeholder="Add a comment…"
           value={input}
@@ -149,10 +255,21 @@ export function CommentThread({
         <button
           onClick={() => void handleSend()}
           disabled={!input.trim() || isLoading}
-          className="px-3 py-2 rounded bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="px-3 py-2 rounded bg-navy text-parchment text-sm font-medium border border-navy/40 hover:border-parchment-border hover:text-parchment disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           Reply
         </button>
+      </div>
+
+      {/* Resize handle — bottom-right corner */}
+      <div
+        className="absolute bottom-0 right-0 w-4 h-4"
+        style={{ cursor: 'nwse-resize' }}
+        onMouseDown={handleResizeMouseDown}
+      >
+        <svg className="w-4 h-4 text-parchment/20" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M14 14H10L14 10V14ZM14 8L8 14H6L14 6V8Z" />
+        </svg>
       </div>
     </div>
   )

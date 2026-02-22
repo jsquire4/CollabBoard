@@ -49,6 +49,8 @@ export interface AgentLoopConfig {
   executors: Map<string, (args: unknown) => Promise<unknown>>
   /** Optional LangSmith trace metadata (boardId, userId, agentType) */
   traceMetadata?: TraceMetadata
+  /** When false, forces sequential tool execution — prevents races on create→modify flows. Defaults to true (OpenAI default). */
+  parallelToolCalls?: boolean
   onMessage(msg: OpenAI.Chat.ChatCompletionMessageParam): Promise<void>
   onToolResult(name: string, result: unknown): Promise<void>
   onError(err: Error): Promise<void>
@@ -75,7 +77,7 @@ export function runAgentLoop(
   openai: OpenAI,
   config: AgentLoopConfig,
 ): ReadableStream {
-  const { messages, tools, model, executors } = config
+  const { messages, tools, model, executors, parallelToolCalls } = config
   const encoder = new TextEncoder()
   let fullAssistantContent = ''
   const allToolCalls: FunctionToolCall[] = []
@@ -97,6 +99,9 @@ export function runAgentLoop(
             messages,
             tools: tools.length > 0 ? tools : undefined,
             tool_choice: tools.length > 0 ? 'auto' : undefined,
+            ...(tools.length > 0 && parallelToolCalls !== undefined
+              ? { parallel_tool_calls: parallelToolCalls }
+              : {}),
             stream: true,
           }
           // LangSmith metadata — wrapOpenAI reads langsmithExtra from the second arg

@@ -1,6 +1,6 @@
 /**
  * Tests for POST /api/agent/[boardId]/global
- * Now uses OpenAI Assistants API (threads + runs) instead of Chat Completions + board_messages.
+ * Uses Chat Completions (runAgentLoop) — stateless, board state injected per request.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
@@ -8,37 +8,19 @@ import { NextRequest } from 'next/server'
 // ── Hoisted constants + spies ─────────────────────────────────────────────────
 const {
   TEST_BOARD_ID,
-  mockThreadMessageCreate,
-  mockRunStream,
+  mockRunAgentLoop,
   mockGetUser,
   mockMemberSingle,
-  mockGetOrCreateThread,
-  mockEnsureAssistant,
+  mockLoadBoardState,
 } = vi.hoisted(() => ({
   TEST_BOARD_ID: '11111111-1111-1111-1111-111111111111',
-  mockThreadMessageCreate: vi.fn(),
-  mockRunStream: vi.fn(),
+  mockRunAgentLoop: vi.fn(),
   mockGetUser: vi.fn(),
   mockMemberSingle: vi.fn(),
-  mockGetOrCreateThread: vi.fn(),
-  mockEnsureAssistant: vi.fn(),
+  mockLoadBoardState: vi.fn(),
 }))
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
-vi.mock('openai', () => ({
-  default: vi.fn().mockImplementation(function() {
-    return {
-      beta: {
-        threads: {
-          messages: { create: mockThreadMessageCreate },
-          runs: { stream: mockRunStream },
-        },
-        assistants: { create: vi.fn().mockResolvedValue({ id: 'asst_test' }) },
-      },
-    }
-  }),
-}))
-
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: { getUser: mockGetUser },
@@ -62,11 +44,7 @@ vi.mock('@/lib/supabase/admin', () => ({
 }))
 
 vi.mock('@/lib/agent/boardState', () => ({
-  loadBoardState: vi.fn().mockResolvedValue({
-    boardId: TEST_BOARD_ID,
-    objects: new Map(),
-    fieldClocks: new Map(),
-  }),
+  loadBoardState: mockLoadBoardState,
 }))
 
 vi.mock('@/lib/agent/tools', () => ({
@@ -79,30 +57,9 @@ vi.mock('@/lib/userUtils', () => ({
   getUserDisplayName: vi.fn().mockReturnValue('Alice'),
 }))
 
-vi.mock('@/lib/agent/assistantsThread', () => ({
-  getOrCreateThread: mockGetOrCreateThread,
-  ensureAssistant: mockEnsureAssistant,
-}))
-
 vi.mock('@/lib/agent/sse', () => ({
-  getOpenAI: vi.fn().mockReturnValue({
-    beta: {
-      threads: {
-        messages: { create: mockThreadMessageCreate },
-        runs: { stream: mockRunStream },
-      },
-      assistants: { create: vi.fn().mockResolvedValue({ id: 'asst_test' }) },
-    },
-  }),
-  runAssistantsLoop: vi.fn().mockReturnValue(
-    new ReadableStream({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'text-delta', text: 'Hello' })}\n\n`))
-        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
-        controller.close()
-      },
-    }),
-  ),
+  getOpenAI: vi.fn().mockReturnValue({}),
+  runAgentLoop: mockRunAgentLoop,
   SSE_HEADERS: {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -127,6 +84,16 @@ function makeParams(boardId = TEST_BOARD_ID) {
   return { params: Promise.resolve({ boardId }) }
 }
 
+function makeSSEStream(): ReadableStream {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'text-delta', text: 'Hello' })}\n\n`))
+      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
+      controller.close()
+    },
+  })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('OPENAI_API_KEY', 'test-key')
@@ -139,9 +106,12 @@ beforeEach(() => {
     data: { role: 'editor', can_use_agents: true },
     error: null,
   })
-  mockGetOrCreateThread.mockResolvedValue('thread_test123')
-  mockEnsureAssistant.mockResolvedValue('asst_test123')
-  mockThreadMessageCreate.mockResolvedValue({ id: 'msg_test' })
+  mockLoadBoardState.mockResolvedValue({
+    boardId: TEST_BOARD_ID,
+    objects: new Map(),
+    fieldClocks: new Map(),
+  })
+  mockRunAgentLoop.mockReturnValue(makeSSEStream())
 })
 
 afterEach(() => {
@@ -186,18 +156,6 @@ describe('POST /api/agent/[boardId]/global', () => {
     expect(res.headers.get('Content-Type')).toContain('text/event-stream')
   })
 
-  it('adds prefixed user message to the OpenAI thread', async () => {
-    await POST(makeRequest({ message: 'Hello board' }), makeParams())
-
-    expect(mockThreadMessageCreate).toHaveBeenCalledWith(
-      'thread_test123',
-      expect.objectContaining({
-        role: 'user',
-        content: expect.stringMatching(/^\[Alice \(editor\)\]: Hello board$/),
-      }),
-    )
-  })
-
   it('returns 400 for non-UUID boardId', async () => {
     const res = await POST(makeRequest({ message: 'Hi' }), { params: Promise.resolve({ boardId: 'not-a-uuid' }) })
     expect(res.status).toBe(400)
@@ -211,33 +169,85 @@ describe('POST /api/agent/[boardId]/global', () => {
     expect(await res.json()).toMatchObject({ error: expect.stringMatching(/OPENAI_API_KEY/i) })
   })
 
+  it('calls runAgentLoop with prefixed user message and gpt-4o-mini model', async () => {
+    await POST(makeRequest({ message: 'Hello board' }), makeParams())
+
+    expect(mockRunAgentLoop).toHaveBeenCalledOnce()
+    const config = mockRunAgentLoop.mock.calls[0][1]
+    expect(config.model).toBe('gpt-4o-mini')
+    const userMsg = config.messages.find((m: { role: string }) => m.role === 'user')
+    expect(userMsg.content).toMatch(/^\[Alice \(editor\)\]: Hello board/)
+  })
+
+  it('uses parallelToolCalls: false', async () => {
+    await POST(makeRequest({ message: 'Hi' }), makeParams())
+    const config = mockRunAgentLoop.mock.calls[0][1]
+    expect(config.parallelToolCalls).toBe(false)
+  })
+
+  it('omits board_state block when board is empty', async () => {
+    await POST(makeRequest({ message: 'Hi' }), makeParams())
+    const config = mockRunAgentLoop.mock.calls[0][1]
+    const userMsg = config.messages.find((m: { role: string }) => m.role === 'user')
+    expect(userMsg.content).not.toContain('<board_state>')
+  })
+
+  it('injects board_state into user message when board has objects', async () => {
+    const stickyId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+    mockLoadBoardState.mockResolvedValueOnce({
+      boardId: TEST_BOARD_ID,
+      objects: new Map([[stickyId, {
+        id: stickyId, type: 'sticky_note', board_id: TEST_BOARD_ID,
+        x: 100, y: 200, width: 150, height: 150,
+        text: 'Hello', title: null, color: '#FFEB3B',
+        parent_id: null, deleted_at: null,
+      }]]),
+      fieldClocks: new Map(),
+    })
+
+    await POST(makeRequest({ message: 'What is on the board?' }), makeParams())
+    const config = mockRunAgentLoop.mock.calls[0][1]
+    const userMsg = config.messages.find((m: { role: string }) => m.role === 'user')
+    expect(userMsg.content).toContain('<board_state>')
+    expect(userMsg.content).toContain(stickyId)
+    expect(userMsg.content).toContain('sticky_note')
+  })
+
   it('sanitizes display name special chars in prefix', async () => {
     const { getUserDisplayName } = await import('@/lib/userUtils')
     vi.mocked(getUserDisplayName).mockReturnValueOnce('Alice [Admin]')
     await POST(makeRequest({ message: 'Hi' }), makeParams())
 
-    expect(mockThreadMessageCreate).toHaveBeenCalledWith(
-      'thread_test123',
-      expect.objectContaining({
-        content: expect.stringContaining('Alice Admin'),
-      }),
-    )
-    // Brackets should be stripped
-    const content = mockThreadMessageCreate.mock.calls[0][1].content as string
-    expect(content).not.toMatch(/\[Admin\]/)
+    const config = mockRunAgentLoop.mock.calls[0][1]
+    const userMsg = config.messages.find((m: { role: string }) => m.role === 'user')
+    expect(userMsg.content).not.toMatch(/\[Admin\]/)
+    expect(userMsg.content).toContain('Alice Admin')
   })
 
-  it('calls getOrCreateThread with boardId', async () => {
-    await POST(makeRequest({ message: 'Hi' }), makeParams())
-    expect(mockGetOrCreateThread).toHaveBeenCalledWith(expect.anything(), TEST_BOARD_ID)
+  it('returns 503 when loadBoardState fails', async () => {
+    mockLoadBoardState.mockRejectedValueOnce(new Error('DB error'))
+    const res = await POST(makeRequest({ message: 'Hi' }), makeParams())
+    expect(res.status).toBe(503)
   })
 
-  it('calls ensureAssistant with tools and system prompt', async () => {
-    await POST(makeRequest({ message: 'Hi' }), makeParams())
-    expect(mockEnsureAssistant).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.any(Array),
-      expect.stringContaining('global board assistant'),
-    )
+  it('adds truncation note when board state exceeds char limit', async () => {
+    // Generate enough objects to exceed 50K chars
+    const objects = new Map()
+    for (let i = 0; i < 600; i++) {
+      const id = `${String(i).padStart(8, '0')}-0000-0000-0000-000000000000`
+      objects.set(id, {
+        id, type: 'sticky_note', board_id: TEST_BOARD_ID,
+        x: i * 10, y: 0, width: 150, height: 150,
+        text: `Object number ${i} with some text content to bulk up the payload`,
+        title: null, color: '#FFEB3B', parent_id: null, deleted_at: null,
+      })
+    }
+    mockLoadBoardState.mockResolvedValueOnce({ boardId: TEST_BOARD_ID, objects, fieldClocks: new Map() })
+
+    await POST(makeRequest({ message: 'Summarize the board' }), makeParams())
+    const config = mockRunAgentLoop.mock.calls[0][1]
+    const userMsg = config.messages.find((m: { role: string }) => m.role === 'user')
+    expect(userMsg.content).toContain('truncated')
+    expect(userMsg.content).toContain('<board_state')
   })
 })

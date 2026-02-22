@@ -33,6 +33,7 @@ import { CanvasErrorBoundary } from './CanvasErrorBoundary'
 import { GroupBreadcrumb } from './GroupBreadcrumb'
 import { isVectorType } from './shapeUtils'
 import { FloatingShapePalette } from './FloatingShapePalette'
+import { RadialShapePicker, type RadialPickerState } from './RadialShapePicker'
 import { shapeRegistry } from './shapeRegistry'
 import { getShapeAnchors } from './anchorPoints'
 import type { ShapePreset } from './shapePresets'
@@ -160,6 +161,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const clearPendingEditId = useCallback(() => setPendingEditId(null), [])
   const [snapIndicator, setSnapIndicator] = useState<{ x: number; y: number } | null>(null)
   const [shapePalette, setShapePalette] = useState<{ lineId: string; canvasX: number; canvasY: number; screenX?: number; screenY?: number } | null>(null)
+  const [radialPicker, setRadialPicker] = useState<RadialPickerState | null>(null)
 
   // Grid settings — initialized from server props, persisted on change
   const { gridSize, gridSubdivisions, gridVisible, snapToGrid, gridStyle, canvasColor, gridColor, subdivisionColor, updateBoardSettings } = useGridSettings({
@@ -328,6 +330,24 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     setActivePreset(null)
   }, [])
 
+  const handleEmptyCanvasClick = useCallback((screenX: number, screenY: number, canvasX: number, canvasY: number) => {
+    if (!canEdit) return
+    setRadialPicker({ triggerX: screenX, triggerY: screenY, canvasX, canvasY })
+  }, [canEdit])
+
+  const handleRadialDraw = useCallback((type: BoardObjectType, x: number, y: number, width: number, height: number) => {
+    if (!canEdit) return
+    markActivity()
+    const overrides: Partial<BoardObject> = { width, height }
+    if (type === 'line' || type === 'arrow' || type === 'data_connector') {
+      overrides.x2 = x + (width || 120)
+      overrides.y2 = y + (height || 40)
+    }
+    const obj = addObject(type, x, y, overrides)
+    if (obj) undoStack.push({ type: 'add', ids: [obj.id] })
+    setRadialPicker(null)
+  }, [canEdit, addObject, undoStack, markActivity])
+
   const handleDrawShape = useCallback((type: BoardObjectType, x: number, y: number, width: number, height: number) => {
     if (!canEdit) return
     markActivity()
@@ -480,6 +500,11 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
       setShapePalette(null)
     }
   }, [shapePalette, activeTool, selectedIds])
+
+  // Dismiss radial picker when a tool is activated
+  useEffect(() => {
+    if (radialPicker && activeTool) setRadialPicker(null)
+  }, [radialPicker, activeTool])
 
   // Exit vertex edit when selection changes
   useEffect(() => {
@@ -716,6 +741,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     onAgentClick: handleAgentClick,
     onApiConfigChange: handleApiConfigChange,
     onCommentOpen: handleCommentOpen,
+    onEmptyCanvasClick: handleEmptyCanvasClick,
   }), [
     handleDrawShape, handleCancelTool,
     selectObject, selectObjects, clearSelection, enterGroup, exitGroup,
@@ -742,6 +768,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     handleAddRow, handleDeleteRow, handleAddColumn, handleDeleteColumn,
     handleAddRowAt, handleDeleteRowAt, handleAddColumnAt, handleDeleteColumnAt,
     handleAgentClick, handleApiConfigChange, handleCommentOpen,
+    handleEmptyCanvasClick,
   ])
 
   // ── Tool context ──
@@ -832,6 +859,16 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           y={shapePalette.screenY ?? window.innerHeight / 2}
           onSelectShape={handlePaletteShapeSelect}
           onDismiss={() => setShapePalette(null)}
+        />
+      )}
+      {radialPicker && (
+        <RadialShapePicker
+          triggerX={radialPicker.triggerX}
+          triggerY={radialPicker.triggerY}
+          canvasX={radialPicker.canvasX}
+          canvasY={radialPicker.canvasY}
+          onDrawShape={handleRadialDraw}
+          onClose={() => setRadialPicker(null)}
         />
       )}
       {/* Global Agent toggle button */}

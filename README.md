@@ -64,4 +64,4 @@ Deploy to [Vercel](https://vercel.com) with the same env vars pointing to your h
 
 ## License
 
-Private.
+MIT

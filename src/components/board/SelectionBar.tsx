@@ -6,7 +6,6 @@ import { useBoardMutations } from '@/contexts/BoardMutationsContext'
 import { selectionBBox } from '@/lib/geometry/bbox'
 
 // ── Text-bearing types that show the TextColor button ─────────────────
-// Must stay in sync with TEXT_TYPES in PropertiesPanel.tsx.
 const TEXT_COLOR_TYPES = new Set([
   'sticky_note',
   'text',

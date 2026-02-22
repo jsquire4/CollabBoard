@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
   // 7. Send email (fire-and-forget — don't fail the invite on email error)
   let emailWarning: string | undefined
   try {
-    await resend.emails.send({
+    const { error: sendError } = await resend.emails.send({
       from: 'Theorem <notifications@theorem.app>',
       to: email,
       subject: `${inviterName} invited you to "${boardName}"`,
@@ -152,6 +152,10 @@ export async function POST(request: NextRequest) {
         </div>
       `,
     })
+    if (sendError) {
+      console.error('[api/invites] Resend API error:', sendError)
+      emailWarning = 'Invite created but email notification could not be sent'
+    }
   } catch (err) {
     console.error('[api/invites] Failed to send email:', err)
     emailWarning = 'Invite created but email notification could not be sent'

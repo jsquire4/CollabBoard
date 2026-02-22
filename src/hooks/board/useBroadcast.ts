@@ -122,7 +122,11 @@ export function useBroadcast({ channel, userId, setObjects, fieldClocksRef, hlcR
       if (byteSize > BROADCAST_WARN_BYTES) {
         console.warn(`Broadcast payload near limit: ${(byteSize / 1024).toFixed(1)}KB`)
       }
-      channel.send({ type: 'broadcast', event: 'board:sync', payload })
+      try {
+        channel.send({ type: 'broadcast', event: 'board:sync', payload })
+      } catch (err) {
+        console.warn('[Realtime] channel.send() threw unexpectedly:', err)
+      }
     } else {
       const chunks: BoardChange[][] = []
       let current: BoardChange[] = []
@@ -143,11 +147,15 @@ export function useBroadcast({ channel, userId, setObjects, fieldClocksRef, hlcR
 
       console.warn(`Broadcast payload ${(byteSize / 1024).toFixed(1)}KB exceeds limit, splitting into ${chunks.length} chunks`)
       for (const chunk of chunks) {
-        channel.send({
-          type: 'broadcast',
-          event: 'board:sync',
-          payload: { changes: chunk, sender_id: userId },
-        })
+        try {
+          channel.send({
+            type: 'broadcast',
+            event: 'board:sync',
+            payload: { changes: chunk, sender_id: userId },
+          })
+        } catch (err) {
+          console.warn('[Realtime] channel.send() threw unexpectedly (chunk):', err)
+        }
       }
     }
   }, [channel, userId])
@@ -273,6 +281,9 @@ export function useBroadcast({ channel, userId, setObjects, fieldClocksRef, hlcR
       if (payload.cursor_pos) {
         onRemoteCursorRef.current?.(payload.sender_id, payload.cursor_pos)
       }
+
+      // Guard against malformed payloads (e.g., missing or non-array changes field)
+      if (!Array.isArray(payload.changes)) return
 
       // Advance local HLC from any remote clocks
       if (CRDT_ENABLED) {

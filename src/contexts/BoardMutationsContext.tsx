@@ -135,6 +135,9 @@ export interface BoardMutationsContextValue {
   onAgentClick?: (id: string) => void
   onApiConfigChange?: (id: string, formula: string) => void
   onCommentOpen?: (id: string) => void
+
+  // Empty canvas click — triggers contextual shape picker
+  onEmptyCanvasClick?: (screenX: number, screenY: number, canvasX: number, canvasY: number) => void
 }
 
 const BoardMutationsContext = createContext<BoardMutationsContextValue | null>(null)

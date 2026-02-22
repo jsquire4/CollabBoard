@@ -131,6 +131,7 @@ export function Canvas() {
     onApiConfigChange,
     onCut,
     onCommentOpen,
+    onEmptyCanvasClick,
   } = useBoardMutations()
   // ── Read shared state from context ──────────────────────────────
   const {
@@ -376,11 +377,19 @@ export function Canvas() {
     if (e.target === e.target.getStage()) {
       if (activeGroupId) {
         onExitGroup()
-      } else {
+      } else if (selectedIds.size > 0) {
         onClearSelection()
+      } else {
+        // Nothing selected and nothing to deselect — show contextual shape picker
+        const pos = stageRef.current?.getPointerPosition()
+        if (pos) {
+          const cx = (pos.x - stagePos.x) / stageScale
+          const cy = (pos.y - stagePos.y) / stageScale
+          onEmptyCanvasClick?.(pos.x, pos.y, cx, cy)
+        }
       }
     }
-  }, [onClearSelection, onExitGroup, activeGroupId, activeTool])
+  }, [onClearSelection, onExitGroup, onEmptyCanvasClick, activeGroupId, activeTool, selectedIds, stageRef, stagePos, stageScale])
 
   // Handle shape click with modifier keys + triple-click detection
   const handleShapeSelect = useCallback((id: string) => {

@@ -165,6 +165,12 @@ beforeEach(() => {
   }))
   mockCreateDefaultTableData.mockReturnValue({ columns: [], rows: [] })
   mockSerializeTableData.mockReturnValue('{"columns":[],"rows":[]}')
+  // Default for create tools that call loadBoardState when x,y not provided
+  mockLoadBoardState.mockResolvedValue({
+    boardId: 'board-1',
+    objects: new Map(),
+    fieldClocks: new Map(),
+  })
 })
 
 // ══════════════════════════════════════════════════════════════════════════════

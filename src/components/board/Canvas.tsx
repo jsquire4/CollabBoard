@@ -108,7 +108,7 @@ export function Canvas() {
     onGroup, onUngroup, canGroup, canUngroup,
     onStrokeStyleChange, onOpacityChange, onMarkerChange,
     onDragStart: onDragStartProp, onUndo, onRedo,
-    onCheckFrameContainment, onMoveGroupChildren,
+    onCheckFrameContainment, onEnsureFrameChildren, onMoveGroupChildren,
     recentColors, colors, selectedColor,
     onEndpointDragMove, onEndpointDragEnd,
     onCursorMove, onCursorUpdate,
@@ -216,9 +216,9 @@ export function Canvas() {
 
   const { handleShapeDragStart, handleShapeDragMove, handleShapeDragEnd, shapeDragBoundFunc } = useShapeDrag({
     shapeRefs, stageRef, stagePos, stageScale,
-    objectsRef,
+    objectsRef, getDescendants,
     onDragStart: onDragStartProp, onDragEnd, onDragMove,
-    onMoveGroupChildren, onCheckFrameContainment, onCursorMove,
+    onMoveGroupChildren, onCheckFrameContainment, onEnsureFrameChildren, onCursorMove,
     isDraggingRef, lastDragCursorPosRef, dragPositionsRef, sendCursorDirect,
   })
 

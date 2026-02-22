@@ -64,6 +64,7 @@ export interface BoardMutationsContextValue {
 
   // Frame containment
   onCheckFrameContainment: (id: string) => void
+  onEnsureFrameChildren?: (frameId: string) => void
   onMoveGroupChildren: (parentId: string, dx: number, dy: number, skipDb?: boolean) => void
 
   // Colors

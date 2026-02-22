@@ -340,19 +340,18 @@ export function ContextMenu({
     }
   }, [])
 
-  // Click-outside handler — closes menu on mousedown outside
+  // Close on left or right click outside — use capture so we run before canvas/Konva
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         onClose()
       }
     }
-    const rafId = requestAnimationFrame(() => {
-      window.addEventListener('mousedown', handleClickOutside)
-    })
+    window.addEventListener('mousedown', handleClickOutside, true)
+    window.addEventListener('contextmenu', handleClickOutside, true)
     return () => {
-      cancelAnimationFrame(rafId)
-      window.removeEventListener('mousedown', handleClickOutside)
+      window.removeEventListener('mousedown', handleClickOutside, true)
+      window.removeEventListener('contextmenu', handleClickOutside, true)
     }
   }, [onClose])
 

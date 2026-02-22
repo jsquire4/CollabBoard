@@ -159,7 +159,7 @@ export function useAgentChat({ boardId, mode, enabled = true, viewportCenter }: 
       : `/api/agent/${boardId}`
 
     const requestBody = mode.type === 'global'
-      ? { message }
+      ? { message, ...(viewportCenter ? { viewportCenter } : {}) }
       : {
           message,
           agentObjectId: mode.agentObjectId,

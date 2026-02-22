@@ -5,6 +5,7 @@
 import { loadBoardState, broadcastChanges } from '@/lib/agent/boardState'
 import { makeToolDef, advanceClock, updateFields } from './helpers'
 import { stampFields } from '@/lib/crdt/merge'
+import { findOpenArea } from './placement'
 import { layoutObjectsSchema, computePlacementSchema } from './schemas'
 import type { BoardObject } from '@/types/board'
 import type { ToolContext, ToolDef } from './types'
@@ -14,25 +15,6 @@ const MOVEABLE_TYPES = new Set([
   'sticky_note', 'rectangle', 'circle', 'triangle', 'chevron',
   'parallelogram', 'ngon', 'frame', 'image', 'file', 'table',
 ])
-
-// ── Open area finder ──────────────────────────────────────────────────────────
-
-const OPEN_AREA_MARGIN = 40
-
-function findOpenArea(
-  objects: Map<string, BoardObject>,
-  width: number,
-  height: number,
-): { x: number; y: number } {
-  let maxRight = -Infinity
-  for (const obj of objects.values()) {
-    if (obj.deleted_at) continue
-    const right = (obj.x ?? 0) + (obj.width ?? 0)
-    if (right > maxRight) maxRight = right
-  }
-  if (maxRight === -Infinity) return { x: 100, y: 100 }
-  return { x: maxRight + OPEN_AREA_MARGIN, y: 100 }
-}
 
 // ── Grid cell computation ─────────────────────────────────────────────────────
 
@@ -78,7 +60,7 @@ export const layoutObjectTools: ToolDef[] = [
       const freshState = await loadBoardState(ctx.boardId)
       ctx.state = freshState
 
-      const origin = findOpenArea(freshState.objects, args.width, args.height)
+      const origin = findOpenArea(freshState.objects, args.width, args.height, ctx.viewportCenter)
       const cells = computeGridCells(
         origin.x,
         origin.y,

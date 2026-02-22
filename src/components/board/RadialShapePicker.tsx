@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useCallback } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import type { BoardObjectType, BoardObject } from '@/types/board'
 import {
@@ -113,6 +113,8 @@ export interface RadialShapePickerProps {
   canvasY: number
   onDrawShape: (type: BoardObjectType, x: number, y: number, w: number, h: number, overrides?: Partial<BoardObject>) => void
   onClose: () => void
+  /** Called when user initiates close (click outside, X, hover, Escape) — use for cooldown to prevent immediate reopen */
+  onCloseRequested?: () => void
 }
 
 // ── Layout constants ─────────────────────────────────────────────────────────
@@ -135,6 +137,7 @@ export function RadialShapePicker({
   canvasY,
   onDrawShape,
   onClose,
+  onCloseRequested,
 }: RadialShapePickerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [activeGroup, setActiveGroup] = useState<string | null>(null)
@@ -146,6 +149,27 @@ export function RadialShapePicker({
   // activation, forcing React to unmount → remount for a fresh animation.
   const [revealGen, setRevealGen] = useState(0)
   const raf2Ref = useRef(0)
+  const [isClosing, setIsClosing] = useState(false)
+  const isClosingRef = useRef(false)
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  isClosingRef.current = isClosing
+
+  const CLOSE_DURATION_MS = 180
+  const requestClose = useCallback(() => {
+    if (isClosingRef.current) return
+    isClosingRef.current = true
+    onCloseRequested?.()
+    setIsClosing(true)
+    if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current)
+    closeTimeoutRef.current = setTimeout(() => {
+      closeTimeoutRef.current = null
+      onClose()
+    }, CLOSE_DURATION_MS)
+  }, [onClose, onCloseRequested])
+
+  useEffect(() => () => {
+    if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current)
+  }, [])
 
   // Animate group buttons in on mount
   useEffect(() => {
@@ -178,16 +202,36 @@ export function RadialShapePicker({
         if (activeGroup) {
           setActiveGroup(null)
         } else {
-          onClose()
+          requestClose()
         }
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [onClose, activeGroup])
+  }, [requestClose, activeGroup])
 
   // Dismiss on click outside
-  useClickOutside(containerRef, true, onClose)
+  useClickOutside(containerRef, true, requestClose)
+
+  // Hover-to-close: dismiss shortly after cursor leaves the menu
+  const HOVER_CLOSE_DELAY_MS = 280
+  const hoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleMouseLeave = useCallback(() => {
+    if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current)
+    hoverCloseTimerRef.current = setTimeout(() => {
+      hoverCloseTimerRef.current = null
+      requestClose()
+    }, HOVER_CLOSE_DELAY_MS)
+  }, [requestClose])
+  const handleMouseEnter = useCallback(() => {
+    if (hoverCloseTimerRef.current) {
+      clearTimeout(hoverCloseTimerRef.current)
+      hoverCloseTimerRef.current = null
+    }
+  }, [])
+  useEffect(() => () => {
+    if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current)
+  }, [])
 
   // Viewport-clamped position
   const left = Math.max(8, Math.min(triggerX - RADIUS, window.innerWidth - SIZE - 8))
@@ -222,25 +266,33 @@ export function RadialShapePicker({
     ? RADIAL_GROUPS.find(g => g.id === activeGroup)
     : null
 
+  const SPRING = 'cubic-bezier(.34,1.56,.64,1)'
+
   return (
     <div
       ref={containerRef}
       role="dialog"
       aria-label="Shape picker"
-      className="fixed z-[300]"
+      className={`fixed z-[300] ${isClosing ? 'pointer-events-none' : ''}`}
       style={{ left, top, width: SIZE, height: SIZE }}
+      onMouseLeave={handleMouseLeave}
+      onMouseEnter={handleMouseEnter}
     >
-      {/* Close button — dead center */}
+      {/* Close button — dead center, collapses with radial close (origin is its own center) */}
       <button
         type="button"
         aria-label="Close shape picker"
-        onClick={onClose}
+        onClick={requestClose}
         className="absolute rounded-full bg-red-600 hover:bg-red-500 shadow-lg flex items-center justify-center transition-colors duration-150"
         style={{
           left: RADIUS - CLOSE_SIZE / 2,
           top: RADIUS - CLOSE_SIZE / 2,
           width: CLOSE_SIZE,
           height: CLOSE_SIZE,
+          transformOrigin: `${CLOSE_SIZE / 2}px ${CLOSE_SIZE / 2}px`,
+          opacity: isClosing ? 0 : 1,
+          transform: isClosing ? 'scale(0.3)' : 'scale(1)',
+          transition: isClosing ? `opacity ${CLOSE_DURATION_MS}ms ${SPRING}, transform ${CLOSE_DURATION_MS}ms ${SPRING}` : undefined,
         }}
       >
         <svg
@@ -266,9 +318,14 @@ export function RadialShapePicker({
         const isActive = activeGroup === group.id
         const hasActive = activeGroup !== null
 
-        // Active stays at scale 1, inactive siblings shrink when a group is open
-        let scale = groupsRevealed ? 1 : 0.3
-        if (groupsRevealed && hasActive && !isActive) scale = 0.85
+        // When closing, collapse radially (scale 0.3, opacity 0) like opening in reverse
+        const effectiveRevealed = groupsRevealed && !isClosing
+        let scale = effectiveRevealed ? 1 : 0.3
+        if (effectiveRevealed && hasActive && !isActive) scale = 0.85
+
+        // Transform-origin toward menu center so buttons collapse radially
+        const originX = RADIUS - itemX
+        const originY = RADIUS - itemY
 
         return (
           <button
@@ -286,10 +343,13 @@ export function RadialShapePicker({
               top: itemY,
               width: GROUP_SIZE,
               height: GROUP_SIZE,
-              opacity: groupsRevealed ? (hasActive && !isActive ? 0.45 : 1) : 0,
+              transformOrigin: `${originX}px ${originY}px`,
+              opacity: effectiveRevealed ? (hasActive && !isActive ? 0.45 : 1) : 0,
               transform: `scale(${scale})`,
               boxShadow: '0 4px 16px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.3)',
-              transition: `opacity 140ms cubic-bezier(.34,1.56,.64,1) ${i * 30}ms, transform 140ms cubic-bezier(.34,1.56,.64,1) ${i * 30}ms, background-color 150ms, border-color 150ms`,
+              transition: isClosing
+                ? `opacity ${CLOSE_DURATION_MS}ms ${SPRING}, transform ${CLOSE_DURATION_MS}ms ${SPRING}`
+                : `opacity 140ms ${SPRING} ${i * 30}ms, transform 140ms ${SPRING} ${i * 30}ms, background-color 150ms, border-color 150ms`,
             }}
           >
             <svg
@@ -323,6 +383,9 @@ export function RadialShapePicker({
           const px = RADIUS + Math.cos(angle) * OUTER_R - halfBtn
           const py = RADIUS + Math.sin(angle) * OUTER_R - halfBtn
 
+          const effectiveShapesRevealed = shapesRevealed && !isClosing
+          const shapeOriginX = RADIUS - px
+          const shapeOriginY = RADIUS - py
           return (
             <button
               key={`${revealGen}-${preset.id}`}
@@ -335,10 +398,13 @@ export function RadialShapePicker({
                 top: py,
                 width: SHAPE_SIZE,
                 height: SHAPE_SIZE,
-                opacity: shapesRevealed ? 1 : 0,
-                transform: shapesRevealed ? 'scale(1)' : 'scale(0.3)',
+                transformOrigin: `${shapeOriginX}px ${shapeOriginY}px`,
+                opacity: effectiveShapesRevealed ? 1 : 0,
+                transform: effectiveShapesRevealed ? 'scale(1)' : 'scale(0.3)',
                 boxShadow: '0 4px 16px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.3)',
-                transition: `opacity 140ms cubic-bezier(.34,1.56,.64,1) ${i * 25}ms, transform 140ms cubic-bezier(.34,1.56,.64,1) ${i * 25}ms, border-color 150ms`,
+                transition: isClosing
+                  ? `opacity ${CLOSE_DURATION_MS}ms ${SPRING}, transform ${CLOSE_DURATION_MS}ms ${SPRING}`
+                  : `opacity 140ms ${SPRING} ${i * 25}ms, transform 140ms ${SPRING} ${i * 25}ms, border-color 150ms`,
               }}
             >
               <svg

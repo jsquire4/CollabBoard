@@ -8,6 +8,7 @@ export interface GlobalAgentPanelProps {
   boardId: string
   isOpen: boolean
   onClose: () => void
+  viewportCenter?: { x: number; y: number }
 }
 
 const PANEL_WIDTH = 320
@@ -164,7 +165,7 @@ function MessageRow({ msg }: { msg: ChatMessage }) {
 
 // ── Main Panel ─────────────────────────────────────────────────────────────────
 
-export function GlobalAgentPanel({ boardId, isOpen, onClose }: GlobalAgentPanelProps) {
+export function GlobalAgentPanel({ boardId, isOpen, onClose, viewportCenter }: GlobalAgentPanelProps) {
   const [input, setInput] = useState('')
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
@@ -174,6 +175,7 @@ export function GlobalAgentPanel({ boardId, isOpen, onClose }: GlobalAgentPanelP
     boardId,
     mode,
     enabled: isOpen,
+    viewportCenter,
   })
 
   // Initialize position when first opened

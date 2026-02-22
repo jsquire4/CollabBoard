@@ -589,6 +589,52 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     }
   }, [objects, framesDesc, updateObject])
 
+  /** Assign parent_id to objects whose center is inside the frame but not yet children.
+   *  Called at frame drag start so all contained objects move with the frame. */
+  const ensureFrameChildren = useCallback((frameId: string) => {
+    const frame = objects.get(frameId)
+    if (!frame || frame.type !== 'frame') return
+
+    const fx = frame.x
+    const fy = frame.y
+    const fw = frame.width ?? 0
+    const fh = frame.height ?? 0
+
+    const toAssign: string[] = []
+    setObjects(prev => {
+      const next = new Map(prev)
+      for (const obj of prev.values()) {
+        if (obj.deleted_at || obj.type === 'frame' || obj.type === 'group') continue
+        if (obj.parent_id === frameId) continue
+
+        let centerX: number, centerY: number
+        if (obj.x2 != null && obj.y2 != null) {
+          centerX = (obj.x + obj.x2) / 2
+          centerY = (obj.y + obj.y2) / 2
+        } else {
+          centerX = obj.x + (obj.width ?? 0) / 2
+          centerY = obj.y + (obj.height ?? 0) / 2
+        }
+
+        if (
+          centerX >= fx && centerX <= fx + fw &&
+          centerY >= fy && centerY <= fy + fh
+        ) {
+          const currentParent = obj.parent_id ? prev.get(obj.parent_id) : null
+          if (!currentParent || currentParent.type === 'frame') {
+            next.set(obj.id, { ...obj, parent_id: frameId, updated_at: new Date().toISOString() })
+            toAssign.push(obj.id)
+          }
+        }
+      }
+      return next
+    })
+
+    for (const id of toAssign) {
+      updateObject(id, { parent_id: frameId })
+    }
+  }, [objects, updateObject])
+
   // ── Lock helpers ────────────────────────────────────────────────
 
   const isObjectLocked = useCallback((id: string): boolean => {
@@ -648,6 +694,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     updateObjectDragEnd,
     updateConnectorDrag,
     checkFrameContainment,
+    ensureFrameChildren,
     getChildren,
     getDescendants,
     remoteSelections,

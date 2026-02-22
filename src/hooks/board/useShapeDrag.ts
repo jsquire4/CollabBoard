@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import Konva from 'konva'
 import { BoardObject } from '@/types/board'
 import { useBoardContext } from '@/contexts/BoardContext'
-import { snapToGrid } from '@/components/board/shapeUtils'
+import { snapToGrid, isVectorType } from '@/components/board/shapeUtils'
 import { shapeRegistry } from '@/components/board/shapeRegistry'
+import { syncConnectorVisual } from '@/components/board/vectorImperative'
 
 interface UseShapeDragDeps {
   shapeRefs: React.RefObject<Map<string, Konva.Node>>
@@ -13,11 +14,13 @@ interface UseShapeDragDeps {
   stagePos: { x: number; y: number }
   stageScale: number
   objectsRef: React.RefObject<Map<string, BoardObject>>
+  getDescendants: (parentId: string) => BoardObject[]
   onDragStart?: (id: string) => void
   onDragEnd: (id: string, x: number, y: number) => void
   onDragMove?: (id: string, x: number, y: number) => void
   onMoveGroupChildren: (parentId: string, dx: number, dy: number, skipDb?: boolean) => void
   onCheckFrameContainment: (id: string) => void
+  onEnsureFrameChildren?: (frameId: string) => void
   onCursorMove?: (x: number, y: number) => void
   isDraggingRef?: React.MutableRefObject<boolean>
   lastDragCursorPosRef?: React.MutableRefObject<{ x: number; y: number } | null>
@@ -27,9 +30,9 @@ interface UseShapeDragDeps {
 
 export function useShapeDrag({
   shapeRefs, stageRef, stagePos, stageScale,
-  objectsRef,
+  objectsRef, getDescendants,
   onDragStart: onDragStartProp, onDragEnd, onDragMove, onMoveGroupChildren,
-  onCheckFrameContainment, onCursorMove,
+  onCheckFrameContainment, onEnsureFrameChildren, onCursorMove,
   isDraggingRef, lastDragCursorPosRef, dragPositionsRef, sendCursorDirect,
 }: UseShapeDragDeps) {
   const { canEdit, snapToGrid: snapToGridEnabled, gridSize, gridSubdivisions } = useBoardContext()
@@ -55,8 +58,12 @@ export function useShapeDrag({
         sendCursorDirect?.(lastDragCursorPosRef.current.x, lastDragCursorPosRef.current.y)
       }
     }, 4000)
+    const obj = objectsRef.current.get(id)
+    if (obj?.type === 'frame') {
+      onEnsureFrameChildren?.(id)
+    }
     onDragStartProp?.(id)
-  }, [onDragStartProp, isDraggingRef, lastDragCursorPosRef, sendCursorDirect])
+  }, [onDragStartProp, onEnsureFrameChildren, objectsRef, isDraggingRef, lastDragCursorPosRef, sendCursorDirect])
 
   // Handle drag move: update drag overlay + broadcast, no DB write, no React re-render
   const handleShapeDragMove = useCallback((id: string, x: number, y: number) => {
@@ -108,11 +115,44 @@ export function useShapeDrag({
       }
     }
 
-    // If this is a frame, move children with skipDb
+    // If this is a frame, move children with skipDb and imperatively update Konva nodes
+    // so they follow the frame in real time (no React re-render lag).
     if (obj.type === 'frame') {
       onMoveGroupChildren(id, dx, dy, true)
+      const descendants = getDescendants(id)
+      const overrides = dragPositionsRef?.current
+      for (const d of descendants) {
+        const node = shapeRefs.current.get(d.id)
+        if (!node) continue
+        const updates = overrides?.get(d.id)
+        const newX = updates?.x ?? d.x + dx
+        const newY = updates?.y ?? d.y + dy
+        if (isVectorType(d.type)) {
+          const merged: Partial<BoardObject> = {
+            x: newX,
+            y: newY,
+            x2: updates?.x2 ?? (d.x2 != null ? d.x2 + dx : undefined),
+            y2: updates?.y2 ?? (d.y2 != null ? d.y2 + dy : undefined),
+            waypoints: updates?.waypoints,
+          }
+          syncConnectorVisual(node as Konva.Group, d, merged)
+        } else {
+          const def = shapeRegistry.get(d.type)
+          if (def?.centerOrigin) {
+            const w = d.width ?? 0
+            const h = d.height ?? 0
+            node.position({ x: newX + w / 2, y: newY + h / 2 })
+          } else {
+            node.position({ x: newX, y: newY })
+          }
+        }
+      }
+      if (descendants.length > 0) {
+        const firstNode = shapeRefs.current.get(descendants[0].id)
+        firstNode?.getLayer()?.batchDraw()
+      }
     }
-  }, [canEdit, objectsRef, onDragMove, onMoveGroupChildren, onCursorMove, stagePos, stageScale, snapToGridEnabled, gridSize, gridSubdivisions, shapeRefs, stageRef, lastDragCursorPosRef])
+  }, [canEdit, objectsRef, getDescendants, onDragMove, onMoveGroupChildren, onCursorMove, stagePos, stageScale, snapToGridEnabled, gridSize, gridSubdivisions, shapeRefs, stageRef, lastDragCursorPosRef, dragPositionsRef])
 
   // Timeout ref for deferred frame-containment check — cleared on unmount
   const dragEndTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)

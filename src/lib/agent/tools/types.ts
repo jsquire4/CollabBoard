@@ -12,6 +12,8 @@ export interface ToolContext {
   state: BoardState
   /** When set, scopes tool visibility to objects connected via data_connector edges. */
   agentObjectId?: string
+  /** Optional viewport center (canvas coords) for placement; used as centerHint in findOpenArea. */
+  viewportCenter?: { x: number; y: number }
 }
 
 /**

@@ -97,12 +97,19 @@ export function createTools(ctx: ToolContext, options?: CreateToolsOptions): {
 
 // ── Helper: create a fresh ToolContext with a new HLC ─────────────────────────
 
-export function createToolContext(boardId: string, userId: string, state: BoardState, agentObjectId?: string): ToolContext {
+export function createToolContext(
+  boardId: string,
+  userId: string,
+  state: BoardState,
+  agentObjectId?: string,
+  viewportCenter?: { x: number; y: number },
+): ToolContext {
   return {
     boardId,
     userId,
     hlc: createHLC(userId),
     state,
     agentObjectId,
+    viewportCenter,
   }
 }

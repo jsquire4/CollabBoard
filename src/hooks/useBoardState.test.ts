@@ -726,6 +726,44 @@ describe('useBoardState', () => {
     })
   })
 
+  it('ensureFrameChildren assigns parent_id to objects inside frame at drag start', async () => {
+    const frame = makeFrame({ id: 'f1', board_id: 'board-1', x: 100, y: 100, width: 200, height: 200 })
+    const rect = makeRectangle({ id: 'r1', board_id: 'board-1', x: 150, y: 150, width: 40, height: 40, parent_id: null })
+    const circle = makeCircle({ id: 'c1', board_id: 'board-1', x: 180, y: 180, width: 30, height: 30, parent_id: null })
+    mockFrom.mockImplementation(() =>
+      createBoardObjectsChain({ data: [frame, rect, circle], error: null })
+    )
+
+    const { result } = renderHook(() =>
+      useBoardState('u1', 'board-1', 'editor', null, [])
+    )
+
+    await waitFor(() => expect(result.current.objects.get('r1')).toBeDefined())
+
+    act(() => result.current.ensureFrameChildren('f1'))
+
+    expect(result.current.objects.get('r1')?.parent_id).toBe('f1')
+    expect(result.current.objects.get('c1')?.parent_id).toBe('f1')
+  })
+
+  it('ensureFrameChildren skips objects already in frame', async () => {
+    const frame = makeFrame({ id: 'f1', board_id: 'board-1', x: 0, y: 0, width: 200, height: 200 })
+    const rect = makeRectangle({ id: 'r1', board_id: 'board-1', x: 50, y: 50, width: 40, height: 40, parent_id: 'f1' })
+    mockFrom.mockImplementation(() =>
+      createBoardObjectsChain({ data: [frame, rect], error: null })
+    )
+
+    const { result } = renderHook(() =>
+      useBoardState('u1', 'board-1', 'editor', null, [])
+    )
+
+    await waitFor(() => expect(result.current.objects.get('r1')).toBeDefined())
+
+    act(() => result.current.ensureFrameChildren('f1'))
+
+    expect(result.current.objects.get('r1')?.parent_id).toBe('f1')
+  })
+
   it('isObjectLocked returns true for deep ancestor chain (3+ levels)', async () => {
     const grandparent = makeGroup({ id: 'gp', board_id: 'board-1', z_index: 0, locked_by: 'u1' })
     const parent = makeGroup({ id: 'p1', board_id: 'board-1', parent_id: 'gp', z_index: 1 })

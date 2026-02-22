@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { RadialShapePicker } from './RadialShapePicker'
 
 // ── Default props ─────────────────────────────────────────────────────────────
@@ -137,16 +137,21 @@ describe('RadialShapePicker', () => {
     expect(drawOrder).toBeLessThan(closeOrder)
   })
 
-  // 10. Pressing Escape with no active group calls onClose
+  // 10. Pressing Escape with no active group calls onClose (after closing animation)
   it('pressing Escape calls onClose when no group is open', () => {
+    vi.useFakeTimers()
     const onClose = vi.fn()
     renderPicker({ onClose })
     fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+    act(() => { vi.advanceTimersByTime(180) })
     expect(onClose).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
   })
 
   // 11. Pressing Escape with active group collapses group first
   it('pressing Escape collapses active group before closing picker', () => {
+    vi.useFakeTimers()
     const onClose = vi.fn()
     renderPicker({ onClose })
     openGroup('Utility')
@@ -155,17 +160,24 @@ describe('RadialShapePicker', () => {
     // Group collapsed, picker still open
     expect(onClose).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: /Place Note/i })).toBeNull()
-    // Second Escape closes picker
+    // Second Escape closes picker (after closing animation)
     fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+    act(() => { vi.advanceTimersByTime(180) })
     expect(onClose).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
   })
 
-  // 12. Clicking outside calls onClose
+  // 12. Clicking outside calls onClose (after closing animation)
   it('mousedown outside the picker calls onClose', () => {
+    vi.useFakeTimers()
     const onClose = vi.fn()
     renderPicker({ onClose })
     fireEvent.mouseDown(document.body)
+    expect(onClose).not.toHaveBeenCalled()
+    act(() => { vi.advanceTimersByTime(180) })
     expect(onClose).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
   })
 
   // 13. onClose called even if onDrawShape throws
@@ -306,11 +318,15 @@ describe('RadialShapePicker', () => {
     expect(arrowButtons[0].getAttribute('aria-label')).toBe('Place Arrow Right')
   })
 
-  // 25. Close button calls onClose
+  // 25. Close button calls onClose (after closing animation)
   it('clicking the close button calls onClose', () => {
+    vi.useFakeTimers()
     const onClose = vi.fn()
     renderPicker({ onClose })
     fireEvent.click(screen.getByRole('button', { name: /Close shape picker/i }))
+    expect(onClose).not.toHaveBeenCalled()
+    act(() => { vi.advanceTimersByTime(180) })
     expect(onClose).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
   })
 })

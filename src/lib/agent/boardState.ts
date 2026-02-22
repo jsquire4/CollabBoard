@@ -94,7 +94,7 @@ export function broadcastChanges(boardId: string, changes: BoardChange[]) {
         topic: `board:${boardId}`,
         event: 'board:sync',
         payload: { changes, sender_id: AGENT_SENDER_ID },
-        private: false,
+        private: true,
       }],
     }),
   }).catch(err => {

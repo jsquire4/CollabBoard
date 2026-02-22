@@ -4,18 +4,10 @@
 
 import { getShapeDefaults } from '@/lib/agent/defaults'
 import { createDefaultTableData, serializeTableData } from '@/lib/table/tableUtils'
-import { getMaxZIndex, broadcastChanges } from '@/lib/agent/boardState'
+import { getMaxZIndex, broadcastChanges, loadBoardState } from '@/lib/agent/boardState'
+import { findOpenArea } from './placement'
 import type { BoardObject } from '@/types/board'
-import {
-  buildAndInsertObject,
-  makeToolDef,
-  getConnectedObjectIds,
-  SCATTER_MARGIN,
-  SCATTER_X_WIDE,
-  SCATTER_X_NARROW,
-  SCATTER_Y_WIDE,
-  SCATTER_Y_NARROW,
-} from './helpers'
+import { buildAndInsertObject, makeToolDef, getConnectedObjectIds } from './helpers'
 import {
   createStickyNoteSchema,
   createShapeSchema,
@@ -35,9 +27,17 @@ export const createObjectTools: ToolDef[] = [
     createStickyNoteSchema,
     async (ctx, { text, color, x, y, title }) => {
       const defaults = getShapeDefaults('sticky_note')
+      let px = x
+      let py = y
+      if (px == null || py == null) {
+        const fresh = await loadBoardState(ctx.boardId)
+        const pos = findOpenArea(fresh.objects, defaults.width, defaults.height, ctx.viewportCenter)
+        px = pos.x
+        py = pos.y
+      }
       const result = await buildAndInsertObject(ctx, 'sticky_note', {
-        x: x ?? (SCATTER_MARGIN + Math.random() * SCATTER_X_WIDE),
-        y: y ?? (SCATTER_MARGIN + Math.random() * SCATTER_Y_WIDE),
+        x: px,
+        y: py,
         width: defaults.width,
         height: defaults.height,
         rotation: 0,
@@ -60,9 +60,19 @@ export const createObjectTools: ToolDef[] = [
     createShapeSchema,
     async (ctx, { type, x, y, width, height, color, text, sides }) => {
       const defaults = getShapeDefaults(type)
+      const w = width ?? defaults.width
+      const h = height ?? defaults.height
+      let px = x
+      let py = y
+      if (px == null || py == null) {
+        const fresh = await loadBoardState(ctx.boardId)
+        const pos = findOpenArea(fresh.objects, w, h, ctx.viewportCenter)
+        px = pos.x
+        py = pos.y
+      }
       const fields: Record<string, unknown> = {
-        x: x ?? (SCATTER_MARGIN + Math.random() * SCATTER_X_WIDE),
-        y: y ?? (SCATTER_MARGIN + Math.random() * SCATTER_Y_WIDE),
+        x: px,
+        y: py,
         width: width ?? defaults.width,
         height: height ?? defaults.height,
         rotation: 0,
@@ -86,11 +96,21 @@ export const createObjectTools: ToolDef[] = [
     createFrameSchema,
     async (ctx, { title, x, y, width, height, color }) => {
       const defaults = getShapeDefaults('frame')
+      const w = width ?? defaults.width
+      const h = height ?? defaults.height
+      let px = x
+      let py = y
+      if (px == null || py == null) {
+        const fresh = await loadBoardState(ctx.boardId)
+        const pos = findOpenArea(fresh.objects, w, h, ctx.viewportCenter)
+        px = pos.x
+        py = pos.y
+      }
       const result = await buildAndInsertObject(ctx, 'frame', {
-        x: x ?? (SCATTER_MARGIN + Math.random() * SCATTER_X_NARROW),
-        y: y ?? (SCATTER_MARGIN + Math.random() * SCATTER_Y_NARROW),
-        width: width ?? defaults.width,
-        height: height ?? defaults.height,
+        x: px,
+        y: py,
+        width: w,
+        height: h,
         rotation: 0,
         text: title,
         color: color ?? defaults.color,
@@ -111,10 +131,18 @@ export const createObjectTools: ToolDef[] = [
     createTableSchema,
     async (ctx, { columns, rows, x, y, title }) => {
       const defaults = getShapeDefaults('table')
+      let px = x
+      let py = y
+      if (px == null || py == null) {
+        const fresh = await loadBoardState(ctx.boardId)
+        const pos = findOpenArea(fresh.objects, defaults.width, defaults.height, ctx.viewportCenter)
+        px = pos.x
+        py = pos.y
+      }
       const tableData = createDefaultTableData(columns, rows)
       const result = await buildAndInsertObject(ctx, 'table', {
-        x: x ?? (SCATTER_MARGIN + Math.random() * SCATTER_X_NARROW),
-        y: y ?? (SCATTER_MARGIN + Math.random() * SCATTER_Y_NARROW),
+        x: px,
+        y: py,
         width: defaults.width,
         height: defaults.height,
         rotation: 0,

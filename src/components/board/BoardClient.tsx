@@ -165,7 +165,7 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
     bringToFront, sendToBack, bringForward, sendBackward,
     groupSelected, ungroupSelected,
     moveGroupChildren, updateObjectDrag, updateObjectDragEnd, updateConnectorDrag,
-    checkFrameContainment,
+    checkFrameContainment, ensureFrameChildren,
     getChildren, getDescendants,
     remoteSelections,
     reconcileOnReconnect,
@@ -199,6 +199,7 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
   const [snapIndicator, setSnapIndicator] = useState<{ x: number; y: number } | null>(null)
   const [shapePalette, setShapePalette] = useState<{ lineId: string; canvasX: number; canvasY: number; screenX?: number; screenY?: number } | null>(null)
   const [radialPicker, setRadialPicker] = useState<RadialPickerState | null>(null)
+  const radialClosedAtRef = useRef(0)
 
   // Grid settings — initialized from server props, persisted on change
   const { gridSize, gridSubdivisions, gridVisible, snapToGrid, gridStyle, canvasColor, gridColor, subdivisionColor, updateBoardSettings } = useGridSettings({
@@ -403,6 +404,7 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
 
   const handleEmptyCanvasClick = useCallback((screenX: number, screenY: number, canvasX: number, canvasY: number) => {
     if (!canEdit) return
+    if (Date.now() - radialClosedAtRef.current < 300) return
     setRadialPicker({ triggerX: screenX, triggerY: screenY, canvasX, canvasY })
   }, [canEdit])
 
@@ -874,6 +876,7 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
     onUndo: performUndo,
     onRedo: performRedo,
     onCheckFrameContainment: checkFrameContainment,
+    onEnsureFrameChildren: ensureFrameChildren,
     onMoveGroupChildren: moveGroupChildren,
     recentColors,
     colors: EXPANDED_PALETTE,
@@ -932,7 +935,7 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
     handleGroup, handleUngroup, canGroup, canUngroup,
     handleStrokeStyleChange, handleOpacityChange, handleMarkerChange,
     performUndo, performRedo,
-    checkFrameContainment, moveGroupChildren,
+    checkFrameContainment, ensureFrameChildren, moveGroupChildren,
     recentColors, selectedColor,
     handleEndpointDragMove, handleEndpointDragEnd,
     sendCursorWithActivity, onCursorUpdate, sendCursorDirect,
@@ -1033,6 +1036,7 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
           canvasY={radialPicker.canvasY}
           onDrawShape={handleRadialDraw}
           onClose={() => setRadialPicker(null)}
+          onCloseRequested={() => { radialClosedAtRef.current = Date.now() }}
         />
       )}
       {/* Global Agent toggle button — only when user has can_use_agents */}
@@ -1082,12 +1086,28 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
           onClose={() => setAgentChatPanel(null)}
           agentState={objects.get(agentChatPanel.objectId)?.agent_state ?? 'idle'}
           agentName={objects.get(agentChatPanel.objectId)?.text || 'Board Agent'}
+          viewportCenter={
+            canvasTransform.width && canvasTransform.height
+              ? {
+                  x: (-canvasTransform.x + canvasTransform.width / 2) / canvasTransform.scale,
+                  y: (-canvasTransform.y + canvasTransform.height / 2) / canvasTransform.scale,
+                }
+              : undefined
+          }
         />
       )}
       <GlobalAgentPanel
         boardId={boardId}
         isOpen={globalAgentOpen}
         onClose={() => setGlobalAgentOpen(false)}
+        viewportCenter={
+          canvasTransform.width && canvasTransform.height
+            ? {
+                x: (-canvasTransform.x + canvasTransform.width / 2) / canvasTransform.scale,
+                y: (-canvasTransform.y + canvasTransform.height / 2) / canvasTransform.scale,
+              }
+            : undefined
+        }
       />
       <FileLibraryPanel
         boardId={boardId}

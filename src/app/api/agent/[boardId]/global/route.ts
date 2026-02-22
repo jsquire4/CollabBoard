@@ -118,14 +118,14 @@ export async function POST(
     return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  let body: { message?: string }
+  let body: { message?: string; viewportCenter?: { x: number; y: number } }
   try {
     body = await request.json()
   } catch {
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { message } = body
+  const { message, viewportCenter } = body
   if (!message || typeof message !== 'string') {
     return Response.json({ error: 'message is required' }, { status: 400 })
   }
@@ -153,8 +153,17 @@ export async function POST(
     : `[${safeDisplayName} (${roleName})]: ${message}`
 
   // ── Build tools + executors ───────────────────────────────
+  const validViewport = viewportCenter
+    && typeof viewportCenter.x === 'number' && typeof viewportCenter.y === 'number'
+    && Number.isFinite(viewportCenter.x) && Number.isFinite(viewportCenter.y)
   const toolDefinitions = getToolDefinitions([...GLOBAL_EXCLUDE])
-  const toolCtx = createToolContext(boardId, user.id, boardState)
+  const toolCtx = createToolContext(
+    boardId,
+    user.id,
+    boardState,
+    undefined,
+    validViewport ? viewportCenter : undefined,
+  )
   const { executors } = createTools(toolCtx, { excludeTools: [...GLOBAL_EXCLUDE] })
 
   // ── Stream ────────────────────────────────────────────────

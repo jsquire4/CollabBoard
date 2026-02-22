@@ -136,7 +136,13 @@ Guidelines:
   })
 
   // ── Build messages + tools ────────────────────────────────
-  const toolCtx = createToolContext(boardId, user.id, boardState, agentObjectId)
+  const toolCtx = createToolContext(
+    boardId,
+    user.id,
+    boardState,
+    agentObjectId,
+    validViewport ? viewportCenter : undefined,
+  )
   const { definitions: toolDefinitions, executors } = createTools(toolCtx)
 
   const messages = [

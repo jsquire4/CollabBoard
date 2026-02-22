@@ -204,6 +204,7 @@ describe('boardState', () => {
       const body = JSON.parse(opts.body)
       expect(body.messages[0].topic).toBe('board:board-1')
       expect(body.messages[0].event).toBe('board:sync')
+      expect(body.messages[0].private).toBe(true)
       expect(body.messages[0].payload.sender_id).toBe(AGENT_SENDER_ID)
     })
 

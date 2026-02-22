@@ -14,6 +14,7 @@ const {
   TEST_INVITE_ID,
   mockGetUser,
   mockAdminFrom,
+  mockAdminRpc,
   mockEmailsSend,
 } = vi.hoisted(() => ({
   TEST_BOARD_ID: '11111111-1111-1111-1111-111111111111',
@@ -21,6 +22,7 @@ const {
   TEST_INVITE_ID: 'invite-id-456',
   mockGetUser: vi.fn(),
   mockAdminFrom: vi.fn(),
+  mockAdminRpc: vi.fn(),
   mockEmailsSend: vi.fn(),
 }))
 
@@ -35,6 +37,7 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: vi.fn(() => ({
     from: mockAdminFrom,
+    rpc: mockAdminRpc,
   })),
 }))
 
@@ -82,15 +85,8 @@ function mockMemberCheck(role: string | null) {
   }
 }
 
-function mockUserLookup(userId: string | null) {
-  return {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn().mockResolvedValue({
-      data: userId ? { id: userId } : null,
-      error: null,
-    }),
-  }
+function setupRpcUserLookup(userId: string | null) {
+  mockAdminRpc.mockResolvedValue({ data: userId, error: null })
 }
 
 function mockBoardLookup(name: string) {
@@ -150,11 +146,13 @@ describe('POST /api/invites', () => {
     // Admin from() dispatches based on table
     mockAdminFrom.mockImplementation((table: string) => {
       if (table === 'board_members') return mockMemberCheck('owner')
-      if (table === 'auth.users') return mockUserLookup(null) // no existing user by default
       if (table === 'boards') return mockBoardLookup('My Board')
       if (table === 'board_invites') return mockInviteUpsert()
       return {}
     })
+
+    // Default: no existing user
+    setupRpcUserLookup(null)
 
     // Email send succeeds
     mockEmailsSend.mockResolvedValue({ data: { id: 'email-123' }, error: null })
@@ -258,7 +256,6 @@ describe('POST /api/invites', () => {
     it('allows manager to invite', async () => {
       mockAdminFrom.mockImplementation((table: string) => {
         if (table === 'board_members') return mockMemberCheck('manager')
-        if (table === 'auth.users') return mockUserLookup(null)
         if (table === 'boards') return mockBoardLookup('My Board')
         if (table === 'board_invites') return mockInviteUpsert()
         return {}
@@ -272,12 +269,12 @@ describe('POST /api/invites', () => {
 
   describe('existing user', () => {
     beforeEach(() => {
+      setupRpcUserLookup('existing-user-id')
       mockAdminFrom.mockImplementation((table: string) => {
         if (table === 'board_members') {
           const chain = mockMemberCheck('owner')
           return { ...chain, upsert: vi.fn().mockResolvedValue({ error: null }) }
         }
-        if (table === 'auth.users') return mockUserLookup('existing-user-id')
         return {}
       })
     })
@@ -299,7 +296,6 @@ describe('POST /api/invites', () => {
           const chain = mockMemberCheck('owner')
           return { ...chain, upsert: vi.fn().mockResolvedValue({ error: { message: 'db error' } }) }
         }
-        if (table === 'auth.users') return mockUserLookup('existing-user-id')
         return {}
       })
       const res = await POST(makeRequest(VALID_BODY))
@@ -338,7 +334,6 @@ describe('POST /api/invites', () => {
     it('returns 500 when invite upsert fails', async () => {
       mockAdminFrom.mockImplementation((table: string) => {
         if (table === 'board_members') return mockMemberCheck('owner')
-        if (table === 'auth.users') return mockUserLookup(null)
         if (table === 'board_invites') return mockInviteUpsert(null, { message: 'db error' })
         return {}
       })
@@ -349,7 +344,6 @@ describe('POST /api/invites', () => {
     it('does not send email when invite upsert fails', async () => {
       mockAdminFrom.mockImplementation((table: string) => {
         if (table === 'board_members') return mockMemberCheck('owner')
-        if (table === 'auth.users') return mockUserLookup(null)
         if (table === 'board_invites') return mockInviteUpsert(null, { message: 'db error' })
         return {}
       })
@@ -375,18 +369,9 @@ describe('POST /api/invites', () => {
 
   describe('email normalization', () => {
     it('normalizes email to lowercase', async () => {
-      const mockEq = vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) })
-      const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
-      mockAdminFrom.mockImplementation((table: string) => {
-        if (table === 'board_members') return mockMemberCheck('owner')
-        if (table === 'auth.users') return { select: mockSelect, eq: mockEq, maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) }
-        if (table === 'boards') return mockBoardLookup('My Board')
-        if (table === 'board_invites') return mockInviteUpsert()
-        return {}
-      })
       await POST(makeRequest({ ...VALID_BODY, email: 'USER@EXAMPLE.COM' }))
-      // The user lookup should receive the lowercased email
-      expect(mockEq).toHaveBeenCalledWith('email', 'user@example.com')
+      // The RPC should receive the lowercased email
+      expect(mockAdminRpc).toHaveBeenCalledWith('lookup_user_by_email', { p_email: 'user@example.com' })
     })
 
     it('trims whitespace from email before validation', async () => {

@@ -65,18 +65,13 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  // 4. Check if invitee is an existing user (query auth.users directly via admin client)
-  const { data: existingUser, error: lookupError } = await admin
-    .from('auth.users')
-    .select('id')
-    .eq('email', email)
-    .maybeSingle()
+  // 4. Check if invitee is an existing user via SECURITY DEFINER RPC (auth.users not PostgREST-accessible)
+  const { data: existingUserId, error: lookupError } = await admin
+    .rpc('lookup_user_by_email', { p_email: email })
 
   if (lookupError) {
     console.error('[api/invites] Failed to look up user by email:', lookupError)
   }
-
-  const existingUserId = existingUser?.id ?? null
 
   if (existingUserId) {
     // Add directly to board_members

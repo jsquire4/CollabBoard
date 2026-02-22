@@ -35,6 +35,7 @@ interface CanvasOverlaysProps {
   // Rich text
   isEditingText?: boolean
   richTextEditor?: import('@tiptap/react').Editor | null
+  isCellEditing?: boolean
 
   // API object overlays
   boardId?: string
@@ -48,6 +49,7 @@ export function CanvasOverlays({
   contextMenu, setContextMenu,
   onCellKeyDown,
   isEditingText, richTextEditor,
+  isCellEditing,
   boardId, onApiConfigChange,
 }: CanvasOverlaysProps) {
   const { handleConnectorHintMouseDown } = useDrawInteraction({ connectorHint, connectorDrawingRefs })
@@ -80,8 +82,9 @@ export function CanvasOverlays({
           ))}
         </div>
       )}
-      {/* Textarea overlay for editing text (skip for rich text body editing — handled by TipTapEditorOverlay) */}
-      {editingId && !(RICH_TEXT_ENABLED && editingField !== 'title') && (
+      {/* Textarea overlay for editing text (skip for rich text body editing — handled by TipTapEditorOverlay).
+          Always shown for table cell editing regardless of RICH_TEXT_ENABLED. */}
+      {editingId && (!RICH_TEXT_ENABLED || editingField === 'title' || isCellEditing) && (
         <textarea
           ref={textareaRef}
           value={editText}

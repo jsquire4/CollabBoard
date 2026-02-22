@@ -170,12 +170,14 @@ describe('useTextEditing', () => {
       expect(tryEnterGroup).toHaveBeenCalledWith('shape-1')
     })
 
-    it('records for triple-click when tryEnterGroup returns false', () => {
+    it('attempts to start text edit when tryEnterGroup returns false', () => {
       const tryEnterGroup = vi.fn().mockReturnValue(false)
-      const { result } = renderHook(() => useTextEditing(makeDeps({ tryEnterGroup })))
+      const onUpdateText = vi.fn()
+      const { result } = renderHook(() => useTextEditing(makeDeps({ tryEnterGroup, onUpdateText })))
       act(() => result.current.handleShapeDoubleClick('shape-1'))
-      expect(result.current.lastDblClickRef.current).not.toBeNull()
-      expect(result.current.lastDblClickRef.current?.id).toBe('shape-1')
+      // startGeometricTextEdit returns early when there's no Konva node — but
+      // it should NOT record to lastDblClickRef (that was the triple-click mechanism)
+      expect(result.current.lastDblClickRef.current).toBeNull()
     })
   })
 

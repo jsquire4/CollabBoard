@@ -192,6 +192,7 @@ export function SelectionBar({
     onStrokeStyleChange,
     onOpacityChange,
     onMarkerChange,
+    onStartTextEdit,
   } = useBoardMutations()
 
   const barRef = useRef<HTMLDivElement>(null)
@@ -347,7 +348,11 @@ export function SelectionBar({
 
   // ── Toggle handlers ────────────────────────────────────────────────
   const handleGroupToggle = (group: ActiveGroup) => {
+    const willActivate = activeGroup !== group
     setActiveGroup(prev => (prev === group ? null : group))
+    if (group === 'text' && willActivate && !isEditingText && firstId) {
+      onStartTextEdit(firstId)
+    }
   }
 
   const handleSubToggle = (sub: string) => {

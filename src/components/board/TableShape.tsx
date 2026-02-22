@@ -297,6 +297,16 @@ export const TableShape = memo(function TableShape({
         }
       }
     }
+
+    if (name.startsWith('hdrbg:')) {
+      const colIdx = parseInt(name.split(':')[1], 10)
+      if (!isNaN(colIdx) && groupRef.current) {
+        const found = (groupRef.current.find('Text') as Konva.Text[]).find(
+          (n) => n.name() === `header:${colIdx}`
+        )
+        if (found) onStartCellEdit(object.id, found, -1, colIdx)
+      }
+    }
   }
 
   // ── Column resize (cancelBubble prevents parent table from dragging) ─────────
@@ -452,6 +462,19 @@ export const TableShape = memo(function TableShape({
       {/* Header row background */}
       <Rect y={0} width={tableWidth} height={DEFAULT_HEADER_HEIGHT}
         fill={data.header_bg || HEADER_BG} cornerRadius={[4, 4, 0, 0]} listening={false} />
+
+      {/* Header hit areas — transparent, listening Rects so double-click anywhere in the
+          header cell area triggers editing, even when the column name text is empty */}
+      {data.columns.map((col, colIdx) => (
+        <Rect
+          key={`hdrbg-${col.id}`}
+          name={`hdrbg:${colIdx}`}
+          x={colXOffsets[colIdx]} y={0}
+          width={col.width} height={DEFAULT_HEADER_HEIGHT}
+          fill="transparent"
+          listening={true}
+        />
+      ))}
 
       {/* Header cells — hidden when editing that column's name */}
       {data.columns.map((col, colIdx) => (

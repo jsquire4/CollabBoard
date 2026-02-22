@@ -32,12 +32,14 @@ import { ShareDialog } from './ShareDialog'
 import { CanvasErrorBoundary } from './CanvasErrorBoundary'
 import { GroupBreadcrumb } from './GroupBreadcrumb'
 import { isVectorType } from './shapeUtils'
+import { syncConnectorVisual, resetConnectorVisual } from './vectorImperative'
 import { FloatingShapePalette } from './FloatingShapePalette'
 import { RadialShapePicker, type RadialPickerState } from './RadialShapePicker'
 import { shapeRegistry } from './shapeRegistry'
 import { getShapeAnchors } from './anchorPoints'
 import type { ShapePreset } from './shapePresets'
 import { scaleCustomPoints } from './shapePresets'
+import type Konva from 'konva'
 import { BoardProvider, BoardContextValue } from '@/contexts/BoardContext'
 import { BoardMutationsProvider, BoardMutationsContextValue } from '@/contexts/BoardMutationsContext'
 import { BoardToolProvider, BoardToolContextValue } from '@/contexts/BoardToolContext'
@@ -89,6 +91,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   const isDraggingRef = useRef(false)
   const lastDragCursorPosRef = useRef<{ x: number; y: number } | null>(null)
   const dragPositionsRef = useRef<Map<string, Partial<import('@/types/board').BoardObject>>>(new Map())
+  const shapeRefs = useRef<Map<string, Konva.Node>>(new Map())
 
   const { sendCursor, sendCursorDirect, getDragCursorPos, receiveCursorFromBroadcast, onCursorUpdate } = useCursors(channel, userId, userCount, isDraggingRef)
   const lastActivityRef = useRef(Date.now())
@@ -437,11 +440,24 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     const obj = objects.get(id)
     if (obj && !isVectorType(obj.type)) {
       const anchors = getShapeAnchors({ ...obj, x, y })
-      // Use updateConnectorDrag (ref + state) so connectors re-render during drag —
-      // they're not Konva-dragged natively and need a React render to update visually.
-      followConnectors(id, anchors, updateConnectorDrag, false)
+      followConnectors(id, anchors, updateObjectDrag, false)
+      // Imperatively update each connected connector's Konva nodes so the
+      // visual follows the drag without a React re-render.
+      const connections = connectionIndex.get(id)
+      if (connections) {
+        for (const { connectorId } of connections) {
+          const group = shapeRefs.current.get(connectorId) as import('konva').default.Group | undefined
+          if (!group) continue
+          const connObj = objects.get(connectorId)
+          if (!connObj) continue
+          const overrides = dragPositionsRef.current.get(connectorId)
+          if (overrides) {
+            syncConnectorVisual(group, connObj, overrides)
+          }
+        }
+      }
     }
-  }, [canEdit, updateObjectDrag, updateConnectorDrag, objects, followConnectors, markActivity])
+  }, [canEdit, updateObjectDrag, objects, followConnectors, connectionIndex, markActivity])
 
   const handleDragEnd = useCallback((id: string, x: number, y: number) => {
     if (!canEdit) return
@@ -450,6 +466,17 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     updateObjectDragEnd(id, { x, y })
     const obj = objects.get(id)
     if (obj && !isVectorType(obj.type)) {
+      // Reset imperative connector visuals before the state commit so
+      // react-konva's reconciliation sees real prop diffs.
+      const connections = connectionIndex.get(id)
+      if (connections) {
+        for (const { connectorId } of connections) {
+          const group = shapeRefs.current.get(connectorId) as import('konva').default.Group | undefined
+          if (!group) continue
+          const connObj = objects.get(connectorId)
+          if (connObj) resetConnectorVisual(group, connObj)
+        }
+      }
       const anchors = getShapeAnchors({ ...obj, x, y })
       followConnectors(id, anchors, updateObjectDragEnd, true)
     }
@@ -459,7 +486,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
       undoStack.push({ type: 'move', patches })
       preDragRef.current.clear()
     }
-  }, [canEdit, updateObjectDragEnd, undoStack, objects, followConnectors, markActivity])
+  }, [canEdit, updateObjectDragEnd, undoStack, objects, followConnectors, connectionIndex, markActivity])
 
   const handleUpdateText = useCallback((id: string, text: string) => {
     if (!canEdit) return
@@ -660,6 +687,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     canvasColor, gridColor, subdivisionColor, uiDarkMode,
     commentCounts,
     dragPositionsRef,
+    shapeRefs,
     stagePos, setStagePos, stageScale, setStageScale,
     zoomIn, zoomOut, resetZoom,
   }), [
@@ -673,6 +701,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     canvasColor, gridColor, subdivisionColor, uiDarkMode,
     commentCounts,
     dragPositionsRef,
+    shapeRefs,
     stagePos, stageScale, zoomIn, zoomOut, resetZoom,
   ])
 
@@ -824,6 +853,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     onActivity: markActivity,
     pendingEditId,
     onPendingEditConsumed: clearPendingEditId,
+    onStartTextEdit: setPendingEditId,
     onWaypointDragEnd: handleWaypointDragEnd,
     onWaypointInsert: handleWaypointInsert,
     onWaypointDelete: handleWaypointDelete,
@@ -862,7 +892,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     handleLockSelected, handleUnlockSelected, selectedCanLock, selectedCanUnlock,
     vertexEditId, handleEditVertices, handleExitVertexEdit, handleVertexDragEnd, handleVertexInsert,
     canEditVertices, snapIndicator,
-    markActivity, pendingEditId, clearPendingEditId,
+    markActivity, pendingEditId, clearPendingEditId, setPendingEditId,
     handleWaypointDragEnd, handleWaypointInsert, handleWaypointDelete,
     autoRoutePointsRef, handleDrawLineFromAnchor,
     handleCellTextUpdate, handleTableDataChange,

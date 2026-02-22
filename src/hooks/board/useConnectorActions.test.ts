@@ -153,8 +153,8 @@ describe('useConnectorActions', () => {
       // Drag start endpoint near the right midpoint (100, 40) of rect
       act(() => result.current.handleEndpointDragMove('l1', { x: 105, y: 42 }))
 
-      // Should snap to (100, 40) — updateConnectorDrag writes to both ref + state for re-render
-      expect(deps.updateConnectorDrag).toHaveBeenCalledWith('l1', expect.objectContaining({ x: 100, y: 40 }))
+      // Should snap to (100, 40) — updateObjectDrag writes to ref only (imperative Konva updates handle visuals)
+      expect(deps.updateObjectDrag).toHaveBeenCalledWith('l1', expect.objectContaining({ x: 100, y: 40 }))
       expect(deps.setSnapIndicator).toHaveBeenCalledWith({ x: 100, y: 40 })
     })
 

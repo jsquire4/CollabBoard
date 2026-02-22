@@ -2,6 +2,7 @@
 
 import { createContext, useContext } from 'react'
 import type React from 'react'
+import type Konva from 'konva'
 import { BoardObject, BoardObjectType } from '@/types/board'
 import { BoardRole } from '@/types/sharing'
 import { OnlineUser } from '@/hooks/usePresence'
@@ -49,6 +50,9 @@ export interface BoardContextValue {
 
   // Drag overlay (ref-based, no re-render cost)
   dragPositionsRef: React.MutableRefObject<Map<string, Partial<BoardObject>>>
+
+  // Shape node registry for imperative Konva updates (connectors during drag)
+  shapeRefs: React.MutableRefObject<Map<string, Konva.Node>>
 
   // Canvas viewport (lifted from useCanvas so top bar can show zoom controls)
   stagePos: { x: number; y: number }

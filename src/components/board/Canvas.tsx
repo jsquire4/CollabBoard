@@ -31,9 +31,6 @@ import { CanvasOverlays } from './CanvasOverlays'
 import { RichTextStaticLayer } from './RichTextStaticLayer'
 import { RICH_TEXT_ENABLED } from '@/lib/richText'
 
-// Shape types that support triple-click text editing (all registry shapes)
-const TRIPLE_CLICK_TEXT_TYPES = new Set(shapeRegistry.keys())
-
 // ── VertexEditHandles ────────────────────────────────────────────────────────
 // Renders draggable vertex handles and midpoint "insert vertex" handles for the
 // shape currently in vertex-edit mode. Placed after the Transformer in the layer
@@ -142,6 +139,7 @@ export function Canvas() {
     snapToGrid: snapToGridEnabled,
     gridStyle, canvasColor, gridColor, subdivisionColor,
     dragPositionsRef,
+    shapeRefs,
     stagePos, setStagePos, stageScale, setStageScale,
     zoomIn, zoomOut, resetZoom,
   } = useBoardContext()
@@ -173,7 +171,6 @@ export function Canvas() {
   }, [setStageScale, setStagePos])
   const stageRef = useRef<Konva.Stage>(null)
   const trRef = useRef<Konva.Transformer>(null)
-  const shapeRefs = useRef<Map<string, Konva.Node>>(new Map())
   const reverseShapeRefs = useRef<Map<Konva.Node, string>>(new Map())
   const objectsRef = useRef(objects)
   objectsRef.current = objects
@@ -314,11 +311,19 @@ export function Canvas() {
     editingId, editingField, editText, setEditText,
     textareaStyle, textareaRef,
     handleStartEdit, handleFinishEdit,
-    handleShapeDoubleClick, startGeometricTextEdit, lastDblClickRef,
+    handleShapeDoubleClick, startGeometricTextEdit,
   } = RICH_TEXT_ENABLED ? richTextEditing : plainTextEditing
 
   // Table cell handlers and coords always use plain text editing (table cells are never rich text)
-  const { handleStartCellEdit, handleCellKeyDown, editingCellCoords } = plainTextEditing
+  const {
+    handleStartCellEdit, handleCellKeyDown, editingCellCoords,
+    editingId: cellEditingId,
+    editText: cellEditText,
+    setEditText: cellSetEditText,
+    textareaStyle: cellTextareaStyle,
+    textareaRef: cellTextareaRef,
+    handleFinishEdit: cellHandleFinishEdit,
+  } = plainTextEditing
 
   // Expose editor ref to parent
   useEffect(() => {
@@ -417,21 +422,11 @@ export function Canvas() {
     }
   }, [onClearSelection, onExitGroup, onEmptyCanvasClick, activeGroupId, activeTool, selectedIds, stageRef, stagePos, stageScale])
 
-  // Handle shape click with modifier keys + triple-click detection
+  // Handle shape click with modifier keys
   const handleShapeSelect = useCallback((id: string) => {
     onActivity()
-    // Triple-click detection: a click shortly after a double-click on the same shape
-    const prev = lastDblClickRef.current
-    if (prev && prev.id === id && Date.now() - prev.time < 500) {
-      lastDblClickRef.current = null
-      const obj = objects.get(id)
-      if (obj && TRIPLE_CLICK_TEXT_TYPES.has(obj.type)) {
-        startGeometricTextEdit(id)
-        return
-      }
-    }
     onSelect(id, { shift: shiftHeld, ctrl: ctrlHeld })
-  }, [onSelect, shiftHeld, ctrlHeld, objects, startGeometricTextEdit, onActivity])
+  }, [onSelect, shiftHeld, ctrlHeld, onActivity])
 
   // Auto-route cache: keyed by connector ID, stores { cacheKey, points }.
   // Recomputes only when the connector or connected shapes' positions change.
@@ -500,8 +495,10 @@ export function Canvas() {
 
   // Shape rendering state + callbacks (stable references for renderShape)
   const shapeState: ShapeState = useMemo(() => ({
-    selectedIds, isObjectLocked, canEdit, editingId, editingField, editingCellCoords,
-  }), [selectedIds, isObjectLocked, canEdit, editingId, editingField, editingCellCoords])
+    selectedIds, isObjectLocked, canEdit,
+    editingId: cellEditingId ?? editingId,
+    editingField, editingCellCoords,
+  }), [selectedIds, isObjectLocked, canEdit, cellEditingId, editingId, editingField, editingCellCoords])
 
   const shapeCallbacks: ShapeCallbacks = useMemo(() => ({
     handleShapeDragEnd, handleShapeDragMove, handleShapeDragStart,
@@ -818,13 +815,14 @@ export function Canvas() {
       )}
 
       <CanvasOverlays
-        editingId={editingId}
+        editingId={cellEditingId ?? editingId}
         editingField={editingField}
-        editText={editText}
-        setEditText={setEditText}
-        textareaRef={textareaRef}
-        textareaStyle={textareaStyle}
-        handleFinishEdit={handleFinishEdit}
+        editText={cellEditingId ? cellEditText : editText}
+        setEditText={cellEditingId ? cellSetEditText : setEditText}
+        textareaRef={cellEditingId ? cellTextareaRef : textareaRef}
+        textareaStyle={cellEditingId ? cellTextareaStyle : textareaStyle}
+        handleFinishEdit={cellEditingId ? cellHandleFinishEdit : handleFinishEdit}
+        isCellEditing={!!cellEditingId}
         onUpdateText={onUpdateText}
         onUpdateTitle={onUpdateTitle}
         objects={objects}

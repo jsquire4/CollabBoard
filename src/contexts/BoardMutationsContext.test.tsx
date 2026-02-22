@@ -64,6 +64,7 @@ function makeMutationsValue(overrides?: Record<string, unknown>) {
     onActivity: noop,
     pendingEditId: null,
     onPendingEditConsumed: noop,
+    onStartTextEdit: noop,
     onWaypointDragEnd: noop,
     onWaypointInsert: noop,
     onWaypointDelete: noop,

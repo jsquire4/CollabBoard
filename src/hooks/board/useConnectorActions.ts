@@ -125,14 +125,31 @@ export function useConnectorActions({
         updateFn(connectorId, updates)
         continue
       }
+      // During drag (commitAnchor=false): stay locked to the current anchor
+      // so the line doesn't jump between attachment points mid-drag.
+      // On mouse-up (commitAnchor=true): re-evaluate the best anchor.
+      // TODO: Consider adding a UI toggle to let users choose between
+      //       "sticky anchor" (current) and "dynamic anchor" (always re-evaluate).
+      const currentAnchorId = endpoint === 'start' ? connector.connect_start_anchor : connector.connect_end_anchor
+      if (!commitAnchor && currentAnchorId) {
+        const anchor = anchorMap.get(currentAnchorId)
+        if (anchor) {
+          if (endpoint === 'start') {
+            updateFn(connectorId, { x: anchor.x, y: anchor.y, waypoints: null })
+          } else {
+            updateFn(connectorId, { x2: anchor.x, y2: anchor.y, waypoints: null })
+          }
+          continue
+        }
+      }
+
       const otherEnd = endpoint === 'start'
         ? { x: connector.x2 ?? connector.x + connector.width, y: connector.y2 ?? connector.y + connector.height }
         : { x: connector.x, y: connector.y }
       const best = pickBestAnchor(connector, endpoint, anchors, otherEnd)
       if (!best) {
-        const anchorId = endpoint === 'start' ? connector.connect_start_anchor : connector.connect_end_anchor
-        if (!anchorId) continue
-        const anchor = anchorMap.get(anchorId)
+        if (!currentAnchorId) continue
+        const anchor = anchorMap.get(currentAnchorId)
         if (!anchor) continue
         if (endpoint === 'start') {
           updateFn(connectorId, { x: anchor.x, y: anchor.y, waypoints: null })
@@ -140,11 +157,9 @@ export function useConnectorActions({
           updateFn(connectorId, { x2: anchor.x, y2: anchor.y, waypoints: null })
         }
       } else if (endpoint === 'start') {
-        const extra: Partial<BoardObject> = commitAnchor ? { connect_start_anchor: best.anchorId } : {}
-        updateFn(connectorId, { x: best.x, y: best.y, waypoints: null, ...extra })
+        updateFn(connectorId, { x: best.x, y: best.y, waypoints: null, connect_start_anchor: best.anchorId })
       } else {
-        const extra: Partial<BoardObject> = commitAnchor ? { connect_end_anchor: best.anchorId } : {}
-        updateFn(connectorId, { x2: best.x, y2: best.y, waypoints: null, ...extra })
+        updateFn(connectorId, { x2: best.x, y2: best.y, waypoints: null, connect_end_anchor: best.anchorId })
       }
     }
   }, [objects, connectionIndex])
@@ -203,19 +218,11 @@ export function useConnectorActions({
 
     setSnapIndicator(snap ? { x: snap.x, y: snap.y } : null)
 
-    if (isWholeDrag) {
-      // Whole-line drag: Konva natively moves the Line node within its Group,
-      // so all children (markers, anchors) travel with it visually.  Only
-      // broadcast + write to dragPositionsRef (no React state) to avoid a
-      // double-offset loop (Konva offset + Group state shift).
-      updateObjectDrag(id, updates)
-    } else {
-      // Endpoint drag: trigger a React re-render so the Line redraws to the
-      // new endpoint and markers follow.  Konva and React-Konva agree on the
-      // Circle position so there's no double-offset.
-      updateConnectorDrag(id, updates)
-    }
-  }, [canEdit, updateObjectDrag, updateConnectorDrag, computeAllAnchors, markActivity, setSnapIndicator])
+    // Ref-only update (no setObjects) for both whole-line and endpoint drags.
+    // VectorShape imperatively updates the Konva Line during endpoint drag so
+    // a React re-render is not needed, avoiding Maximum-update-depth loops.
+    updateObjectDrag(id, updates)
+  }, [canEdit, updateObjectDrag, computeAllAnchors, markActivity, setSnapIndicator])
 
   const handleEndpointDragEnd = useCallback((id: string, updates: Partial<BoardObject>, preDragRef: MutableRefObject<Map<string, { x: number; y: number; x2?: number | null; y2?: number | null; parent_id: string | null; waypoints?: string | null; connect_start_id?: string | null; connect_end_id?: string | null; connect_start_anchor?: string | null; connect_end_anchor?: string | null }>>) => {
     if (!canEdit) return

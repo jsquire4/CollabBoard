@@ -106,6 +106,7 @@ export interface BoardMutationsContextValue {
   // Pending edit
   pendingEditId: string | null
   onPendingEditConsumed: () => void
+  onStartTextEdit: (id: string) => void
 
   // Waypoints
   onWaypointDragEnd: (id: string, waypointIndex: number, x: number, y: number) => void

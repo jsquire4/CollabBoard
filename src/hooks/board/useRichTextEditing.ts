@@ -214,11 +214,6 @@ export function useRichTextEditing({
     setEditingId(null)
   }, [commitCurrentEdit])
 
-  const handleShapeDoubleClick = useCallback((id: string) => {
-    if (tryEnterGroup(id)) return
-    lastDblClickRef.current = { id, time: Date.now() }
-  }, [tryEnterGroup])
-
   const startGeometricTextEdit = useCallback((id: string) => {
     const obj = objects.get(id)
     if (!obj || !canEdit) return
@@ -242,6 +237,11 @@ export function useRichTextEditing({
       }, 50)
     }
   }, [objects, canEdit, handleStartEdit, onUpdateText])
+
+  const handleShapeDoubleClick = useCallback((id: string) => {
+    if (tryEnterGroup(id)) return
+    startGeometricTextEdit(id)
+  }, [tryEnterGroup, startGeometricTextEdit])
 
   // Focus textarea when title editing starts
   useEffect(() => {

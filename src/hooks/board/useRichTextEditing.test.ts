@@ -205,16 +205,14 @@ describe('useRichTextEditing', () => {
     expect(deps.onActivity).toHaveBeenCalled()
   })
 
-  it('handleShapeDoubleClick records for triple-click detection', () => {
+  it('handleShapeDoubleClick attempts text edit (no Konva node = no-op)', () => {
     const deps = createDefaultDeps()
     const { result } = renderHook(() => useRichTextEditing(deps))
     act(() => {
       result.current.handleShapeDoubleClick('r1')
     })
-    expect(result.current.lastDblClickRef.current).toEqual({
-      id: 'r1',
-      time: expect.any(Number),
-    })
+    // startGeometricTextEdit returns early with no Konva node; lastDblClickRef stays null
+    expect(result.current.lastDblClickRef.current).toBeNull()
   })
 
   it('handleShapeDoubleClick defers to tryEnterGroup', () => {

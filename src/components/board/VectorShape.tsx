@@ -6,6 +6,7 @@ import { ShapeProps, getShadowProps } from './shapeUtils'
 import { parseWaypoints, snapAngle45 } from './autoRoute'
 import { renderMarker, computeEndpointAngle, MarkerType } from './lineMarkers'
 import { buildWaypointSegments } from '@/lib/geometry/waypoints'
+import { resetConnectorVisual } from './vectorImperative'
 
 interface VectorShapeProps extends Omit<ShapeProps, 'object'> {
   object: VectorObject
@@ -126,37 +127,94 @@ export const VectorShape = memo(function VectorShape({
     onEndpointDragEnd(object.id, computeLineDragUpdates(e, true))
   }
 
+  // Marker child indices inside the Group (Line is always [0]).
+  // False-y React conditionals produce no Konva node, so indices shift.
+  const hasStartMarker = markerStart !== 'none' && allPoints.length >= 4
+  const hasEndMarker = markerEnd !== 'none' && allPoints.length >= 4
+  const startMarkerIdx = hasStartMarker ? 1 : -1
+  const endMarkerIdx = hasEndMarker ? (hasStartMarker ? 2 : 1) : -1
+
+  // Imperatively update the Konva Line + both markers so they follow the
+  // anchor without a React re-render.  The dragged marker moves + rotates;
+  // the fixed marker stays in place but its rotation updates because the
+  // line angle at that endpoint changes when the other end moves.
+  const syncLineDrag = (
+    group: Konva.Group,
+    startX: number, startY: number,
+    endX: number, endY: number,
+    draggedEndpoint: 'start' | 'end',
+  ) => {
+    const pts: number[] = [startX, startY]
+    for (let i = 0; i < routePoints.length; i += 2) {
+      pts.push(routePoints[i] - object.x, routePoints[i + 1] - object.y)
+    }
+    pts.push(endX, endY)
+
+    const lineNode = group.children?.[0]
+    if (lineNode && 'points' in lineNode) {
+      ;(lineNode as Konva.Line).points(pts)
+    }
+
+    if (pts.length >= 4) {
+      const dragIdx = draggedEndpoint === 'start' ? startMarkerIdx : endMarkerIdx
+      const dragNode = dragIdx > 0 ? group.children?.[dragIdx] : undefined
+      if (dragNode) {
+        const angle = computeEndpointAngle(pts, draggedEndpoint)
+        dragNode.x(draggedEndpoint === 'start' ? startX : endX)
+        dragNode.y(draggedEndpoint === 'start' ? startY : endY)
+        dragNode.rotation((angle * 180) / Math.PI)
+      }
+
+      const fixedEnd: 'start' | 'end' = draggedEndpoint === 'start' ? 'end' : 'start'
+      const fixedIdx = fixedEnd === 'start' ? startMarkerIdx : endMarkerIdx
+      const fixedNode = fixedIdx > 0 ? group.children?.[fixedIdx] : undefined
+      if (fixedNode) {
+        fixedNode.rotation((computeEndpointAngle(pts, fixedEnd) * 180) / Math.PI)
+      }
+    }
+
+    group.getLayer()?.batchDraw()
+  }
+
   // Start anchor drag (updates x, y — keeps x2/y2 fixed)
   const handleStartAnchorDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true
     if (!onEndpointDragMove) return
     const node = e.target
+    syncLineDrag(node.parent as Konva.Group, node.x(), node.y(), dx, dy, 'start')
     onEndpointDragMove(object.id, { x: object.x + node.x(), y: object.y + node.y() })
   }
 
   const handleStartAnchorDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true
     if (!onEndpointDragEnd) return
     const node = e.target
     const newX = object.x + node.x()
     const newY = object.y + node.y()
     node.x(0)
     node.y(0)
+    resetConnectorVisual(node.parent as Konva.Group, object)
     onEndpointDragEnd(object.id, { x: newX, y: newY })
   }
 
   // End anchor drag (updates x2, y2 — keeps x/y fixed)
   const handleEndAnchorDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true
     if (!onEndpointDragMove) return
     const node = e.target
+    syncLineDrag(node.parent as Konva.Group, 0, 0, node.x(), node.y(), 'end')
     onEndpointDragMove(object.id, { x2: object.x + node.x(), y2: object.y + node.y() })
   }
 
   const handleEndAnchorDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true
     if (!onEndpointDragEnd) return
     const node = e.target
     const newX2 = object.x + node.x()
     const newY2 = object.y + node.y()
     node.x(dx)
     node.y(dy)
+    resetConnectorVisual(node.parent as Konva.Group, object)
     onEndpointDragEnd(object.id, { x2: newX2, y2: newY2 })
   }
 
@@ -270,6 +328,7 @@ export const VectorShape = memo(function VectorShape({
                 draggable
                 onMouseDown={(e) => { e.cancelBubble = true }}
                 onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
+                  e.cancelBubble = true
                   if (!onWaypointDragEnd) return
                   const node = e.target
                   // Get absolute position

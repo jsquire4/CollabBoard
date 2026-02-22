@@ -232,14 +232,7 @@ export function useTextEditing({
     }
   }, [editingId, editingCellCoords, objects, editText, onUpdateTableCell, handleFinishEdit])
 
-  // Double-click handler for non-text shapes — only enters group, records for triple-click
-  const handleShapeDoubleClick = useCallback((id: string) => {
-    if (tryEnterGroup(id)) return
-    // Record for triple-click detection (geometric shapes use triple-click to edit text)
-    lastDblClickRef.current = { id, time: Date.now() }
-  }, [tryEnterGroup])
-
-  // Start text editing on a geometric shape (used by triple-click)
+  // Start text editing on a geometric shape (used by double-click)
   const startGeometricTextEdit = useCallback((id: string) => {
     const obj = objects.get(id)
     if (!obj || !canEdit) return
@@ -258,6 +251,12 @@ export function useTextEditing({
       }, 50)
     }
   }, [objects, canEdit, handleStartEdit, onUpdateText])
+
+  // Double-click handler — enters group or starts text editing
+  const handleShapeDoubleClick = useCallback((id: string) => {
+    if (tryEnterGroup(id)) return
+    startGeometricTextEdit(id)
+  }, [tryEnterGroup, startGeometricTextEdit])
 
   // ── Effects ────────────────────────────────────────────────────────
 

@@ -14,6 +14,7 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireBoardMember } from '@/lib/supabase/requireBoardMember'
 import * as dnsPromises from 'dns/promises'
 import { UUID_RE } from '@/lib/api/uuidRe'
 
@@ -90,14 +91,8 @@ export async function POST(
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data: member } = await supabase
-    .from('board_members')
-    .select('role')
-    .eq('board_id', boardId)
-    .eq('user_id', user.id)
-    .single()
-
-  if (!member || !['owner', 'editor'].includes(member.role)) {
+  const member = await requireBoardMember(supabase, boardId, user.id, { allowedRoles: ['owner', 'editor'] })
+  if (!member) {
     return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 

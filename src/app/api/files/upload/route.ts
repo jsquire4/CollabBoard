@@ -6,6 +6,7 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireBoardMember } from '@/lib/supabase/requireBoardMember'
 import { v4 as uuidv4 } from 'uuid'
 import { UUID_RE } from '@/lib/api/uuidRe'
 
@@ -73,18 +74,18 @@ export async function POST(request: NextRequest) {
   }
 
   // Check board membership (editor or owner)
-  const { data: member } = await supabase
-    .from('board_members')
-    .select('role')
-    .eq('board_id', boardId)
-    .eq('user_id', user.id)
-    .single()
-
-  if (!member || !['owner', 'editor'].includes(member.role)) {
+  const member = await requireBoardMember(supabase, boardId, user.id, { allowedRoles: ['owner', 'editor'] })
+  if (!member) {
     return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const admin = createAdminClient()
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch (err) {
+    console.error('[api/files/upload] Admin client unavailable:', err)
+    return Response.json({ error: 'Service unavailable' }, { status: 503 })
+  }
   const fileId = uuidv4()
   const ext = extFromMime(file.type)
   const storagePath = `files/${boardId}/${fileId}.${ext}`

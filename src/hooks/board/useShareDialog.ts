@@ -57,6 +57,12 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
   // Link form state
   const [linkRole, setLinkRole] = useState<'editor' | 'viewer'>('editor')
   const [copied, setCopied] = useState(false)
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Clear copy-feedback timer on unmount to prevent setState on unmounted component
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
+  }, [])
 
   // Ownership transfer confirmation
   const [transferTarget, setTransferTarget] = useState<string | null>(null)
@@ -253,7 +259,8 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
     try {
       await navigator.clipboard.writeText(url)
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000)
     } catch {
       toast.error('Failed to copy link')
     }

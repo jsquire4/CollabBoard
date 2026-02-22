@@ -313,6 +313,8 @@ export function ContextMenu({
   return (
     <div
       ref={menuRef}
+      role="menu"
+      aria-label="Shape actions"
       className="flex flex-col gap-1 animate-[panel-in]"
       style={{ position: 'fixed', top: pos.y, left: pos.x, zIndex: 200 }}
     >

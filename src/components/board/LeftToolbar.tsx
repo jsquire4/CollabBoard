@@ -94,7 +94,7 @@ export function LeftToolbar({
 
   return (
     <div className="@container h-full">
-    <aside className="flex w-[clamp(52px,5vw,72px)] shrink-0 flex-col items-center gap-0.5 border-r py-2 overflow-y-auto border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#111827]">
+    <aside className="flex w-[clamp(56px,5.5vw,72px)] shrink-0 flex-col items-center gap-0.5 border-r py-2 overflow-y-auto border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#111827]">
       {canEdit && (
         <>
           {/* Shape tools — fades out when editing text */}
@@ -313,14 +313,15 @@ function ToolGroupButton({
         ref={btnRef}
         type="button"
         onClick={onToggle}
-        className={`relative flex h-[clamp(40px,4.5vw,52px)] w-[clamp(40px,4.5vw,52px)] flex-col items-center justify-center rounded-full transition ${
+        className={`relative flex w-[clamp(44px,4.5vw,56px)] flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 transition ${
           isActive || isOpen
-            ? 'bg-navy text-parchment shadow-md shadow-leather/30 ring-2 ring-leather/40 dark:bg-navy dark:text-parchment'
+            ? 'bg-navy text-parchment shadow-md shadow-leather/30 dark:bg-navy dark:text-parchment'
             : 'text-charcoal/70 hover:bg-charcoal/10 hover:text-charcoal dark:text-parchment/60 dark:hover:bg-navy/40'
         }`}
         title={label}
       >
         <PresetIcon iconPath={iconPath} />
+        <span className="text-[8px] leading-tight font-medium">{label}</span>
       </button>
       {isOpen && (
         <div
@@ -418,14 +419,15 @@ function MergedShapesGroupButton({ isOpen, activePreset, isActive, sides, onSide
         ref={btnRef}
         type="button"
         onClick={onToggle}
-        className={`relative flex h-[clamp(40px,4.5vw,52px)] w-[clamp(40px,4.5vw,52px)] flex-col items-center justify-center rounded-full transition ${
+        className={`relative flex w-[clamp(44px,4.5vw,56px)] flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 transition ${
           isActive || isOpen
-            ? 'bg-navy text-parchment shadow-md shadow-leather/30 ring-2 ring-leather/40 dark:bg-navy dark:text-parchment'
+            ? 'bg-navy text-parchment shadow-md shadow-leather/30 dark:bg-navy dark:text-parchment'
             : 'text-charcoal/70 hover:bg-charcoal/10 hover:text-charcoal dark:text-parchment/60 dark:hover:bg-navy/40'
         }`}
         title="Shapes"
       >
         <PresetIcon iconPath="M3 3h18v18H3z" />
+        <span className="text-[8px] leading-tight font-medium">Shapes</span>
       </button>
       {isOpen && (
         <div

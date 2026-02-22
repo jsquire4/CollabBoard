@@ -196,7 +196,7 @@ export function BoardCard({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${ROLE_STYLES[board.role] ?? ROLE_STYLES.viewer}`}>
-            {ROLE_LABELS[board.role]}
+            {ROLE_LABELS[board.role] ?? 'Viewer'}
           </span>
         </div>
       </div>

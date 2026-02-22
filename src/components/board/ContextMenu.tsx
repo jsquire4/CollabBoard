@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useBoardMutations } from '@/contexts/BoardMutationsContext'
 import { useBoardContext } from '@/contexts/BoardContext'
 import { isVectorType } from './shapeUtils'
@@ -10,6 +10,13 @@ interface ContextMenuProps {
   objectId: string
   onClose: () => void
 }
+
+// ─── Shared animation constants (matched to RadialShapePicker) ──────────────
+
+const EASING = 'cubic-bezier(.34,1.56,.64,1)'
+const BTN_STAGGER = 30   // ms between each main button
+const SUB_STAGGER = 25   // ms between each sub-button
+const SHADOW = '0 4px 16px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.3)'
 
 // ─── Icon components (stroke-based inline SVGs) ───────────────────────────────
 
@@ -77,6 +84,16 @@ function IconUnlock() {
   )
 }
 
+function IconDuplicate() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <rect x="9" y="9" width="11" height="11" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.5 12.5v4m-2-2h4" />
+    </svg>
+  )
+}
+
 function IconDelete() {
   return (
     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -100,22 +117,32 @@ function SubButton({
   shortcut,
   onClick,
   disabled = false,
+  revealed = true,
+  delay = 0,
 }: {
   label: string
   shortcut?: string
   onClick?: () => void
   disabled?: boolean
+  revealed?: boolean
+  delay?: number
 }) {
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors
+      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm whitespace-nowrap
         ${disabled
-          ? 'opacity-40 cursor-not-allowed bg-charcoal/90 text-parchment dark:bg-[#1E293B]'
-          : 'bg-charcoal/90 text-parchment hover:bg-navy dark:bg-[#1E293B] dark:hover:bg-navy/70 cursor-pointer'
+          ? 'opacity-40 cursor-not-allowed bg-navy border border-navy/40 text-parchment/60'
+          : 'bg-navy border border-navy/40 text-parchment/80 hover:border-parchment-border hover:text-parchment cursor-pointer'
         }`}
+      style={{
+        boxShadow: SHADOW,
+        opacity: revealed ? 1 : 0,
+        transform: revealed ? 'scale(1)' : 'scale(0.3)',
+        transition: `opacity 140ms ${EASING} ${delay}ms, transform 140ms ${EASING} ${delay}ms, border-color 150ms, background-color 150ms`,
+      }}
     >
       <span>{label}</span>
       {shortcut && (
@@ -135,9 +162,11 @@ interface CtxButtonProps {
   danger?: boolean
   disabled?: boolean
   isOpen?: boolean
+  revealed?: boolean
+  delay?: number
   onHoverEnter: (id: string) => void
   onHoverLeave: () => void
-  onClick?: () => void
+  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void
   children?: React.ReactNode
 }
 
@@ -149,11 +178,29 @@ function CtxButton({
   danger = false,
   disabled = false,
   isOpen = false,
+  revealed = true,
+  delay = 0,
   onHoverEnter,
   onHoverLeave,
   onClick,
   children,
 }: CtxButtonProps) {
+  // Animate sub-menu items when this group opens
+  const [subsRevealed, setSubsRevealed] = useState(false)
+  const rafRef = useRef(0)
+
+  useEffect(() => {
+    if (isOpen) {
+      setSubsRevealed(false)
+      const raf1 = requestAnimationFrame(() => {
+        rafRef.current = requestAnimationFrame(() => setSubsRevealed(true))
+      })
+      return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(rafRef.current) }
+    } else {
+      setSubsRevealed(false)
+    }
+  }, [isOpen])
+
   return (
     <div
       className="relative"
@@ -165,13 +212,21 @@ function CtxButton({
         disabled={disabled}
         onClick={onClick}
         title={label}
-        className={`h-10 w-10 rounded-full flex items-center justify-center shadow-md transition-colors
+        className={`h-10 w-10 rounded-full flex items-center justify-center border
           ${disabled
-            ? 'opacity-40 cursor-not-allowed bg-charcoal/90 text-parchment dark:bg-[#1E293B]'
-            : danger
-              ? 'bg-charcoal/90 text-parchment hover:bg-red-700 dark:bg-[#1E293B] dark:hover:bg-red-700 cursor-pointer'
-              : 'bg-charcoal/90 text-parchment hover:bg-navy dark:bg-[#1E293B] dark:hover:bg-navy/70 cursor-pointer'
+            ? 'opacity-40 cursor-not-allowed bg-navy border-navy/40 text-parchment/60'
+            : isOpen
+              ? 'bg-navy border-leather text-parchment cursor-pointer'
+              : danger
+                ? 'bg-red-700 border-red-600 text-parchment hover:bg-red-600 hover:border-red-400 cursor-pointer'
+                : 'bg-navy border-navy/40 text-parchment/80 hover:border-parchment-border hover:text-parchment cursor-pointer'
           }`}
+        style={{
+          boxShadow: SHADOW,
+          opacity: revealed ? 1 : 0,
+          transform: revealed ? 'scale(1)' : 'scale(0.3)',
+          transition: `opacity 140ms ${EASING} ${delay}ms, transform 140ms ${EASING} ${delay}ms, background-color 150ms, border-color 150ms`,
+        }}
       >
         {icon}
         {hasSubmenu && (
@@ -184,10 +239,20 @@ function CtxButton({
       {/* Sub-option flyout — positioned absolutely to the right of this row */}
       {isOpen && children && (
         <div
-          className="absolute flex flex-col gap-1 animate-[flyout-in]"
+          className="absolute flex flex-col gap-1"
           style={{ top: 0, left: 'calc(100% + 8px)' }}
         >
-          {children}
+          {(() => {
+            let idx = 0
+            return React.Children.map(children, child => {
+              if (!React.isValidElement(child)) return child
+              const i = idx++
+              return React.cloneElement(child as React.ReactElement<{ revealed?: boolean; delay?: number }>, {
+                revealed: subsRevealed,
+                delay: i * SUB_STAGGER,
+              })
+            })
+          })()}
         </div>
       )}
     </div>
@@ -257,6 +322,17 @@ export function ContextMenu({
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null)
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Staggered reveal animation — same double-rAF pattern as RadialShapePicker
+  const [revealed, setRevealed] = useState(false)
+  const rafRef = useRef(0)
+
+  useEffect(() => {
+    const raf1 = requestAnimationFrame(() => {
+      rafRef.current = requestAnimationFrame(() => setRevealed(true))
+    })
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(rafRef.current) }
+  }, [])
+
   // Clear any pending hover timer on unmount to prevent setState after unmount
   useEffect(() => {
     return () => {
@@ -311,55 +387,33 @@ export function ContextMenu({
   }
 
   // Derived display flags
-  const showEdit = canEditVertices || isTable
+  const showEditVertices = canEditVertices && !isTable
+  const showTableEdit = isTable
   const showArrange = canGroup || canUngroup
   const showComment = !isLine && !isDataConnector
-  const showLockButton = canLock || canUnlock || isLocked
+  const showLockButton = canLock || canUnlock
   const showDelete = !isLocked
+
+  // Build ordered list of button indices for stagger delay
+  let btnIndex = 0
 
   return (
     <div
       ref={menuRef}
       role="menu"
       aria-label="Shape actions"
-      className="flex flex-col gap-1 animate-[panel-in]"
+      className="flex flex-col gap-1"
       style={{ position: 'fixed', top: pos.y, left: pos.x, zIndex: 200 }}
     >
-      {/* ── Edit ›  (vertices / table operations) ─────────────────────────── */}
-      {showEdit && (
-        <CtxButton
-          id="edit"
-          label="Edit"
-          icon={<IconEdit />}
-          hasSubmenu
-          isOpen={openSubmenu === 'edit'}
-          onHoverEnter={handleHover}
-          onHoverLeave={handleHoverLeave}
-        >
-          {canEditVertices && (
-            <SubButton
-              label="Edit Vertices"
-              onClick={() => { onEditVertices(); onClose() }}
-            />
-          )}
-          {isTable && (
-            <>
-              <SubButton label="Add Row"      onClick={() => { onAddRow();    onClose() }} />
-              <SubButton label="Delete Row"   onClick={() => { onDeleteRow(); onClose() }} />
-              <SubButton label="Add Column"   onClick={() => { onAddColumn();    onClose() }} />
-              <SubButton label="Delete Column" onClick={() => { onDeleteColumn(); onClose() }} />
-            </>
-          )}
-        </CtxButton>
-      )}
-
-      {/* ── Copy / Paste › ────────────────────────────────────────────────── */}
+      {/* ── Copy / Paste / Duplicate › ────────────────────────────────────── */}
       <CtxButton
         id="copy"
         label="Copy / Paste"
         icon={<IconCopy />}
         hasSubmenu
         isOpen={openSubmenu === 'copy'}
+        revealed={revealed}
+        delay={btnIndex++ * BTN_STAGGER}
         onHoverEnter={handleHover}
         onHoverLeave={handleHoverLeave}
       >
@@ -369,26 +423,6 @@ export function ContextMenu({
         <SubButton label="Paste"     shortcut="Ctrl+V" onClick={() => { onPaste();     onClose() }} />
       </CtxButton>
 
-      {/* ── Arrange › (group / ungroup) ───────────────────────────────────── */}
-      {showArrange && (
-        <CtxButton
-          id="arrange"
-          label="Arrange"
-          icon={<IconArrange />}
-          hasSubmenu
-          isOpen={openSubmenu === 'arrange'}
-          onHoverEnter={handleHover}
-          onHoverLeave={handleHoverLeave}
-        >
-          {canGroup && (
-            <SubButton label="Group"   shortcut="Ctrl+G"       onClick={() => { onGroup();   onClose() }} />
-          )}
-          {canUngroup && (
-            <SubButton label="Ungroup" shortcut="Ctrl+Shift+G" onClick={() => { onUngroup(); onClose() }} />
-          )}
-        </CtxButton>
-      )}
-
       {/* ── Order › (z-order, hide when locked) ──────────────────────────── */}
       {!isLocked && (
         <CtxButton
@@ -397,6 +431,8 @@ export function ContextMenu({
           icon={<IconOrder />}
           hasSubmenu
           isOpen={openSubmenu === 'order'}
+          revealed={revealed}
+          delay={btnIndex++ * BTN_STAGGER}
           onHoverEnter={handleHover}
           onHoverLeave={handleHoverLeave}
         >
@@ -423,6 +459,48 @@ export function ContextMenu({
         </CtxButton>
       )}
 
+      {/* ── Arrange › (group / ungroup) ───────────────────────────────────── */}
+      {showArrange && (
+        <CtxButton
+          id="arrange"
+          label="Arrange"
+          icon={<IconArrange />}
+          hasSubmenu
+          isOpen={openSubmenu === 'arrange'}
+          revealed={revealed}
+          delay={btnIndex++ * BTN_STAGGER}
+          onHoverEnter={handleHover}
+          onHoverLeave={handleHoverLeave}
+        >
+          {canGroup && (
+            <SubButton label="Group"   shortcut="Ctrl+G"       onClick={() => { onGroup();   onClose() }} />
+          )}
+          {canUngroup && (
+            <SubButton label="Ungroup" shortcut="Ctrl+Shift+G" onClick={() => { onUngroup(); onClose() }} />
+          )}
+        </CtxButton>
+      )}
+
+      {/* ── Table Edit › (above Comment) ──────────────────────────────────── */}
+      {showTableEdit && (
+        <CtxButton
+          id="table-edit"
+          label="Edit Table"
+          icon={<IconEdit />}
+          hasSubmenu
+          isOpen={openSubmenu === 'table-edit'}
+          revealed={revealed}
+          delay={btnIndex++ * BTN_STAGGER}
+          onHoverEnter={handleHover}
+          onHoverLeave={handleHoverLeave}
+        >
+          <SubButton label="Add Row"       onClick={() => { onAddRow();       onClose() }} />
+          <SubButton label="Delete Row"    onClick={() => { onDeleteRow();    onClose() }} />
+          <SubButton label="Add Column"    onClick={() => { onAddColumn();    onClose() }} />
+          <SubButton label="Delete Column" onClick={() => { onDeleteColumn(); onClose() }} />
+        </CtxButton>
+      )}
+
       {/* ── Comment (hide for lines and data connectors) ──────────────────── */}
       {showComment && (
         <CtxButton
@@ -430,9 +508,29 @@ export function ContextMenu({
           label="Comment"
           icon={<IconComment />}
           isOpen={openSubmenu === 'comment'}
+          revealed={revealed}
+          delay={btnIndex++ * BTN_STAGGER}
           onHoverEnter={handleHover}
           onHoverLeave={handleHoverLeave}
-          onClick={() => { onCommentOpen?.(objectId); onClose() }}
+          onClick={(e) => {
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+            onCommentOpen?.(objectId, rect.left + rect.width / 2, rect.top + rect.height / 2)
+            onClose()
+          }}
+        />
+      )}
+
+      {/* ── Edit Vertices (below Comment, above Lock) ────────────────────── */}
+      {showEditVertices && (
+        <CtxButton
+          id="edit-vertices"
+          label="Edit Vertices"
+          icon={<IconEdit />}
+          revealed={revealed}
+          delay={btnIndex++ * BTN_STAGGER}
+          onHoverEnter={handleHover}
+          onHoverLeave={handleHoverLeave}
+          onClick={() => { onEditVertices(); onClose() }}
         />
       )}
 
@@ -445,6 +543,8 @@ export function ContextMenu({
               label="Lock"
               icon={<IconLock />}
               isOpen={openSubmenu === 'lock'}
+              revealed={revealed}
+              delay={btnIndex++ * BTN_STAGGER}
               onHoverEnter={handleHover}
               onHoverLeave={handleHoverLeave}
               onClick={() => { onLock(); onClose() }}
@@ -456,6 +556,8 @@ export function ContextMenu({
               label="Unlock"
               icon={<IconUnlock />}
               isOpen={openSubmenu === 'lock'}
+              revealed={revealed}
+              delay={btnIndex++ * BTN_STAGGER}
               onHoverEnter={handleHover}
               onHoverLeave={handleHoverLeave}
               onClick={() => { onUnlock(); onClose() }}
@@ -468,6 +570,8 @@ export function ContextMenu({
               icon={<IconLock />}
               disabled
               isOpen={false}
+              revealed={revealed}
+              delay={btnIndex++ * BTN_STAGGER}
               onHoverEnter={handleHover}
               onHoverLeave={handleHoverLeave}
             />
@@ -475,7 +579,7 @@ export function ContextMenu({
         </>
       )}
 
-      {/* ── Delete (danger, hide if locked) ──────────────────────────────── */}
+      {/* ── Delete (red, hide if locked) ─────────────────────────────────── */}
       {showDelete && (
         <CtxButton
           id="delete"
@@ -483,6 +587,8 @@ export function ContextMenu({
           icon={<IconDelete />}
           danger
           isOpen={openSubmenu === 'delete'}
+          revealed={revealed}
+          delay={btnIndex++ * BTN_STAGGER}
           onHoverEnter={handleHover}
           onHoverLeave={handleHoverLeave}
           onClick={() => { onDelete(); onClose() }}

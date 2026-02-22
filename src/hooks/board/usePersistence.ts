@@ -68,7 +68,7 @@ export function usePersistence({
   })
 
   // Drag: updateObjectDrag, updateObjectDragEnd, moveGroupChildren
-  const { updateObjectDrag, updateObjectDragEnd, moveGroupChildren } = usePersistenceDrag({
+  const { updateObjectDrag, updateObjectDragEnd, updateConnectorDrag, moveGroupChildren } = usePersistenceDrag({
     canEdit, supabase,
     setObjects, objectsRef,
     getDescendants,
@@ -100,6 +100,7 @@ export function usePersistence({
     persistZIndexBatch,
     updateObjectDrag,
     updateObjectDragEnd,
+    updateConnectorDrag,
     moveGroupChildren,
     waitForPersist,
   }

@@ -144,7 +144,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
   const {
     loadObjects, reconcileOnReconnect,
     addObject, addObjectWithId, updateObject, deleteObject, duplicateObject,
-    persistZIndexBatch, updateObjectDrag, updateObjectDragEnd,
+    persistZIndexBatch, updateObjectDrag, updateObjectDragEnd, updateConnectorDrag,
     moveGroupChildren, waitForPersist,
   } = usePersistence({
     boardId, userId, canEdit, supabase,
@@ -640,6 +640,7 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     moveGroupChildren,
     updateObjectDrag,
     updateObjectDragEnd,
+    updateConnectorDrag,
     checkFrameContainment,
     getChildren,
     getDescendants,

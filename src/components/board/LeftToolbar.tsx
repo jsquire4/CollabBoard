@@ -31,7 +31,6 @@ interface LeftToolbarProps {
   isEditingText: boolean
   activePreset: ShapePreset | null
   onPresetSelect: (preset: ShapePreset) => void
-  uiDarkMode?: boolean
   boardId?: string
   onFilePick?: (file: import('./FileLibraryPanel').FileRecord) => void
 }

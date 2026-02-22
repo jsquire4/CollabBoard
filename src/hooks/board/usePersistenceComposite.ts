@@ -112,6 +112,7 @@ export function usePersistenceComposite({
           for (const obj of newObjects) next.delete(obj.id)
           return next
         })
+        setSelectedIds(new Set())
       }
       fireAndRetry({
         operation: () => supabase.from('board_objects').insert(parentRow),

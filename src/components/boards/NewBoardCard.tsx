@@ -33,7 +33,7 @@ export function NewBoardCard({
           onChange={(e) => onNameChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') onCreate()
-            if (e.key === 'Escape') onCancel()
+            if (e.key === 'Escape' && !isSubmitting) onCancel()
           }}
           placeholder="Board name"
           className="mb-3 w-full rounded-lg border border-parchment-border bg-parchment px-3 py-2 text-sm text-charcoal outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/20"

@@ -106,8 +106,6 @@ export function usePersistenceDrag({
     if (descendants.length === 0) return
 
     const now = new Date().toISOString()
-    const changes: BoardChange[] = []
-
     const translateWaypoints = (wp: string | null | undefined): string | null => {
       if (!wp) return null
       try {
@@ -126,6 +124,8 @@ export function usePersistenceDrag({
     for (const d of descendants) {
       snapshot.set(d.id, { ...d })
     }
+
+    const changes: BoardChange[] = []
 
     for (const d of descendants) {
       const hasEndpoints = d.x2 != null && d.y2 != null
@@ -169,7 +169,6 @@ export function usePersistenceDrag({
 
     if (!skipDb) {
       // Build an id -> change lookup so the DB patch uses the same final values
-      // computed in the changes array (avoids re-deriving from potentially stale d.x / d.y)
       const changeById = new Map<string, Partial<BoardObject> & { id: string }>()
       for (const c of changes) {
         changeById.set(c.object.id, c.object as Partial<BoardObject> & { id: string })
@@ -206,9 +205,37 @@ export function usePersistenceDrag({
     }
   }, [canEdit, getDescendants, queueBroadcast, stampChange, notify, log, dragPositionsRef])
 
+  // Connector-specific drag: writes to BOTH ref (overlay) AND React state (triggers re-render).
+  // Connectors aren't Konva-dragged natively, so they need a re-render to visually update.
+  const updateConnectorDrag = useCallback((id: string, updates: Partial<BoardObject>) => {
+    if (!canEdit) return
+    if (checkLocked(objectsRef, id)) return
+
+    const now = new Date().toISOString()
+    if (dragPositionsRef) {
+      dragPositionsRef.current.set(id, {
+        ...(dragPositionsRef.current.get(id) ?? {}),
+        ...updates,
+        updated_at: now,
+      })
+    }
+    setObjects(prev => {
+      const existing = prev.get(id)
+      if (!existing) return prev
+      const next = new Map(prev)
+      next.set(id, { ...existing, ...updates, updated_at: now })
+      return next
+    })
+
+    const changedFields = Object.keys(updates).filter(k => k !== 'updated_at')
+    const clocks = stampChange(id, changedFields)
+    queueBroadcast([{ action: 'update', object: { id, ...updates }, clocks }])
+  }, [canEdit, queueBroadcast, stampChange, dragPositionsRef])
+
   return {
     updateObjectDrag,
     updateObjectDragEnd,
+    updateConnectorDrag,
     moveGroupChildren,
   }
 }

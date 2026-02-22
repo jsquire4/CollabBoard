@@ -79,8 +79,10 @@ export const VectorShape = memo(function VectorShape({
   const handleClick = () => onSelect(object.id)
   const handleLineDragStart = () => onDragStart?.(object.id)
 
-  // Shared logic for whole-line drag: compute snapped offset and build updates
-  const computeLineDragUpdates = (e: Konva.KonvaEventObject<DragEvent>): Partial<BoardObject> => {
+  // Shared logic for whole-line drag: compute snapped offset and build updates.
+  // resetNode: only true on dragEnd — during dragMove, let Konva keep the visual offset
+  // so the line follows the cursor in real time.
+  const computeLineDragUpdates = (e: Konva.KonvaEventObject<DragEvent>, resetNode: boolean): Partial<BoardObject> => {
     const node = e.target
     let offsetX = node.x()
     let offsetY = node.y()
@@ -89,8 +91,10 @@ export const VectorShape = memo(function VectorShape({
       offsetX = snapped.x - object.x
       offsetY = snapped.y - object.y
     }
-    node.x(0)
-    node.y(0)
+    if (resetNode) {
+      node.x(0)
+      node.y(0)
+    }
 
     const updates: Partial<BoardObject> = {
       x: object.x + offsetX,
@@ -110,12 +114,12 @@ export const VectorShape = memo(function VectorShape({
 
   const handleLineDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!onEndpointDragMove) return
-    onEndpointDragMove(object.id, computeLineDragUpdates(e))
+    onEndpointDragMove(object.id, computeLineDragUpdates(e, false))
   }
 
   const handleLineDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!onEndpointDragEnd) return
-    onEndpointDragEnd(object.id, computeLineDragUpdates(e))
+    onEndpointDragEnd(object.id, computeLineDragUpdates(e, true))
   }
 
   // Start anchor drag (updates x, y — keeps x2/y2 fixed)

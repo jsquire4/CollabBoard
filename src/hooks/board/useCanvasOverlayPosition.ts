@@ -35,7 +35,7 @@ export function useCanvasOverlayPosition(
   stagePos: { x: number; y: number },
   stageScale: number,
   elementRef: RefObject<HTMLElement | null>,
-  options?: { gap?: number; margin?: number }
+  options?: { gap?: number; margin?: number; extraDeps?: readonly unknown[] }
 ): OverlayPosition | null {
   const gap = options?.gap ?? 8
   const margin = options?.margin ?? 8
@@ -67,7 +67,8 @@ export function useCanvasOverlayPosition(
       if (prev !== null && prev.top === top && prev.left === left) return prev
       return { top, left }
     })
-  }, [bbox, stagePos, stageScale, gap, margin, elementRef])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bbox, stagePos, stageScale, gap, margin, elementRef, ...(options?.extraDeps ?? [])])
 
   return pos
 }

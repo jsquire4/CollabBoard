@@ -30,29 +30,35 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
     if (!user) return
 
     setIsSubmitting(true)
-    const { data, error } = await supabase
-      .from('boards')
-      .insert({ name, created_by: user.id })
-      .select()
-      .single()
+    try {
+      const { data, error } = await supabase
+        .from('boards')
+        .insert({ name, created_by: user.id })
+        .select()
+        .single()
 
-    if (error) {
+      if (error) {
+        toast.error('Failed to create board')
+        return
+      }
+      setNewName('')
+      setShowNameInput(false)
+      window.location.href = `/board/${data.id}`
+    } catch {
       toast.error('Failed to create board')
+    } finally {
       setIsSubmitting(false)
-      return
     }
-    setIsSubmitting(false)
-    setNewName('')
-    setShowNameInput(false)
-    window.location.href = `/board/${data.id}`
   }
 
   const handleRename = async (id: string) => {
+    if (editingId !== id) return
     const name = editName.trim().slice(0, 100)
     if (!name) {
       setEditingId(null)
       return
     }
+    setEditingId(null)
 
     const { error } = await supabase
       .from('boards')
@@ -65,7 +71,6 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
       setMyBoards(prev => prev.map(b => b.id === id ? { ...b, name } : b))
       setSharedBoards(prev => prev.map(b => b.id === id ? { ...b, name } : b))
     }
-    setEditingId(null)
   }
 
   const handleDelete = async (id: string) => {

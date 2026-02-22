@@ -228,7 +228,7 @@ describe('ContextMenu', () => {
     const onCommentOpen = vi.fn()
     const { onClose } = renderMenu('obj-1', objects, { onCommentOpen })
     fireEvent.click(screen.getByRole('button', { name: /comment/i }))
-    expect(onCommentOpen).toHaveBeenCalledWith('obj-1')
+    expect(onCommentOpen).toHaveBeenCalledWith('obj-1', expect.any(Number), expect.any(Number))
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
@@ -287,7 +287,7 @@ describe('ContextMenu', () => {
     )
     // Flush the rAF so the clamp effect runs with the real (mocked) getBoundingClientRect
     act(() => { vi.runAllTimers() })
-    const menu = screen.getByRole('button', { name: /copy/i }).closest('[style]')!
+    const menu = screen.getByRole('menu')!
     expect(menu).toHaveStyle({ left: '250px' })
   })
 
@@ -308,7 +308,7 @@ describe('ContextMenu', () => {
       </Wrapper>
     )
     act(() => { vi.runAllTimers() })
-    const menu = screen.getByRole('button', { name: /copy/i }).closest('[style]')!
+    const menu = screen.getByRole('menu')!
     expect(menu).toHaveStyle({ top: '350px' })
   })
 
@@ -329,7 +329,7 @@ describe('ContextMenu', () => {
       </Wrapper>
     )
     act(() => { vi.runAllTimers() })
-    const menu = screen.getByRole('button', { name: /copy/i }).closest('[style]')!
+    const menu = screen.getByRole('menu')!
     expect(menu).toHaveStyle({ left: '400px', top: '200px' })
   })
 })

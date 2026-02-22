@@ -193,6 +193,7 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
       .from('board_members')
       .delete()
       .eq('id', memberId)
+      .eq('board_id', boardId)
 
     if (error) {
       toast.error('Failed to remove member')

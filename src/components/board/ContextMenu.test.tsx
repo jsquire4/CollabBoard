@@ -93,6 +93,31 @@ describe('ContextMenu', () => {
     expect(screen.getByRole('button', { name: /duplicate/i })).toBeInTheDocument()
   })
 
+  it('clears hover timer on unmount to prevent setState after unmount', () => {
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
+    const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
+    const Wrapper = createBoardContextWrapper({
+      boardValue: { objects, isObjectLocked: () => false, activeGroupId: null },
+      mutationsValue: {
+        onDelete: vi.fn(), onDuplicate: vi.fn(), onCopy: vi.fn(), onCut: vi.fn(),
+        onPaste: vi.fn(), onGroup: vi.fn(), onUngroup: vi.fn(),
+        canGroup: false, canUngroup: false, canLock: false, canUnlock: false, canEditVertices: false,
+      },
+    })
+    const { unmount } = render(
+      <Wrapper>
+        <ContextMenu position={{ x: 100, y: 100 }} objectId="obj-1" onClose={vi.fn()} />
+      </Wrapper>
+    )
+    const copyBtn = screen.getByRole('button', { name: /copy/i })
+    const wrapper = copyBtn.closest('[data-submenu-id]') ?? copyBtn.parentElement!
+    fireEvent.mouseEnter(wrapper)
+    clearTimeoutSpy.mockClear()
+    unmount()
+    expect(clearTimeoutSpy).toHaveBeenCalled()
+    clearTimeoutSpy.mockRestore()
+  })
+
   it('calls onDuplicate and onClose when Duplicate sub-button is clicked', () => {
     const objects = new Map([['obj-1', makeRectangle({ id: 'obj-1' })]])
     const onDuplicate = vi.fn()

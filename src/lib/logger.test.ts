@@ -24,6 +24,12 @@ describe('logger', () => {
     expect(spy).toHaveBeenCalledWith('[ERROR] fail', 'oops')
   })
 
+  it('logs error with non-Error error value', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    logger.error({ message: 'fail', error: 'string error' })
+    expect(spy).toHaveBeenCalledWith('[ERROR] fail', 'string error')
+  })
+
   it('includes board and user IDs when provided', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     logger.error({ message: 'test', boardId: '12345678-abcd', userId: 'abcd1234-efgh' })

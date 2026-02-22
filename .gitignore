@@ -55,4 +55,8 @@ CLAUDE.md
 /docs
 /research
 AI_Dev_log.md
-PLAN.md
+PLAN.md.claude/heartbeat.sh
+.claude/heartbeat.pid
+.claude/heartbeat.session
+.claude/pr-review.log
+.claude/heartbeat.reviewed

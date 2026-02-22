@@ -157,4 +157,70 @@ describe('useCursors', () => {
     // With userCount=1, throttle is 16ms; all three calls are within same tick
     expect(mockSend).toHaveBeenCalledTimes(1)
   })
+
+  it('sendCursor catches and logs when channel.send throws', () => {
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const mockSend = vi.fn().mockImplementation(() => {
+      throw new Error('send failed')
+    })
+    const channel = {
+      state: 'joined',
+      send: mockSend,
+      on: vi.fn(() => ({})),
+    } as unknown as Parameters<typeof useCursors>[0]
+
+    const { result } = renderHook(() => useCursors(channel, 'u1', 1))
+
+    expect(() => {
+      act(() => {
+        result.current.sendCursor(100, 200)
+      })
+    }).not.toThrow()
+    expect(consoleSpy).toHaveBeenCalledWith('[Realtime] cursor channel.send() threw unexpectedly:', expect.any(Error))
+    consoleSpy.mockRestore()
+  })
+
+  it('sendCursorDirect catches and logs when channel.send throws', () => {
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const mockSend = vi.fn().mockImplementation(() => {
+      throw new Error('send failed')
+    })
+    const channel = {
+      state: 'joined',
+      send: mockSend,
+      on: vi.fn(() => ({})),
+    } as unknown as Parameters<typeof useCursors>[0]
+
+    const { result } = renderHook(() => useCursors(channel, 'u1', 1))
+
+    expect(() => {
+      act(() => {
+        result.current.sendCursorDirect(100, 200)
+      })
+    }).not.toThrow()
+    expect(consoleSpy).toHaveBeenCalledWith('[Realtime] cursor channel.send() threw unexpectedly (direct):', expect.any(Error))
+    consoleSpy.mockRestore()
+  })
+
+  it('broadcast handler ignores malformed payloads (NaN, Infinity, missing coords)', () => {
+    let broadcastHandler: ((args: { payload: { x?: number; y?: number; user_id: string } }) => void) | null = null
+    const mockOn = vi.fn((_e: string, _o: unknown, h?: (a: unknown) => void) => {
+      if (h) broadcastHandler = h as typeof broadcastHandler
+      return {}
+    })
+
+    const channel = {
+      state: 'joined',
+      send: vi.fn(),
+      on: mockOn,
+    } as unknown as Parameters<typeof useCursors>[0]
+
+    renderHook(() => useCursors(channel, 'u1', 2))
+    expect(broadcastHandler).not.toBeNull()
+
+    // Malformed payloads should not throw; handler returns early
+    expect(() => broadcastHandler!({ payload: { user_id: 'other', x: NaN, y: 100 } })).not.toThrow()
+    expect(() => broadcastHandler!({ payload: { user_id: 'other', x: Infinity, y: 1 } })).not.toThrow()
+    expect(() => broadcastHandler!({ payload: { user_id: 'other', x: 1 } })).not.toThrow()
+  })
 })

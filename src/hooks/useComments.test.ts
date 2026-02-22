@@ -182,7 +182,21 @@ describe('useComments', () => {
     expect(result.current.error).toBeNull()
   })
 
-  // 7. Does not load when enabled is false
+  // 7. Sets error when fetch fails
+  it('sets error when fetch fails', async () => {
+    mockSelectResult = { data: null, error: { message: 'DB connection failed' } }
+
+    const { result } = renderHook(() =>
+      useComments({ boardId: BOARD_ID, objectId: OBJECT_ID }),
+    )
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+      expect(result.current.error).toBe('DB connection failed')
+    })
+  })
+
+  // 8. Does not load when enabled is false
   it('does not load when enabled is false', () => {
     const { result } = renderHook(() =>
       useComments({ boardId: BOARD_ID, objectId: OBJECT_ID, enabled: false }),

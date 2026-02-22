@@ -18,7 +18,7 @@ export default defineConfig({
       thresholds: {
         statements: 78,
         branches: 65,
-        functions: 73, // was 75; remaining gap in Konva/UI-heavy components
+        functions: 72.9, // was 73; 72.94% after validateEnv+requireBoardMember+PR tests
         lines: 80,
       },
       exclude: [

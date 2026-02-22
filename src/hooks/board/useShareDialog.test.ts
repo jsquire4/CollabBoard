@@ -43,7 +43,7 @@ const BOARD_ID = '11111111-1111-1111-1111-111111111111'
 
 describe('useShareDialog', () => {
   afterEach(() => {
-
+    vi.useRealTimers()
   })
 
   beforeEach(() => {
@@ -501,6 +501,51 @@ describe('useShareDialog', () => {
       expect.stringContaining('/board/join/xyz789')
     )
     expect(result.current.copied).toBe(true)
+  })
+
+  it('clears copy-feedback timer on unmount to prevent setState on unmounted component', async () => {
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
+    mockRpc.mockImplementation((name: string) => {
+      if (name === 'get_board_member_details') return Promise.resolve({ data: [], error: null })
+      return Promise.resolve({ data: null, error: null })
+    })
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'board_share_links') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          limit: vi.fn(() => Promise.resolve({
+            data: [{ id: 'l1', token: 'xyz789', role: 'viewer' }],
+            error: null,
+          })),
+        }
+      }
+      if (table === 'board_invites') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          limit: vi.fn(() => Promise.resolve({ data: [], error: null })),
+        }
+      }
+      return {}
+    })
+
+    const { result, unmount } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+      expect(result.current.shareLink).not.toBeNull()
+    })
+
+    await act(async () => {
+      await result.current.copyLink()
+    })
+    expect(result.current.copied).toBe(true)
+
+    clearTimeoutSpy.mockClear()
+    unmount()
+    // Cleanup runs on unmount and clears the copy-feedback timer
+    expect(clearTimeoutSpy).toHaveBeenCalled()
+    clearTimeoutSpy.mockRestore()
   })
 
   it('confirmTransferOwnership: calls RPC and clears transferTarget', async () => {

@@ -173,8 +173,10 @@ export function usePersistenceComposite({
           if (error) log.warn({ message: 'Failed to update z_index', operation: 'persistZIndexBatch', error })
         }
       }
+    }).catch((err: unknown) => {
+      log.error({ message: 'Unexpected error in persistZIndexBatch', operation: 'persistZIndexBatch', error: err })
     })
-  }, [log])
+  }, [log, notify])
 
   return {
     duplicateObject,

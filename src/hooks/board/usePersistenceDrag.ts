@@ -200,6 +200,8 @@ export function usePersistenceDrag({
           })
           notify('Failed to save group move')
         }
+      }).catch((err: unknown) => {
+        log.error({ message: 'Unexpected error in moveGroupChildren', operation: 'moveGroupChildren', error: err })
       })
     }
   }, [canEdit, getDescendants, queueBroadcast, stampChange, notify, log, dragPositionsRef])

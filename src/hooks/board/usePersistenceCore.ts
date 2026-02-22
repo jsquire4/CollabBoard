@@ -54,6 +54,7 @@ export function usePersistenceCore({
 
     if (data && data.length === 5000) {
       console.warn('Board object limit reached (5000). Some objects may not be loaded.')
+      notify('This board has too many objects to display all of them (limit: 5000).')
     }
 
     const map = new Map<string, BoardObject>()

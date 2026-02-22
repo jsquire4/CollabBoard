@@ -217,7 +217,15 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                   Send Invite
                 </button>
                 {inviteStatus && (
-                  <p className={`mt-3 text-sm ${inviteStatus.startsWith('Added') || inviteStatus.startsWith('Invite') ? 'text-green-600' : 'text-red-600'}`}>
+                  <p
+                    className={`mt-3 text-sm ${
+                      inviteStatus.startsWith('Added') || inviteStatus.startsWith('Invite')
+                        ? inviteStatus.includes('could not be sent') || inviteStatus.includes('not sent')
+                          ? 'text-amber-600 dark:text-amber-500'
+                          : 'text-green-600'
+                        : 'text-red-600'
+                    }`}
+                  >
                     {inviteStatus}
                   </p>
                 )}

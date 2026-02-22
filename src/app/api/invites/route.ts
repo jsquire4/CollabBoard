@@ -13,6 +13,40 @@ import { resend } from '@/lib/resend'
 
 const VALID_ROLES = new Set(['manager', 'editor', 'viewer'])
 
+async function sendBoardNotificationEmail(params: {
+  to: string
+  inviterName: string
+  boardName: string
+  role: string
+  linkUrl: string
+  linkLabel: string
+  heading: string
+  bodyText: string
+}): Promise<{ error?: unknown }> {
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'Theorem <notifications@theoremai.app>'
+  const { error } = await resend.emails.send({
+    from: fromEmail,
+    to: params.to,
+    subject: `${params.inviterName} ${params.bodyText.toLowerCase()} "${params.boardName}"`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+        <h2>${params.heading}</h2>
+        <p><strong>${params.inviterName}</strong> ${params.bodyText} <strong>&ldquo;${params.boardName}&rdquo;</strong> as a <strong>${params.role}</strong>.</p>
+        <p>
+          <a href="${params.linkUrl}" style="display: inline-block; background: #1a1f36; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500;">
+            ${params.linkLabel}
+          </a>
+        </p>
+        <p style="color: #666; font-size: 14px; margin-top: 24px;">
+          If the button doesn't work, copy and paste this link:<br/>
+          <a href="${params.linkUrl}">${params.linkUrl}</a>
+        </p>
+      </div>
+    `,
+  })
+  return { error }
+}
+
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
@@ -68,8 +102,9 @@ export async function POST(request: NextRequest) {
   }
 
   // 4. Check if invitee is an existing user via SECURITY DEFINER RPC (auth.users not PostgREST-accessible)
-  const { data: existingUserId, error: lookupError } = await admin
-    .rpc('lookup_user_by_email', { p_email: email })
+  // Use user client so auth.uid() is set for the RPC's permission check; admin client has no user JWT
+  const { data: existingUserId, error: lookupError } = await supabase
+    .rpc('lookup_user_by_email', { p_board_id: boardId, p_email: email })
 
   if (lookupError) {
     console.error('[api/invites] Failed to look up user by email:', lookupError)
@@ -91,7 +126,32 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Failed to add member' }, { status: 500 })
     }
 
-    return Response.json({ outcome: 'added' }, { status: 201 })
+    // Send notification email (fire-and-forget)
+    let emailWarning: string | undefined
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : '')
+    if (appUrl) {
+      const { data: board } = await admin.from('boards').select('name').eq('id', boardId).maybeSingle()
+      const boardName = escapeHtml(board?.name ?? 'a board')
+      const inviterName = escapeHtml(user.user_metadata?.full_name ?? user.email ?? 'Someone')
+      const safeRole = escapeHtml(role)
+      const boardUrl = `${appUrl}/board/${boardId}`
+      const { error: sendError } = await sendBoardNotificationEmail({
+        to: email,
+        inviterName,
+        boardName,
+        role: safeRole,
+        linkUrl: boardUrl,
+        linkLabel: 'Open Board',
+        heading: "You've been added!",
+        bodyText: 'added you to',
+      })
+      if (sendError) {
+        console.error('[api/invites] Resend API error (existing user):', JSON.stringify(sendError, null, 2))
+        emailWarning = 'Member added but notification email could not be sent'
+      }
+    }
+
+    return Response.json({ outcome: 'added', ...(emailWarning && { emailWarning }) }, { status: 201 })
   }
 
   // 5. New user: create invite
@@ -134,28 +194,18 @@ export async function POST(request: NextRequest) {
   // 7. Send email (fire-and-forget — don't fail the invite on email error)
   let emailWarning: string | undefined
   try {
-    const { error: sendError } = await resend.emails.send({
-      from: 'Theorem <notifications@theorem.app>',
+    const { error: sendError } = await sendBoardNotificationEmail({
       to: email,
-      subject: `${inviterName} invited you to "${boardName}"`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-          <h2>You've been invited!</h2>
-          <p><strong>${inviterName}</strong> invited you to join <strong>&ldquo;${boardName}&rdquo;</strong> as a <strong>${safeRole}</strong>.</p>
-          <p>
-            <a href="${acceptUrl}" style="display: inline-block; background: #1a1f36; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500;">
-              Accept Invite
-            </a>
-          </p>
-          <p style="color: #666; font-size: 14px; margin-top: 24px;">
-            If the button doesn't work, copy and paste this link:<br/>
-            <a href="${acceptUrl}">${acceptUrl}</a>
-          </p>
-        </div>
-      `,
+      inviterName,
+      boardName,
+      role: safeRole,
+      linkUrl: acceptUrl,
+      linkLabel: 'Accept Invite',
+      heading: "You've been invited!",
+      bodyText: 'invited you to join',
     })
     if (sendError) {
-      console.error('[api/invites] Resend API error:', sendError)
+      console.error('[api/invites] Resend API error:', JSON.stringify(sendError, null, 2))
       emailWarning = 'Invite created but email notification could not be sent'
     }
   } catch (err) {

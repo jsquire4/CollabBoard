@@ -114,9 +114,11 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
 
       if (res.status === 201) {
         if (data.outcome === 'added') {
-          setInviteStatus(`Added ${email} as ${inviteRole}`)
+          const base = `Added ${email} as ${inviteRole}`
+          setInviteStatus(data.emailWarning ? `${base}. ${data.emailWarning}` : base)
         } else if (data.outcome === 'invited') {
-          setInviteStatus(`Invited ${email} (pending signup)`)
+          const base = `Invited ${email} (pending signup)`
+          setInviteStatus(data.emailWarning ? `${base}. ${data.emailWarning}` : base)
         } else {
           setInviteStatus(`Invite processed for ${email}`)
         }

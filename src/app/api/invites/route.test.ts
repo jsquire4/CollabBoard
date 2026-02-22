@@ -15,6 +15,7 @@ const {
   mockGetUser,
   mockAdminFrom,
   mockAdminRpc,
+  mockUserRpc,
   mockEmailsSend,
   mockRequireBoardMember,
 } = vi.hoisted(() => ({
@@ -24,6 +25,7 @@ const {
   mockGetUser: vi.fn(),
   mockAdminFrom: vi.fn(),
   mockAdminRpc: vi.fn(),
+  mockUserRpc: vi.fn(),
   mockEmailsSend: vi.fn(),
   mockRequireBoardMember: vi.fn(),
 }))
@@ -33,6 +35,7 @@ const {
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: { getUser: mockGetUser },
+    rpc: mockUserRpc,
   }),
 }))
 
@@ -92,7 +95,7 @@ function mockMemberCheck(role: string | null) {
 }
 
 function setupRpcUserLookup(userId: string | null) {
-  mockAdminRpc.mockResolvedValue({ data: userId, error: null })
+  mockUserRpc.mockResolvedValue({ data: userId, error: null })
 }
 
 function mockBoardLookup(name: string) {
@@ -268,6 +271,7 @@ describe('POST /api/invites', () => {
         if (table === 'board_members') {
           return { upsert: vi.fn().mockResolvedValue({ error: null }) }
         }
+        if (table === 'boards') return mockBoardLookup('My Board')
         return {}
       })
     })
@@ -278,9 +282,15 @@ describe('POST /api/invites', () => {
       expect(await res.json()).toMatchObject({ outcome: 'added' })
     })
 
-    it('does not send email when adding existing user', async () => {
+    it('sends notification email when adding existing user', async () => {
       await POST(makeRequest(VALID_BODY))
-      expect(mockEmailsSend).not.toHaveBeenCalled()
+      expect(mockEmailsSend).toHaveBeenCalledOnce()
+      expect(mockEmailsSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'invitee@example.com',
+          subject: expect.stringContaining('added you to'),
+        })
+      )
     })
 
     it('returns 500 when member upsert fails', async () => {
@@ -363,7 +373,7 @@ describe('POST /api/invites', () => {
     it('normalizes email to lowercase', async () => {
       await POST(makeRequest({ ...VALID_BODY, email: 'USER@EXAMPLE.COM' }))
       // The RPC should receive the lowercased email
-      expect(mockAdminRpc).toHaveBeenCalledWith('lookup_user_by_email', { p_email: 'user@example.com' })
+      expect(mockUserRpc).toHaveBeenCalledWith('lookup_user_by_email', { p_board_id: TEST_BOARD_ID, p_email: 'user@example.com' })
     })
 
     it('trims whitespace from email before validation', async () => {

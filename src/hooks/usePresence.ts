@@ -121,6 +121,7 @@ export function usePresence(
   const updatePresence = useCallback((status: 'active' | 'idle') => {
     if (!channel || !presencePayloadRef.current) return
     if ((channel as unknown as { state: string }).state !== 'joined') return
+    if (presencePayloadRef.current.status === status) return // no-op if unchanged — avoids 60 channel.track() calls/sec during drag
     const next = { ...presencePayloadRef.current, status }
     presencePayloadRef.current = next
     channel.track(next)

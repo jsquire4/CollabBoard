@@ -233,7 +233,7 @@ describe('ContextMenu', () => {
 
   // ── Markers moved to PropertiesPanel — not in context menu ────────────
 
-  it('does not show marker options (markers live in PropertiesPanel now)', () => {
+  it('does not show marker options (markers live in SelectionBar)', () => {
     const objects = new Map([['obj-1', makeArrow({ id: 'obj-1' })]])
     renderMenu('obj-1', objects)
     expect(screen.queryByText('Start marker')).not.toBeInTheDocument()

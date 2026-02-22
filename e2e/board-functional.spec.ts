@@ -249,8 +249,8 @@ test.describe('Board functional', () => {
     await canvas.click({ position: { x: 300, y: 300 }, button: 'right', force: true })
     await page.waitForTimeout(300)
 
-    // Context menu: a fixed div with min-w-[224px] class
-    const contextMenu = page.locator('.min-w-\\[224px\\]').first()
+    // Context menu: directional strip with role="menu"
+    const contextMenu = page.getByRole('menu', { name: 'Shape actions' }).first()
     const isVisible = await contextMenu.isVisible({ timeout: 3000 }).catch(() => false)
 
     if (isVisible) {

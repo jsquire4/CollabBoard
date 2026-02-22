@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import { ColorPicker } from './ColorPicker'
 
@@ -9,37 +9,7 @@ interface RichTextToolbarProps {
   dark?: boolean
 }
 
-interface ToolbarButtonProps {
-  label: string
-  shortLabel: string
-  isActive: boolean
-  onClick: () => void
-  dark?: boolean
-  style?: React.CSSProperties
-}
-
-function ToolbarButton({ label, shortLabel, isActive, onClick, dark, style }: ToolbarButtonProps) {
-  return (
-    <button
-      type="button"
-      title={label}
-      onMouseDown={(e) => {
-        e.preventDefault() // prevent editor blur
-        onClick()
-      }}
-      className={`flex h-8 w-8 items-center justify-center rounded text-xs font-medium transition-colors
-        ${isActive
-          ? (dark ? 'bg-navy text-parchment' : 'bg-navy/10 text-navy')
-          : (dark ? 'text-parchment/80 hover:bg-white/15' : 'text-charcoal/70 hover:bg-parchment-dark')
-        }`}
-      style={style}
-    >
-      {shortLabel}
-    </button>
-  )
-}
-
-// Active state snapshot — read from editor in event handlers, stored in state for render
+// Active state snapshot — read from editor, stored in state for render
 interface ActiveState {
   bold: boolean
   italic: boolean
@@ -54,13 +24,15 @@ interface ActiveState {
   h3: boolean
   textAlign: 'left' | 'center' | 'right'
   textColor: string | null
+  fontFamily: string | null
+  fontSize: string | null
 }
 
 const EMPTY_ACTIVE: ActiveState = {
   bold: false, italic: false, underline: false, strike: false,
   highlight: false, bulletList: false, orderedList: false, taskList: false,
   h1: false, h2: false, h3: false,
-  textAlign: 'left', textColor: null,
+  textAlign: 'left', textColor: null, fontFamily: null, fontSize: null,
 }
 
 function readActiveState(editor: Editor | null): ActiveState {
@@ -80,18 +52,72 @@ function readActiveState(editor: Editor | null): ActiveState {
     textAlign: editor.isActive({ textAlign: 'center' }) ? 'center'
              : editor.isActive({ textAlign: 'right' }) ? 'right' : 'left',
     textColor: (editor.getAttributes('textStyle').color as string | undefined) ?? null,
+    fontFamily: (editor.getAttributes('textStyle').fontFamily as string | undefined) ?? null,
+    fontSize: (editor.getAttributes('textStyle').fontSize as string | undefined) ?? null,
   }
 }
 
+// ── Font options ──────────────────────────────────────────────────────────────
+
+const FONT_FAMILIES = [
+  { label: 'Default', value: '' },
+  { label: 'Inter', value: 'Inter, sans-serif' },
+  { label: 'Serif', value: 'Georgia, serif' },
+  { label: 'Mono', value: 'ui-monospace, monospace' },
+  { label: 'Comic', value: '"Comic Sans MS", cursive' },
+  { label: 'Impact', value: 'Impact, sans-serif' },
+]
+
+const FONT_SIZES = ['10', '12', '14', '16', '18', '20', '24', '28', '32', '36', '48', '64']
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+interface BtnProps {
+  label: string
+  isActive: boolean
+  onClick: () => void
+  dark?: boolean
+  children: React.ReactNode
+  style?: React.CSSProperties
+}
+
+function Btn({ label, isActive, onClick, dark, children, style }: BtnProps) {
+  return (
+    <button
+      type="button"
+      title={label}
+      onMouseDown={(e) => { e.preventDefault(); onClick() }}
+      style={style}
+      className={`flex h-7 min-w-[28px] items-center justify-center rounded px-1 text-xs font-medium transition-colors
+        ${isActive
+          ? (dark ? 'bg-parchment/20 text-parchment' : 'bg-navy/15 text-navy')
+          : (dark ? 'text-parchment/75 hover:bg-parchment/10' : 'text-charcoal/65 hover:bg-charcoal/10')
+        }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function Divider({ dark }: { dark?: boolean }) {
+  return <div className={`h-5 w-px mx-0.5 shrink-0 ${dark ? 'bg-white/15' : 'bg-charcoal/15'}`} />
+}
+
+// ── Main toolbar ──────────────────────────────────────────────────────────────
+
 export function RichTextToolbar({ editor, dark }: RichTextToolbarProps) {
   const [active, setActive] = useState<ActiveState>(EMPTY_ACTIVE)
+  const [fontSizeInput, setFontSizeInput] = useState('')
+  const fontSizeRef = useRef<HTMLInputElement>(null)
 
-  // Subscribe to editor selection/transaction changes to update active states
+  // Subscribe to editor changes
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
-
-    const handler = () => setActive(readActiveState(editor))
-    // Initial read
+    const handler = () => {
+      const state = readActiveState(editor)
+      setActive(state)
+      setFontSizeInput(state.fontSize ? state.fontSize.replace('px', '') : '')
+    }
     handler()
     editor.on('selectionUpdate', handler)
     editor.on('transaction', handler)
@@ -106,143 +132,185 @@ export function RichTextToolbar({ editor, dark }: RichTextToolbarProps) {
     cmd(editor)
   }, [editor])
 
+  const applyFontSize = useCallback((value: string) => {
+    if (!editor || editor.isDestroyed) return
+    const px = parseInt(value, 10)
+    if (!isNaN(px) && px > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(editor.chain().focus() as any).setFontSize(`${px}px`).run()
+    }
+  }, [editor])
+
+  const currentFontFamily = active.fontFamily ?? ''
+
   return (
     <div
-      className="flex flex-col items-center gap-0.5"
+      className="flex flex-col items-start gap-0.5 w-full"
       onMouseDown={(e) => e.preventDefault()}
     >
-      {/* Text formatting */}
-      <ToolbarButton
-        label="Bold"
-        shortLabel="B"
-        isActive={active.bold}
-        onClick={() => run(e => e.chain().focus().toggleBold().run())}
-        dark={dark}
-        style={{ fontWeight: 'bold' }}
-      />
-      <ToolbarButton
-        label="Italic"
-        shortLabel="I"
-        isActive={active.italic}
-        onClick={() => run(e => e.chain().focus().toggleItalic().run())}
-        dark={dark}
-        style={{ fontStyle: 'italic' }}
-      />
-      <ToolbarButton
-        label="Underline"
-        shortLabel="U"
-        isActive={active.underline}
-        onClick={() => run(e => e.chain().focus().toggleUnderline().run())}
-        dark={dark}
-        style={{ textDecoration: 'underline' }}
-      />
-      <ToolbarButton
-        label="Strikethrough"
-        shortLabel="S"
-        isActive={active.strike}
-        onClick={() => run(e => e.chain().focus().toggleStrike().run())}
-        dark={dark}
-        style={{ textDecoration: 'line-through' }}
-      />
+      {/* ── Row 1: Font family + size ── */}
+      <div className="flex items-center gap-0.5 w-full flex-wrap">
+        {/* Font family */}
+        <select
+          value={currentFontFamily}
+          onChange={(e) => {
+            const val = e.target.value
+            run(ed =>
+              val
+                ? ed.chain().focus().setFontFamily(val).run()
+                : ed.chain().focus().unsetFontFamily().run()
+            )
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          className={`h-7 rounded px-1 text-[11px] transition cursor-pointer outline-none border
+            ${dark
+              ? 'bg-white/10 border-white/20 text-parchment'
+              : 'bg-parchment-dark border-charcoal/15 text-charcoal'
+            }`}
+          style={{ maxWidth: 84 }}
+        >
+          {FONT_FAMILIES.map(f => (
+            <option key={f.value} value={f.value}>{f.label}</option>
+          ))}
+        </select>
 
-      <div className={`my-1 h-px w-8 ${dark ? 'bg-white/10' : 'bg-parchment-border'}`} />
-
-      {/* Highlight */}
-      <ToolbarButton
-        label="Highlight"
-        shortLabel="H"
-        isActive={active.highlight}
-        onClick={() => run(e => e.chain().focus().toggleHighlight().run())}
-        dark={dark}
-        style={{ backgroundColor: active.highlight ? '#fef08a' : undefined }}
-      />
-
-      <div className={`my-1 h-px w-8 ${dark ? 'bg-white/10' : 'bg-parchment-border'}`} />
-
-      {/* Lists */}
-      <ToolbarButton
-        label="Bullet List"
-        shortLabel="•"
-        isActive={active.bulletList}
-        onClick={() => run(e => e.chain().focus().toggleBulletList().run())}
-        dark={dark}
-      />
-      <ToolbarButton
-        label="Ordered List"
-        shortLabel="1."
-        isActive={active.orderedList}
-        onClick={() => run(e => e.chain().focus().toggleOrderedList().run())}
-        dark={dark}
-      />
-      <ToolbarButton
-        label="Checklist"
-        shortLabel="☑"
-        isActive={active.taskList}
-        onClick={() => run(e => e.chain().focus().toggleTaskList().run())}
-        dark={dark}
-      />
-
-      <div className={`my-1 h-px w-8 ${dark ? 'bg-white/10' : 'bg-parchment-border'}`} />
-
-      {/* Headings */}
-      <ToolbarButton
-        label="Heading 1"
-        shortLabel="H1"
-        isActive={active.h1}
-        onClick={() => run(e => e.chain().focus().toggleHeading({ level: 1 }).run())}
-        dark={dark}
-      />
-      <ToolbarButton
-        label="Heading 2"
-        shortLabel="H2"
-        isActive={active.h2}
-        onClick={() => run(e => e.chain().focus().toggleHeading({ level: 2 }).run())}
-        dark={dark}
-      />
-      <ToolbarButton
-        label="Heading 3"
-        shortLabel="H3"
-        isActive={active.h3}
-        onClick={() => run(e => e.chain().focus().toggleHeading({ level: 3 }).run())}
-        dark={dark}
-      />
-
-      <div className={`my-1 h-px w-8 ${dark ? 'bg-white/10' : 'bg-parchment-border'}`} />
-
-      {/* Text color */}
-      <div
-        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation() }}
-      >
-        <ColorPicker
-          compact
-          label="Text color"
-          selectedColor={active.textColor ?? '#1C1C1E'}
-          onColorChange={(color) => run(e => e.chain().focus().setColor(color).run())}
-        />
+        {/* Font size input + dropdown */}
+        <div className="flex items-center">
+          <input
+            ref={fontSizeRef}
+            type="number"
+            min={6}
+            max={200}
+            value={fontSizeInput}
+            onChange={(e) => setFontSizeInput(e.target.value)}
+            onMouseDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { applyFontSize(fontSizeInput); editor?.commands.focus() }
+            }}
+            onBlur={() => applyFontSize(fontSizeInput)}
+            placeholder="px"
+            className={`h-7 w-10 rounded-l px-1 text-[11px] text-center transition outline-none border
+              ${dark
+                ? 'bg-white/10 border-white/20 text-parchment'
+                : 'bg-parchment-dark border-charcoal/15 text-charcoal'
+              }`}
+          />
+          <select
+            value={fontSizeInput}
+            onChange={(e) => { setFontSizeInput(e.target.value); applyFontSize(e.target.value) }}
+            onMouseDown={(e) => e.stopPropagation()}
+            className={`h-7 w-6 rounded-r border-l-0 px-0 text-[10px] transition cursor-pointer outline-none border
+              ${dark
+                ? 'bg-white/10 border-white/20 text-parchment'
+                : 'bg-parchment-dark border-charcoal/15 text-charcoal'
+              }`}
+          >
+            {FONT_SIZES.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {/* Text alignment */}
-      <ToolbarButton
-        label="Align left"
-        shortLabel="≡"
-        isActive={active.textAlign === 'left'}
-        onClick={() => run(e => e.chain().focus().setTextAlign('left').run())}
-        dark={dark}
-      />
-      <ToolbarButton
-        label="Align center"
-        shortLabel="≡"
-        isActive={active.textAlign === 'center'}
-        onClick={() => run(e => e.chain().focus().setTextAlign('center').run())}
-        dark={dark}
-      />
-      <ToolbarButton
-        label="Align right"
-        shortLabel="≡"
-        isActive={active.textAlign === 'right'}
-        onClick={() => run(e => e.chain().focus().setTextAlign('right').run())}
-        dark={dark}
-      />
+      {/* ── Row 2: Formatting ── */}
+      <div className="flex items-center gap-0.5 flex-wrap">
+        <Btn label="Bold (⌘B)" isActive={active.bold} dark={dark}
+          onClick={() => run(e => e.chain().focus().toggleBold().run())}
+          style={{ fontWeight: 'bold' }}
+        >B</Btn>
+        <Btn label="Italic (⌘I)" isActive={active.italic} dark={dark}
+          onClick={() => run(e => e.chain().focus().toggleItalic().run())}
+          style={{ fontStyle: 'italic' }}
+        >I</Btn>
+        <Btn label="Underline (⌘U)" isActive={active.underline} dark={dark}
+          onClick={() => run(e => e.chain().focus().toggleUnderline().run())}
+          style={{ textDecoration: 'underline' }}
+        >U</Btn>
+        <Btn label="Strikethrough" isActive={active.strike} dark={dark}
+          onClick={() => run(e => e.chain().focus().toggleStrike().run())}
+          style={{ textDecoration: 'line-through' }}
+        >S</Btn>
+
+        <Divider dark={dark} />
+
+        <Btn label="Highlight" isActive={active.highlight} dark={dark}
+          onClick={() => run(e => e.chain().focus().toggleHighlight().run())}
+          style={active.highlight ? { backgroundColor: '#fef08a', color: '#1c1c1e' } : undefined}
+        >H</Btn>
+
+        {/* Text color */}
+        <div onMouseDown={(e) => { e.preventDefault(); e.stopPropagation() }}>
+          <ColorPicker
+            compact
+            label="Text color"
+            selectedColor={active.textColor ?? '#1C1C1E'}
+            onColorChange={(color) => run(e => e.chain().focus().setColor(color).run())}
+          />
+        </div>
+
+        <Divider dark={dark} />
+
+        {/* Headings */}
+        <Btn label="Heading 1" isActive={active.h1} dark={dark}
+          onClick={() => run(e => e.chain().focus().toggleHeading({ level: 1 }).run())}
+        >H1</Btn>
+        <Btn label="Heading 2" isActive={active.h2} dark={dark}
+          onClick={() => run(e => e.chain().focus().toggleHeading({ level: 2 }).run())}
+        >H2</Btn>
+        <Btn label="Heading 3" isActive={active.h3} dark={dark}
+          onClick={() => run(e => e.chain().focus().toggleHeading({ level: 3 }).run())}
+        >H3</Btn>
+      </div>
+
+      {/* ── Row 3: Lists + alignment ── */}
+      <div className="flex items-center gap-0.5 flex-wrap">
+        <Btn label="Bullet list" isActive={active.bulletList} dark={dark}
+          onClick={() => run(e => e.chain().focus().toggleBulletList().run())}
+        >
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+          </svg>
+        </Btn>
+        <Btn label="Ordered list" isActive={active.orderedList} dark={dark}
+          onClick={() => run(e => e.chain().focus().toggleOrderedList().run())}
+        >
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path d="M10 6h11M10 12h11M10 18h11M4 6h1v4M4 10h2M4 14l2-1.5A1.5 1.5 0 114 16.5h2" />
+          </svg>
+        </Btn>
+        <Btn label="Checklist" isActive={active.taskList} dark={dark}
+          onClick={() => run(e => e.chain().focus().toggleTaskList().run())}
+        >
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+          </svg>
+        </Btn>
+
+        <Divider dark={dark} />
+
+        {/* Alignment */}
+        <Btn label="Align left" isActive={active.textAlign === 'left'} dark={dark}
+          onClick={() => run(e => e.chain().focus().setTextAlign('left').run())}
+        >
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path d="M3 6h18M3 10h12M3 14h18M3 18h12" />
+          </svg>
+        </Btn>
+        <Btn label="Align center" isActive={active.textAlign === 'center'} dark={dark}
+          onClick={() => run(e => e.chain().focus().setTextAlign('center').run())}
+        >
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path d="M3 6h18M6 10h12M3 14h18M6 18h12" />
+          </svg>
+        </Btn>
+        <Btn label="Align right" isActive={active.textAlign === 'right'} dark={dark}
+          onClick={() => run(e => e.chain().focus().setTextAlign('right').run())}
+        >
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path d="M3 6h18M9 10h12M3 14h18M9 18h12" />
+          </svg>
+        </Btn>
+      </div>
     </div>
   )
 }

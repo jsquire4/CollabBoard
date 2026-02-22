@@ -128,8 +128,8 @@ export function RadialShapePicker({
   // Dismiss on click outside
   useClickOutside(containerRef, true, onClose)
 
-  // Viewport-clamped position — the picker div is 180×180px, centered on the trigger
-  const RADIUS = 90
+  // Viewport-clamped position — the picker div is centered on the trigger
+  const RADIUS = 120
   const SIZE = RADIUS * 2
   const left = Math.max(8, Math.min(triggerX - RADIUS, window.innerWidth - SIZE - 8))
   const top = Math.max(8, Math.min(triggerY - RADIUS, window.innerHeight - SIZE - 8))
@@ -158,11 +158,11 @@ export function RadialShapePicker({
       style={{ left, top, width: SIZE, height: SIZE }}
     >
       {RADIAL_PRESETS.map((item, i) => {
-        // Items are placed at 75% of RADIUS from center, starting from -90° (top),
+        // Items are placed at 80% of RADIUS from center, starting from -90° (top),
         // evenly spaced at 45° intervals.
         const angle = (i / RADIAL_PRESETS.length) * 2 * Math.PI - Math.PI / 2
-        const itemX = RADIUS + Math.cos(angle) * RADIUS * 0.75 - 28 // 28 = half of 56px button
-        const itemY = RADIUS + Math.sin(angle) * RADIUS * 0.75 - 28
+        const itemX = RADIUS + Math.cos(angle) * RADIUS * 0.80 - 28 // 28 = half of 56px button
+        const itemY = RADIUS + Math.sin(angle) * RADIUS * 0.80 - 28
 
         return (
           <button

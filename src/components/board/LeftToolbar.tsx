@@ -2,8 +2,6 @@
 
 import { useState, useCallback, ReactNode } from 'react'
 import { BoardRole } from '@/types/sharing'
-import { FontSelector } from './FontSelector'
-import type { FontStyle } from '@/types/board'
 import type { ShapePreset } from './shapePresets'
 import {
   STANDALONE_PRESETS,
@@ -22,9 +20,6 @@ import {
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { useFlyoutPosition } from '@/hooks/useFlyoutPosition'
 import { FilePickerFlyout } from './FilePickerFlyout'
-import { RichTextToolbar } from './RichTextToolbar'
-import { RICH_TEXT_ENABLED } from '@/lib/richText'
-import type { Editor } from '@tiptap/react'
 
 const SUBMENU_MIN_WIDTH = { minWidth: '160px' } as const
 const SUBMENU_MIN_WIDTH_SM = { minWidth: '120px' } as const
@@ -34,18 +29,9 @@ const SUBMENU_MIN_WIDTH_LG = { minWidth: '180px' } as const
 interface LeftToolbarProps {
   userRole: BoardRole
   isEditingText: boolean
-  selectedFontFamily?: string
-  selectedFontSize?: number
-  selectedFontStyle?: FontStyle
-  selectedTextAlign?: string
-  selectedTextVerticalAlign?: string
-  selectedTextColor?: string
-  onFontChange: (updates: { font_family?: string; font_size?: number; font_style?: FontStyle }) => void
-  onTextStyleChange: (updates: { text_align?: string; text_vertical_align?: string; text_color?: string }) => void
   activePreset: ShapePreset | null
   onPresetSelect: (preset: ShapePreset) => void
   uiDarkMode?: boolean
-  richTextEditor?: Editor | null
   boardId?: string
   onFilePick?: (file: import('./FileLibraryPanel').FileRecord) => void
 }
@@ -66,18 +52,8 @@ const SHAPES_IDS = [
 export function LeftToolbar({
   userRole,
   isEditingText,
-  selectedFontFamily,
-  selectedFontSize,
-  selectedFontStyle,
-  selectedTextAlign,
-  selectedTextVerticalAlign,
-  selectedTextColor,
-  onFontChange,
-  onTextStyleChange,
   activePreset,
   onPresetSelect,
-  uiDarkMode = false,
-  richTextEditor,
   boardId,
   onFilePick,
 }: LeftToolbarProps) {
@@ -94,7 +70,7 @@ export function LeftToolbar({
 
   return (
     <div className="@container h-full">
-    <aside className="flex w-[clamp(52px,5vw,72px)] shrink-0 flex-col items-center gap-0.5 border-r py-2 overflow-y-auto border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#111827]">
+    <aside className="flex w-[clamp(56px,5.5vw,72px)] shrink-0 flex-col items-center gap-0.5 border-r py-2 overflow-y-auto border-parchment-border bg-parchment dark:border-white/10 dark:bg-[#111827]">
       {canEdit && (
         <>
           {/* Shape tools — fades out when editing text */}
@@ -221,38 +197,17 @@ export function LeftToolbar({
             </ToolGroupButton>
           </div>
 
-          {/* Text editing tools — fades in when editing text */}
-          <div
-            onMouseDown={e => e.preventDefault()}
-            style={{
-              opacity: isEditingText ? 1 : 0,
-              pointerEvents: isEditingText ? 'auto' : 'none',
-              transition: 'opacity 150ms ease',
-              position: isEditingText ? 'relative' : 'absolute',
-            }}
-          >
-            <div className="mb-1 w-full px-1.5">
-              <div className="text-[9px] font-semibold uppercase tracking-widest text-center text-charcoal/70 dark:text-parchment/60">
-                Text
+          {/* Text editing indicator — shape tools fade out while editing */}
+          {isEditingText && (
+            <div className="px-1.5 py-2 text-center">
+              <div className="text-[8px] font-semibold uppercase tracking-widest text-charcoal/50 dark:text-parchment/40 leading-tight">
+                Editing
+              </div>
+              <div className="text-[8px] text-charcoal/40 dark:text-parchment/30 leading-tight mt-0.5">
+                Use bar above object
               </div>
             </div>
-            {RICH_TEXT_ENABLED && richTextEditor ? (
-              <RichTextToolbar editor={richTextEditor} dark={uiDarkMode} />
-            ) : (
-              <FontSelector
-                fontFamily={selectedFontFamily}
-                fontSize={selectedFontSize}
-                fontStyle={selectedFontStyle}
-                textAlign={selectedTextAlign}
-                textVerticalAlign={selectedTextVerticalAlign}
-                textColor={selectedTextColor}
-                showTextLayout={true}
-                onFontChange={onFontChange}
-                onTextStyleChange={onTextStyleChange}
-                compact
-              />
-            )}
-          </div>
+          )}
         </>
       )}
 
@@ -313,14 +268,15 @@ function ToolGroupButton({
         ref={btnRef}
         type="button"
         onClick={onToggle}
-        className={`relative flex h-[clamp(40px,4.5vw,52px)] w-[clamp(40px,4.5vw,52px)] flex-col items-center justify-center rounded-full transition ${
+        className={`relative flex w-[clamp(44px,4.5vw,56px)] flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 transition ${
           isActive || isOpen
-            ? 'bg-navy text-parchment shadow-md shadow-leather/30 ring-2 ring-leather/40 dark:bg-navy dark:text-parchment'
+            ? 'bg-navy text-parchment shadow-md shadow-leather/30 dark:bg-navy dark:text-parchment'
             : 'text-charcoal/70 hover:bg-charcoal/10 hover:text-charcoal dark:text-parchment/60 dark:hover:bg-navy/40'
         }`}
         title={label}
       >
         <PresetIcon iconPath={iconPath} />
+        <span className="text-[8px] leading-tight font-medium">{label}</span>
       </button>
       {isOpen && (
         <div
@@ -418,14 +374,15 @@ function MergedShapesGroupButton({ isOpen, activePreset, isActive, sides, onSide
         ref={btnRef}
         type="button"
         onClick={onToggle}
-        className={`relative flex h-[clamp(40px,4.5vw,52px)] w-[clamp(40px,4.5vw,52px)] flex-col items-center justify-center rounded-full transition ${
+        className={`relative flex w-[clamp(44px,4.5vw,56px)] flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 transition ${
           isActive || isOpen
-            ? 'bg-navy text-parchment shadow-md shadow-leather/30 ring-2 ring-leather/40 dark:bg-navy dark:text-parchment'
+            ? 'bg-navy text-parchment shadow-md shadow-leather/30 dark:bg-navy dark:text-parchment'
             : 'text-charcoal/70 hover:bg-charcoal/10 hover:text-charcoal dark:text-parchment/60 dark:hover:bg-navy/40'
         }`}
         title="Shapes"
       >
         <PresetIcon iconPath="M3 3h18v18H3z" />
+        <span className="text-[8px] leading-tight font-medium">Shapes</span>
       </button>
       {isOpen && (
         <div

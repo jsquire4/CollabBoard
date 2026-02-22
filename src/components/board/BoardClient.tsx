@@ -881,18 +881,8 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
         <LeftToolbar
           userRole={userRole}
           isEditingText={isEditingText}
-          selectedFontFamily={selectedFontInfo.fontFamily}
-          selectedFontSize={selectedFontInfo.fontSize}
-          selectedFontStyle={selectedFontInfo.fontStyle}
-          selectedTextAlign={selectedFontInfo.textAlign}
-          selectedTextVerticalAlign={selectedFontInfo.textVerticalAlign}
-          selectedTextColor={selectedFontInfo.textColor}
-          onFontChange={handleFontChange}
-          onTextStyleChange={handleTextStyleChange}
           activePreset={activePreset}
           onPresetSelect={handlePresetSelect}
-          uiDarkMode={uiDarkMode}
-          richTextEditor={RICH_TEXT_ENABLED ? richTextEditor : undefined}
           boardId={boardId}
           onFilePick={handleFilePick}
         />

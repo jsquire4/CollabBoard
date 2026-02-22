@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useMemo, useLayoutEffect } from 'react'
+import { useRef, useState, useMemo, useEffect, useLayoutEffect } from 'react'
 import { useBoardContext } from '@/contexts/BoardContext'
 import { useBoardMutations } from '@/contexts/BoardMutationsContext'
 import { selectionBBox } from '@/lib/geometry/bbox'
@@ -229,6 +229,13 @@ export function SelectionBar({
 
   const [activeMode, setActiveMode] = useState<SelectionMode>(null)
 
+  // Auto-open the Text panel when the user enters text editing mode
+  useEffect(() => {
+    if (isEditingText && RICH_TEXT_ENABLED) {
+      setActiveMode('text')
+    }
+  }, [isEditingText])
+
   // ── Position via hook ──────────────────────────────────────────────
   const bbox = useMemo(
     () => selectedIds.size > 0 ? selectionBBox(selectedIds, objects) : null,
@@ -239,7 +246,6 @@ export function SelectionBar({
   // ── Conditional animation: only animate the very first appearance ──
   const barWasVisibleRef = useRef(false)
   const justAppeared = barPos !== null && !barWasVisibleRef.current
-
   // Sync the ref AFTER commit so concurrent-mode teardown can't mutate it mid-render
   useLayoutEffect(() => {
     barWasVisibleRef.current = barPos !== null

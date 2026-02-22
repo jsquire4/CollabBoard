@@ -4,12 +4,18 @@ import { fetchBoardRole } from '@/lib/supabase/boardsApi'
 import { BoardClient } from '@/components/board/BoardClient'
 import { getUserDisplayName } from '@/lib/userUtils'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 interface BoardPageProps {
   params: Promise<{ id: string }>
 }
 
 export default async function BoardPage({ params }: BoardPageProps) {
   const { id } = await params
+
+  // Reject non-UUID paths before hitting the DB
+  if (!UUID_RE.test(id)) notFound()
+
   const supabase = await createClient()
 
   // Authenticate first to prevent board ID enumeration

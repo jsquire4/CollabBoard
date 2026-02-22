@@ -25,7 +25,7 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
   const supabase = supabaseRef.current
 
   const handleCreate = async () => {
-    const name = newName.trim() || 'Untitled Board'
+    const name = (newName.trim() || 'Untitled Board').slice(0, 100)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
@@ -48,7 +48,7 @@ export function BoardList({ initialMyBoards, initialSharedBoards }: BoardListPro
   }
 
   const handleRename = async (id: string) => {
-    const name = editName.trim()
+    const name = editName.trim().slice(0, 100)
     if (!name) {
       setEditingId(null)
       return

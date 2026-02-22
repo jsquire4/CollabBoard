@@ -26,6 +26,7 @@ export interface BoardShareLink {
   board_id: string
   token: string
   role: 'editor' | 'viewer'
+  can_use_agents: boolean
   created_by: string
   created_at: string
   is_active: boolean

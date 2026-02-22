@@ -1,12 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { BoardRole } from '@/types/sharing'
 import { useShareDialog } from '@/hooks/board/useShareDialog'
 
 interface ShareDialogProps {
   boardId: string
   userRole: BoardRole
+  channel: RealtimeChannel | null
   onClose: () => void
 }
 
@@ -18,7 +20,7 @@ const ROLE_OPTIONS: { value: BoardRole; label: string }[] = [
   { value: 'viewer', label: 'Viewer' },
 ]
 
-export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
+export function ShareDialog({ boardId, userRole, channel, onClose }: ShareDialogProps) {
   const [tab, setTab] = useState<Tab>('members')
 
   const {
@@ -33,6 +35,8 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
     inviteStatus,
     linkRole,
     setLinkRole,
+    linkCanUseAgents,
+    setLinkCanUseAgents,
     copied,
     transferTarget,
     setTransferTarget,
@@ -42,10 +46,11 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
     handleRemoveMember,
     handleDeleteInvite,
     handleGenerateLink,
+    handleUpdateLink,
     handleDeactivateLink,
     copyLink,
     confirmTransferOwnership,
-  } = useShareDialog(boardId, userRole)
+  } = useShareDialog(boardId, userRole, channel)
 
   const isOwner = userRole === 'owner'
   const canManage = userRole === 'owner' || userRole === 'manager'
@@ -240,8 +245,37 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                     <div className="mb-3 break-all rounded-lg bg-parchment-dark px-3 py-2.5 text-sm text-charcoal/70 dark:bg-[#111827] dark:text-parchment/60">
                       {`${window.location.origin}/board/join/${shareLink.token}`}
                     </div>
-                    <div className="mb-3 text-sm text-charcoal/70 dark:text-parchment/60">
-                      Anyone with this link joins as <strong>{shareLink.role}</strong>
+                    <div className="mb-3 space-y-2">
+                      <p className="text-sm font-medium text-charcoal dark:text-parchment">Link permissions</p>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <select
+                          value={linkRole}
+                          onChange={e => {
+                            const role = e.target.value as 'editor' | 'viewer'
+                            setLinkRole(role)
+                            handleUpdateLink(role, role === 'editor' ? linkCanUseAgents : false)
+                          }}
+                          className="rounded-lg border border-parchment-border px-3 py-2 text-sm text-charcoal outline-none focus:ring-2 focus:ring-navy dark:bg-[#111827] dark:border-white/10 dark:text-parchment"
+                        >
+                          <option value="editor">Editor</option>
+                          <option value="viewer">Viewer</option>
+                        </select>
+                        {linkRole === 'editor' && (
+                          <label className="flex items-center gap-2 text-sm text-charcoal/70 dark:text-parchment/60">
+                            <input
+                              type="checkbox"
+                              checked={linkCanUseAgents}
+                              onChange={e => {
+                                const checked = e.target.checked
+                                setLinkCanUseAgents(checked)
+                                handleUpdateLink(linkRole, checked)
+                              }}
+                              className="accent-navy"
+                            />
+                            Can use AI
+                          </label>
+                        )}
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -265,23 +299,36 @@ export function ShareDialog({ boardId, userRole, onClose }: ShareDialogProps) {
                     <p className="mb-3 text-sm text-charcoal/70 dark:text-parchment/60">
                       Generate a shareable link. Anyone with the link can join the board.
                     </p>
-                    <div className="flex gap-2">
-                      <select
-                        value={linkRole}
-                        onChange={e => setLinkRole(e.target.value as 'editor' | 'viewer')}
-                        className="rounded-lg border border-parchment-border px-3 py-2.5 text-sm text-charcoal outline-none focus:ring-2 focus:ring-navy dark:bg-[#111827] dark:border-white/10 dark:text-parchment"
-                      >
-                        <option value="editor">Editor</option>
-                        <option value="viewer">Viewer</option>
-                      </select>
-                      <button
-                        type="button"
-                        onClick={handleGenerateLink}
-                        className="flex-1 rounded-lg bg-navy py-2.5 text-sm font-medium text-parchment transition hover:bg-navy/90"
-                      >
-                        Generate Link
-                      </button>
+                    <div className="mb-3 space-y-2">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <select
+                          value={linkRole}
+                          onChange={e => setLinkRole(e.target.value as 'editor' | 'viewer')}
+                          className="rounded-lg border border-parchment-border px-3 py-2.5 text-sm text-charcoal outline-none focus:ring-2 focus:ring-navy dark:bg-[#111827] dark:border-white/10 dark:text-parchment"
+                        >
+                          <option value="editor">Editor</option>
+                          <option value="viewer">Viewer</option>
+                        </select>
+                        {linkRole === 'editor' && (
+                          <label className="flex items-center gap-2 text-sm text-charcoal/70 dark:text-parchment/60">
+                            <input
+                              type="checkbox"
+                              checked={linkCanUseAgents}
+                              onChange={e => setLinkCanUseAgents(e.target.checked)}
+                              className="accent-navy"
+                            />
+                            Can use AI
+                          </label>
+                        )}
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={handleGenerateLink}
+                      className="w-full rounded-lg bg-navy py-2.5 text-sm font-medium text-parchment transition hover:bg-navy/90"
+                    >
+                      Generate Link
+                    </button>
                   </div>
                 )}
               </div>

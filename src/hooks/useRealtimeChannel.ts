@@ -36,28 +36,21 @@ export function useRealtimeChannel(boardId: string): RealtimeChannel | null {
         supabase.realtime.setAuth(token)
       }
 
-      const ch = supabase.channel(`board:${boardId}`)
+      const ch = supabase.channel(`board:${boardId}`, {
+        config: { private: true },
+      })
       createdChannel = ch
       setChannel(ch)
     })
 
     return () => {
       cancelled = true
-      // Disconnect the socket FIRST. This closes the WebSocket entirely,
-      // which is cleaner than ch.unsubscribe() because:
-      // 1. unsubscribe() fires a synchronous CLOSED callback that
-      //    useConnectionManager (which hasn't cleaned up yet due to React
-      //    effect ordering) misinterprets as a real disconnection, triggering
-      //    a spurious reconnect attempt
-      // 2. disconnect() kills the WebSocket without per-channel callbacks
-      // 3. subscribe() on the next mount will auto-connect a fresh WebSocket
-      supabase.realtime.disconnect()
-
+      // Do NOT call disconnect() — it kills the shared WebSocket. Board cards on
+      // /boards use useBoardPresenceCount and need the same connection for presence.
+      // useConnectionManager cleans up first (mounts after us) and calls
+      // channel.unsubscribe(); we only remove the channel from the socket's list.
       const ch = createdChannel
       if (ch) {
-        // Remove the channel from the socket's internal channel list to
-        // prevent Supabase's topic-based deduplication from returning this
-        // stale channel when the effect re-runs (e.g. React Strict Mode).
         const socket = (ch as unknown as { socket: { _remove?: (c: RealtimeChannel) => void } }).socket
         if (typeof socket?._remove === 'function') {
           socket._remove(ch)

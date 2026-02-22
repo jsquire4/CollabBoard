@@ -68,6 +68,7 @@ const TEXT_TYPES = new Set(['sticky_note', 'rectangle', 'circle', 'triangle', 'c
 
 interface BoardClientProps {
   userId: string
+  isAnonymous: boolean
   boardId: string
   boardName: string
   userRole: BoardRole
@@ -83,9 +84,39 @@ interface BoardClientProps {
   initialSubdivisionColor?: string
 }
 
-export function BoardClient({ userId, boardId, boardName, userRole, canUseAgents, displayName, initialGridSize = 40, initialGridSubdivisions = 1, initialGridVisible = true, initialSnapToGrid = false, initialGridStyle = 'lines', initialCanvasColor = '#FAF8F4', initialGridColor = '#E8E3DA', initialSubdivisionColor = '#E8E3DA' }: BoardClientProps) {
+export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole, canUseAgents, displayName, initialGridSize = 40, initialGridSubdivisions = 1, initialGridVisible = true, initialSnapToGrid = false, initialGridStyle = 'lines', initialCanvasColor = '#FAF8F4', initialGridColor = '#E8E3DA', initialSubdivisionColor = '#E8E3DA' }: BoardClientProps) {
   const channel = useRealtimeChannel(boardId)
+  const [effectiveCanUseAgents, setEffectiveCanUseAgents] = useState(canUseAgents)
   const { onlineUsers, trackPresence, updatePresence } = usePresence(channel, userId, userRole, displayName)
+
+  // Sync from server prop (e.g. on full reload)
+  useEffect(() => {
+    setEffectiveCanUseAgents(canUseAgents)
+  }, [canUseAgents])
+
+  // Listen for real-time permission changes
+  useEffect(() => {
+    if (!channel) return
+    const onAgentAccessChanged = (args: { payload?: { user_id?: string; can_use_agents?: boolean } }) => {
+      if (args.payload?.user_id === userId) {
+        setEffectiveCanUseAgents(args.payload.can_use_agents ?? false)
+      }
+    }
+    const onMemberRemoved = (args: { payload?: { user_id?: string } }) => {
+      if (args.payload?.user_id === userId) {
+        window.location.href = isAnonymous ? '/' : '/boards'
+      }
+    }
+    channel.on('broadcast', { event: 'agent_access_changed' }, onAgentAccessChanged)
+    channel.on('broadcast', { event: 'member_removed' }, onMemberRemoved)
+    return () => {
+      const ch = channel as unknown as { _off?: (t: string, f: object) => void }
+      if (typeof ch._off === 'function') {
+        ch._off('broadcast', { event: 'agent_access_changed' })
+        ch._off('broadcast', { event: 'member_removed' })
+      }
+    }
+  }, [channel, userId, isAnonymous])
   const userCount = onlineUsers.length + 1 // include self
 
   // Drag state refs — shared across useCursors, useBroadcast, usePersistenceDrag, useShapeDrag, Canvas
@@ -214,9 +245,9 @@ export function BoardClient({ userId, boardId, boardName, userRole, canUseAgents
   // Auto-route points ref: populated by Canvas during render, used by handleWaypointInsert
   const autoRoutePointsRef = useRef<Map<string, number[]>>(new Map())
 
-  // Cmd+G — toggle global board assistant (only when canUseAgents)
+  // Cmd+G — toggle global board assistant (only when effectiveCanUseAgents)
   useEffect(() => {
-    if (!canUseAgents) return
+    if (!effectiveCanUseAgents) return
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'g') {
         e.preventDefault()
@@ -225,7 +256,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, canUseAgents
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [canUseAgents])
+  }, [effectiveCanUseAgents])
 
   // Subscribe LAST — after all hooks have registered their .on() listeners.
   const { connectionStatus } = useConnectionManager({ channel, trackPresence, reconcileOnReconnect, supabaseRef })
@@ -871,7 +902,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, canUseAgents
     onDeleteRowAt: handleDeleteRowAt,
     onAddColumnAt: handleAddColumnAt,
     onDeleteColumnAt: handleDeleteColumnAt,
-    onAgentClick: canUseAgents ? handleAgentClick : undefined,
+    onAgentClick: effectiveCanUseAgents ? handleAgentClick : undefined,
     onApiConfigChange: handleApiConfigChange,
     onCommentOpen: handleCommentOpen,
     onEmptyCanvasClick: handleEmptyCanvasClick,
@@ -900,7 +931,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, canUseAgents
     handleCellTextUpdate, handleTableDataChange,
     handleAddRow, handleDeleteRow, handleAddColumn, handleDeleteColumn,
     handleAddRowAt, handleDeleteRowAt, handleAddColumnAt, handleDeleteColumnAt,
-    canUseAgents, handleAgentClick, handleApiConfigChange, handleCommentOpen,
+    effectiveCanUseAgents, handleAgentClick, handleApiConfigChange, handleCommentOpen,
     handleEmptyCanvasClick,
   ])
 
@@ -967,6 +998,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, canUseAgents
         <ShareDialog
           boardId={boardId}
           userRole={userRole}
+          channel={channel}
           onClose={() => setShareOpen(false)}
         />
       )}
@@ -989,7 +1021,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, canUseAgents
         />
       )}
       {/* Global Agent toggle button — only when user has can_use_agents */}
-      {canUseAgents && (
+      {effectiveCanUseAgents && (
         <button
           onClick={() => setGlobalAgentOpen(prev => !prev)}
           className="fixed bottom-16 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-navy text-parchment shadow-lg hover:bg-navy/80 border border-transparent dark:border-white/10"

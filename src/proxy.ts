@@ -43,6 +43,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Anonymous users cannot access /boards — redirect to landing
+  if (user?.is_anonymous && request.nextUrl.pathname === '/boards') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/'
+    return NextResponse.redirect(url)
+  }
+
   return supabaseResponse
 }
 

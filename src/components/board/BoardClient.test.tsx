@@ -68,6 +68,7 @@ describe('BoardClient', () => {
 
   const defaultProps = {
     userId: 'user-1',
+    isAnonymous: false,
     boardId: 'board-1',
     boardName: 'Test Board',
     userRole: 'editor' as const,

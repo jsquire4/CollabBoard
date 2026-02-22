@@ -55,7 +55,9 @@ describe('useRealtimeChannel', () => {
     })
 
     expect(mockGetSession).toHaveBeenCalled()
-    expect(mockChannel).toHaveBeenCalledWith('board:board-123')
+    expect(mockChannel).toHaveBeenCalledWith('board:board-123', {
+      config: { private: true },
+    })
     expect(result.current).toBe(mockChannel.mock.results[0]?.value)
   })
 
@@ -86,7 +88,7 @@ describe('useRealtimeChannel', () => {
     })
   })
 
-  it('disconnects socket and removes channel from socket on unmount', async () => {
+  it('removes channel from socket on unmount (does not disconnect)', async () => {
     const ch = createMockChannel('closed')
     mockChannel.mockReturnValue(ch)
 
@@ -99,15 +101,12 @@ describe('useRealtimeChannel', () => {
 
     unmount()
 
-    // disconnect() is called to kill the WebSocket cleanly (no CLOSED callbacks)
-    expect(mockDisconnect).toHaveBeenCalled()
+    // Do NOT disconnect — that kills the shared WebSocket used by board cards
+    expect(mockDisconnect).not.toHaveBeenCalled()
     expect(mockSocketRemove).toHaveBeenCalledWith(ch)
-    // ch.unsubscribe() should NOT be called — disconnect() handles cleanup
-    // without triggering synchronous CLOSED callbacks that confuse useConnectionManager
-    expect(ch.unsubscribe).not.toHaveBeenCalled()
   })
 
-  it('does not call untrack on cleanup (disconnect handles it)', async () => {
+  it('does not call untrack on cleanup (useConnectionManager unsubscribes)', async () => {
     const ch = createMockChannel('joined')
     const untrackSpy = vi.spyOn(ch, 'untrack')
     mockChannel.mockReturnValue(ch)
@@ -120,10 +119,9 @@ describe('useRealtimeChannel', () => {
 
     unmount()
 
-    // untrack is no longer called — disconnect() closes the socket and the
-    // server handles presence cleanup via timeout
+    // untrack not called — useConnectionManager unsubscribes the channel
     expect(untrackSpy).not.toHaveBeenCalled()
-    expect(mockDisconnect).toHaveBeenCalled()
+    expect(mockDisconnect).not.toHaveBeenCalled()
     expect(mockSocketRemove).toHaveBeenCalledWith(ch)
   })
 
@@ -137,7 +135,9 @@ describe('useRealtimeChannel', () => {
       await mockGetSession()
     })
 
-    expect(mockChannel).toHaveBeenCalledWith('board:board-1')
+    expect(mockChannel).toHaveBeenCalledWith('board:board-1', {
+      config: { private: true },
+    })
     expect(mockSocketRemove).not.toHaveBeenCalled()
 
     rerender({ boardId: 'board-2' })
@@ -146,7 +146,9 @@ describe('useRealtimeChannel', () => {
       await mockGetSession()
     })
 
-    expect(mockChannel).toHaveBeenCalledWith('board:board-2')
+    expect(mockChannel).toHaveBeenCalledWith('board:board-2', {
+      config: { private: true },
+    })
     expect(mockSocketRemove).toHaveBeenCalledTimes(1)
   })
 

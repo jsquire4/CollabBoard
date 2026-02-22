@@ -77,9 +77,10 @@ function MemberList({
 }) {
   if (!summary) return null
 
-  const filtered = excludeOwnerId
-    ? summary.members.filter((m) => m.user_id !== excludeOwnerId)
-    : summary.members
+  // Exclude owner (if requested) and viewers — collaborators = editors/managers only; viewers contribute to "viewing now" count only
+  const filtered = summary.members.filter(
+    (m) => (!excludeOwnerId || m.user_id !== excludeOwnerId) && m.role !== 'viewer'
+  )
 
   const onlineMap = new Map(onlineUsers.map((u) => [u.user_id, u]))
   const sorted = [...filtered].sort((a, b) => (a.is_anonymous === b.is_anonymous ? 0 : a.is_anonymous ? 1 : -1))

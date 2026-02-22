@@ -38,12 +38,20 @@ describe('proxy', () => {
     })
   }
 
-  it('returns next when user is authenticated', async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+  it('returns next when user is authenticated (non-anonymous)', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1', is_anonymous: false } } })
     const req = makeRequest('/boards')
     const res = await proxy(req)
     expect(res.status).toBe(200)
     expect(res.headers.get('location')).toBeNull()
+  })
+
+  it('redirects to / when anonymous user accesses /boards', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'anon-1', is_anonymous: true } } })
+    const req = makeRequest('/boards')
+    const res = await proxy(req)
+    expect(res.status).toBe(307)
+    expect(res.headers.get('location')).toMatch(/\/$/)
   })
 
   it('returns next for unauthenticated user on / (landing)', async () => {

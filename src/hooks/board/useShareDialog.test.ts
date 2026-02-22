@@ -80,7 +80,7 @@ describe('useShareDialog', () => {
   })
 
   it('loads members, invites, and share link on mount', async () => {
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false)
@@ -95,7 +95,7 @@ describe('useShareDialog', () => {
   it('shows toast on load error', async () => {
     mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'DB error' } })
 
-    renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
 
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith('Failed to load sharing data')
@@ -103,7 +103,7 @@ describe('useShareDialog', () => {
   })
 
   it('handleInvite: no-op when email is empty', async () => {
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     await act(async () => {
@@ -114,7 +114,7 @@ describe('useShareDialog', () => {
   })
 
   it('handleInvite: sets error for invalid email', async () => {
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     act(() => result.current.setInviteEmail('not-an-email'))
@@ -133,7 +133,7 @@ describe('useShareDialog', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     act(() => result.current.setInviteEmail('user@example.com'))
@@ -159,7 +159,7 @@ describe('useShareDialog', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     act(() => result.current.setInviteEmail('newuser@example.com'))
@@ -181,7 +181,7 @@ describe('useShareDialog', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     act(() => result.current.setInviteEmail('valid@email.com'))
@@ -202,7 +202,7 @@ describe('useShareDialog', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     act(() => result.current.setInviteEmail('valid@email.com'))
@@ -223,7 +223,7 @@ describe('useShareDialog', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     act(() => result.current.setInviteEmail('valid@email.com'))
@@ -239,7 +239,7 @@ describe('useShareDialog', () => {
   it('handleInvite: shows error when fetch throws', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')))
 
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     act(() => result.current.setInviteEmail('valid@email.com'))
@@ -256,7 +256,7 @@ describe('useShareDialog', () => {
     const mockFetch = vi.fn()
     vi.stubGlobal('fetch', mockFetch)
 
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     act(() => result.current.setInviteEmail('not-an-email'))
@@ -271,7 +271,7 @@ describe('useShareDialog', () => {
   })
 
   it('handleRoleChange: sets transferTarget when newRole is owner', async () => {
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     await act(async () => {
@@ -311,7 +311,7 @@ describe('useShareDialog', () => {
     })
     mockUpdate.mockReturnValue({ eq: vi.fn(() => ({ eq: mockEq })) })
 
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     await act(async () => {
@@ -325,7 +325,7 @@ describe('useShareDialog', () => {
 
   it('handleRoleChange: no-op when userRole is editor', async () => {
     mockRpc.mockResolvedValue({ data: [{ id: 'm1', role: 'owner' }], error: null })
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'editor'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'editor', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     await act(async () => {
@@ -366,7 +366,7 @@ describe('useShareDialog', () => {
     })
     mockUpdate.mockReturnValue({ eq: vi.fn(() => ({ eq: mockEq })) })
 
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'manager'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'manager', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     await act(async () => {
@@ -377,37 +377,21 @@ describe('useShareDialog', () => {
     expect(result.current.members[0].can_use_agents).toBe(false)
   })
 
-  it('handleRemoveMember: deletes member', async () => {
-    const mockDelete = vi.fn().mockReturnThis()
-    const mockEq = vi.fn().mockResolvedValue({ error: null })
-    mockFrom.mockImplementation((table: string) => {
-      if (table === 'board_members') {
-        return {
-          delete: mockDelete,
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          limit: vi.fn(() => Promise.resolve({ data: [], error: null })),
-        }
+  it('handleRemoveMember: blocks and removes member', async () => {
+    mockRpc.mockImplementation((name: string, args?: Record<string, unknown>) => {
+      if (name === 'block_and_remove_member') {
+        return Promise.resolve({ data: null, error: null })
       }
-      if (table === 'board_invites') {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          limit: vi.fn(() => Promise.resolve({ data: [], error: null })),
-        }
+      if (name === 'get_board_member_details') {
+        return Promise.resolve({
+          data: [{ id: 'm1', user_id: 'u1', role: 'owner', email: 'owner@test.com', display_name: 'Owner', can_use_agents: true }],
+          error: null,
+        })
       }
-      if (table === 'board_share_links') {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          limit: vi.fn(() => Promise.resolve({ data: [], error: null })),
-        }
-      }
-      return {}
+      return Promise.resolve({ data: null, error: null })
     })
-    mockDelete.mockReturnValue({ eq: vi.fn(() => ({ eq: mockEq })) })
 
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.members).toHaveLength(1)
 
@@ -415,6 +399,10 @@ describe('useShareDialog', () => {
       await result.current.handleRemoveMember('m1')
     })
 
+    expect(mockRpc).toHaveBeenCalledWith('block_and_remove_member', {
+      p_board_id: BOARD_ID,
+      p_member_id: 'm1',
+    })
     expect(result.current.members).toHaveLength(0)
   })
 
@@ -444,7 +432,7 @@ describe('useShareDialog', () => {
       return {}
     })
 
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     await act(async () => {
@@ -487,7 +475,7 @@ describe('useShareDialog', () => {
       return {}
     })
 
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
     await waitFor(() => {
       expect(result.current.loading).toBe(false)
       expect(result.current.shareLink).not.toBeNull()
@@ -530,7 +518,7 @@ describe('useShareDialog', () => {
       return {}
     })
 
-    const { result, unmount } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result, unmount } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
     await waitFor(() => {
       expect(result.current.loading).toBe(false)
       expect(result.current.shareLink).not.toBeNull()
@@ -555,7 +543,7 @@ describe('useShareDialog', () => {
       return Promise.resolve({ data: null, error: null })
     })
 
-    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner'))
+    const { result } = renderHook(() => useShareDialog(BOARD_ID, 'owner', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     act(() => result.current.setTransferTarget('m1'))

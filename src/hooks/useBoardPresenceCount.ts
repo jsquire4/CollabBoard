@@ -60,7 +60,6 @@ export function useBoardPresenceCount(
       })
 
     return () => {
-      // removeChannel unsubscribes AND removes all listeners in one call
       supabase.removeChannel(channel)
     }
   }, [boardId, enabled])

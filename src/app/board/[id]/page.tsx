@@ -39,6 +39,7 @@ export default async function BoardPage({ params }: BoardPageProps) {
   return (
     <BoardClient
       userId={user.id}
+      isAnonymous={user.is_anonymous ?? false}
       boardId={board.id}
       boardName={board.name}
       userRole={member.role}

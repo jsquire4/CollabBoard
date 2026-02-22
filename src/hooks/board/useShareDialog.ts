@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { BoardRole, BoardMember, BoardInvite, BoardShareLink } from '@/types/sharing'
 import { toast } from 'sonner'
@@ -22,6 +23,8 @@ export interface UseShareDialogReturn {
   // Link form state
   linkRole: 'editor' | 'viewer'
   setLinkRole: (role: 'editor' | 'viewer') => void
+  linkCanUseAgents: boolean
+  setLinkCanUseAgents: (value: boolean) => void
   copied: boolean
 
   // Ownership transfer state
@@ -35,12 +38,17 @@ export interface UseShareDialogReturn {
   handleRemoveMember: (memberId: string) => Promise<void>
   handleDeleteInvite: (inviteId: string) => Promise<void>
   handleGenerateLink: () => Promise<void>
+  handleUpdateLink: (role: 'editor' | 'viewer', canUseAgents: boolean) => Promise<void>
   handleDeactivateLink: () => Promise<void>
   copyLink: () => Promise<void>
   confirmTransferOwnership: () => Promise<void>
 }
 
-export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDialogReturn {
+export function useShareDialog(
+  boardId: string,
+  userRole: BoardRole,
+  channel: RealtimeChannel | null
+): UseShareDialogReturn {
   const supabaseRef = useRef(createClient())
   const supabase = supabaseRef.current
 
@@ -56,6 +64,7 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
 
   // Link form state
   const [linkRole, setLinkRole] = useState<'editor' | 'viewer'>('editor')
+  const [linkCanUseAgents, setLinkCanUseAgents] = useState(false)
   const [copied, setCopied] = useState(false)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -84,13 +93,31 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
       setMembers(membersRes.data as BoardMember[])
     }
     if (invitesRes.data) setInvites(invitesRes.data as BoardInvite[])
-    if (linksRes.data && linksRes.data.length > 0) setShareLink(linksRes.data[0] as BoardShareLink)
+    if (linksRes.data && linksRes.data.length > 0) {
+      const link = linksRes.data[0] as BoardShareLink
+      setShareLink(link)
+      setLinkRole(link.role)
+      setLinkCanUseAgents(link.can_use_agents ?? false)
+    }
     setLoading(false)
   }, [boardId, supabase])
 
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // Refresh member list when someone joins via share link (they broadcast member_joined)
+  useEffect(() => {
+    if (!channel) return
+    const handler = (args: { payload?: { board_id?: string } }) => {
+      if (args.payload?.board_id === boardId) loadData()
+    }
+    channel.on('broadcast', { event: 'member_joined' }, handler)
+    return () => {
+      const ch = channel as unknown as { _off?: (t: string, f: object) => void }
+      if (typeof ch._off === 'function') ch._off('broadcast', { event: 'member_joined' })
+    }
+  }, [channel, boardId, loadData])
 
   async function handleInvite() {
     const email = inviteEmail.trim().toLowerCase()
@@ -139,6 +166,9 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
   async function handleAgentToggle(memberId: string, value: boolean) {
     if (userRole !== 'owner' && userRole !== 'manager') return
 
+    const member = members.find(m => m.id === memberId)
+    const targetUserId = member?.user_id
+
     const { error } = await supabase
       .from('board_members')
       .update({ can_use_agents: value })
@@ -149,6 +179,17 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
       toast.error('Failed to update agent access')
     } else {
       setMembers(prev => prev.map(m => m.id === memberId ? { ...m, can_use_agents: value } : m))
+      if (channel && targetUserId && (channel as unknown as { state: string }).state === 'joined') {
+        try {
+          channel.send({
+            type: 'broadcast',
+            event: 'agent_access_changed',
+            payload: { user_id: targetUserId, can_use_agents: value },
+          })
+        } catch {
+          // Non-fatal: target will see change on next load
+        }
+      }
     }
   }
 
@@ -159,6 +200,8 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
       return
     }
 
+    const member = members.find(m => m.id === memberId)
+    const targetUserId = member?.user_id
     const canUseAgents = newRole !== 'viewer'
     const { error } = await supabase
       .from('board_members')
@@ -169,6 +212,17 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
       toast.error('Failed to change role')
     } else {
       setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: newRole, can_use_agents: canUseAgents } : m))
+      if (channel && targetUserId && (channel as unknown as { state: string }).state === 'joined') {
+        try {
+          channel.send({
+            type: 'broadcast',
+            event: 'agent_access_changed',
+            payload: { user_id: targetUserId, can_use_agents: canUseAgents },
+          })
+        } catch {
+          // Non-fatal
+        }
+      }
     }
   }
 
@@ -191,16 +245,29 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
 
   async function handleRemoveMember(memberId: string) {
     if (userRole !== 'owner' && userRole !== 'manager') return
-    const { error } = await supabase
-      .from('board_members')
-      .delete()
-      .eq('id', memberId)
-      .eq('board_id', boardId)
+    const member = members.find(m => m.id === memberId)
+    const removedUserId = member?.user_id
+
+    const { error } = await supabase.rpc('block_and_remove_member', {
+      p_board_id: boardId,
+      p_member_id: memberId,
+    })
 
     if (error) {
       toast.error('Failed to remove member')
     } else {
       setMembers(prev => prev.filter(m => m.id !== memberId))
+      if (channel && removedUserId && (channel as unknown as { state: string }).state === 'joined') {
+        try {
+          channel.send({
+            type: 'broadcast',
+            event: 'member_removed',
+            payload: { user_id: removedUserId },
+          })
+        } catch {
+          // Non-fatal: removed user may need to refresh
+        }
+      }
     }
   }
 
@@ -223,11 +290,13 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
+    const canUseAgents = linkRole === 'editor' ? linkCanUseAgents : false
     const { data, error } = await supabase
       .from('board_share_links')
       .insert({
         board_id: boardId,
         role: linkRole,
+        can_use_agents: canUseAgents,
         created_by: user.id,
       })
       .select()
@@ -235,6 +304,25 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
 
     if (error) {
       toast.error('Failed to generate link')
+    } else if (data) {
+      setShareLink(data as BoardShareLink)
+    }
+  }
+
+  async function handleUpdateLink(role: 'editor' | 'viewer', canUseAgents: boolean) {
+    if (userRole !== 'owner' && userRole !== 'manager') return
+    if (!shareLink) return
+
+    const effectiveCanUseAgents = role === 'editor' ? canUseAgents : false
+    const { data, error } = await supabase
+      .from('board_share_links')
+      .update({ role, can_use_agents: effectiveCanUseAgents })
+      .eq('id', shareLink.id)
+      .select()
+      .single()
+
+    if (error) {
+      toast.error('Failed to update link settings')
     } else if (data) {
       setShareLink(data as BoardShareLink)
     }
@@ -281,6 +369,8 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
     inviteStatus,
     linkRole,
     setLinkRole,
+    linkCanUseAgents,
+    setLinkCanUseAgents,
     copied,
     transferTarget,
     setTransferTarget,
@@ -290,6 +380,7 @@ export function useShareDialog(boardId: string, userRole: BoardRole): UseShareDi
     handleRemoveMember,
     handleDeleteInvite,
     handleGenerateLink,
+    handleUpdateLink,
     handleDeactivateLink,
     copyLink,
     confirmTransferOwnership,

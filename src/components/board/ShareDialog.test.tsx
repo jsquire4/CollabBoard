@@ -76,7 +76,7 @@ describe('ShareDialog', () => {
 
   it('renders Share Board title and close button', async () => {
     const onClose = vi.fn()
-    render(<ShareDialog boardId={BOARD_ID} userRole="owner" onClose={onClose} />)
+    render(<ShareDialog boardId={BOARD_ID} userRole="owner" channel={null} onClose={onClose} />)
 
     await waitFor(() => {
       expect(screen.getByText('Share Board')).toBeInTheDocument()
@@ -88,7 +88,7 @@ describe('ShareDialog', () => {
   })
 
   it('shows Members, Invite, Link tabs', async () => {
-    render(<ShareDialog boardId={BOARD_ID} userRole="owner" onClose={() => {}} />)
+    render(<ShareDialog boardId={BOARD_ID} userRole="owner" channel={null} onClose={() => {}} />)
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Members' })).toBeInTheDocument()
@@ -98,7 +98,7 @@ describe('ShareDialog', () => {
   })
 
   it('switches to Invite tab and shows invite form', async () => {
-    render(<ShareDialog boardId={BOARD_ID} userRole="owner" onClose={() => {}} />)
+    render(<ShareDialog boardId={BOARD_ID} userRole="owner" channel={null} onClose={() => {}} />)
 
     await waitFor(() => expect(screen.getByText('Share Board')).toBeInTheDocument())
 
@@ -108,7 +108,7 @@ describe('ShareDialog', () => {
   })
 
   it('switches to Link tab and shows generate link UI', async () => {
-    render(<ShareDialog boardId={BOARD_ID} userRole="owner" onClose={() => {}} />)
+    render(<ShareDialog boardId={BOARD_ID} userRole="owner" channel={null} onClose={() => {}} />)
 
     await waitFor(() => expect(screen.getByText('Share Board')).toBeInTheDocument())
 
@@ -117,7 +117,7 @@ describe('ShareDialog', () => {
   })
 
   it('displays members when loaded', async () => {
-    render(<ShareDialog boardId={BOARD_ID} userRole="owner" onClose={() => {}} />)
+    render(<ShareDialog boardId={BOARD_ID} userRole="owner" channel={null} onClose={() => {}} />)
 
     await waitFor(() => {
       expect(screen.getByText(/owner@test.com/)).toBeInTheDocument()
@@ -127,7 +127,7 @@ describe('ShareDialog', () => {
 
   it('calls onClose when backdrop is clicked', async () => {
     const onClose = vi.fn()
-    const { container } = render(<ShareDialog boardId={BOARD_ID} userRole="owner" onClose={onClose} />)
+    const { container } = render(<ShareDialog boardId={BOARD_ID} userRole="owner" channel={null} onClose={onClose} />)
 
     await waitFor(() => expect(screen.getByText('Share Board')).toBeInTheDocument())
 
@@ -138,7 +138,7 @@ describe('ShareDialog', () => {
   })
 
   it('shows Owner (you) for owner when viewing as owner', async () => {
-    render(<ShareDialog boardId={BOARD_ID} userRole="owner" onClose={() => {}} />)
+    render(<ShareDialog boardId={BOARD_ID} userRole="owner" channel={null} onClose={() => {}} />)
 
     await waitFor(() => {
       expect(screen.getByText('Owner (you)')).toBeInTheDocument()
@@ -146,7 +146,7 @@ describe('ShareDialog', () => {
   })
 
   it('shows role dropdown for non-owner members', async () => {
-    render(<ShareDialog boardId={BOARD_ID} userRole="owner" onClose={() => {}} />)
+    render(<ShareDialog boardId={BOARD_ID} userRole="owner" channel={null} onClose={() => {}} />)
 
     await waitFor(() => {
       expect(screen.getByText(/editor@test.com/)).toBeInTheDocument()
@@ -170,7 +170,7 @@ describe('ShareDialog', () => {
       return Promise.resolve({ data: null, error: null })
     })
 
-    render(<ShareDialog boardId={BOARD_ID} userRole="owner" onClose={() => {}} />)
+    render(<ShareDialog boardId={BOARD_ID} userRole="owner" channel={null} onClose={() => {}} />)
 
     await waitFor(() => expect(screen.getByText('Share Board')).toBeInTheDocument())
 
@@ -192,7 +192,7 @@ describe('ShareDialog', () => {
   })
 
   it('shows Generate Link and link role selector when no share link', async () => {
-    render(<ShareDialog boardId={BOARD_ID} userRole="owner" onClose={() => {}} />)
+    render(<ShareDialog boardId={BOARD_ID} userRole="owner" channel={null} onClose={() => {}} />)
 
     await waitFor(() => expect(screen.getByText('Share Board')).toBeInTheDocument())
     await userEvent.click(screen.getByRole('button', { name: 'Link' }))
@@ -215,7 +215,7 @@ describe('ShareDialog', () => {
       return Promise.resolve({ data: null, error: null })
     })
 
-    render(<ShareDialog boardId={BOARD_ID} userRole="owner" onClose={() => {}} />)
+    render(<ShareDialog boardId={BOARD_ID} userRole="owner" channel={null} onClose={() => {}} />)
 
     await waitFor(() => {
       expect(screen.getByText(/user-wit\.\.\./)).toBeInTheDocument()

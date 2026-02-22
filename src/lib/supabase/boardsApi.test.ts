@@ -325,7 +325,7 @@ describe('boardsApi', () => {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
                 eq: vi.fn(() => ({
-                  single: vi.fn(() => Promise.resolve({ data: null, error: null })),
+                  maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
                 })),
               })),
             })),
@@ -350,7 +350,7 @@ describe('boardsApi', () => {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
                 eq: vi.fn(() => ({
-                  single: vi.fn(() =>
+                  maybeSingle: vi.fn(() =>
                     Promise.resolve({ data: { role: 'editor' }, error: null })
                   ),
                 })),

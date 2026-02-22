@@ -8,6 +8,7 @@
 
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireBoardMember } from '@/lib/supabase/requireBoardMember'
 import { loadBoardState } from '@/lib/agent/boardState'
 import { createTools, createToolContext, getToolDefinitions } from '@/lib/agent/tools'
 import { getUserDisplayName } from '@/lib/userUtils'
@@ -102,14 +103,11 @@ export async function POST(
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data: member } = await supabase
-    .from('board_members')
-    .select('role, can_use_agents')
-    .eq('board_id', boardId)
-    .eq('user_id', user.id)
-    .single()
-
-  if (!member || !['owner', 'manager', 'editor'].includes(member.role) || !member.can_use_agents) {
+  const member = await requireBoardMember(supabase, boardId, user.id, {
+    allowedRoles: ['owner', 'manager', 'editor'],
+    requireAgents: true,
+  })
+  if (!member) {
     return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 

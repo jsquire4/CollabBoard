@@ -6,6 +6,7 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireBoardMember } from '@/lib/supabase/requireBoardMember'
 import { UUID_RE } from '@/lib/api/uuidRe'
 
 export async function GET(
@@ -26,18 +27,18 @@ export async function GET(
   }
 
   // Any board member can list files
-  const { data: member } = await supabase
-    .from('board_members')
-    .select('role')
-    .eq('board_id', boardId)
-    .eq('user_id', user.id)
-    .single()
-
+  const member = await requireBoardMember(supabase, boardId, user.id)
   if (!member) {
     return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const admin = createAdminClient()
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch (err) {
+    console.error('[api/files] Admin client unavailable:', err)
+    return Response.json({ error: 'Service unavailable' }, { status: 503 })
+  }
   const { data: files, error } = await admin
     .from('files')
     .select('id, name, file_type, size, storage_path, created_at')

@@ -118,7 +118,7 @@ export async function fetchBoardRole(boardId: string): Promise<BoardRole | null>
     .select('role')
     .eq('board_id', boardId)
     .eq('user_id', user.id)
-    .single()
+    .maybeSingle()
 
   return (data?.role as BoardRole) ?? null
 }

@@ -7,6 +7,7 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireBoardMember } from '@/lib/supabase/requireBoardMember'
 import { UUID_RE } from '@/lib/api/uuidRe'
 import { resend } from '@/lib/resend'
 
@@ -53,16 +54,17 @@ export async function POST(request: NextRequest) {
   const email = trimmedEmail.toLowerCase()
 
   // 3. Authorization: caller must be owner or manager
-  const admin = createAdminClient()
-  const { data: callerMember } = await admin
-    .from('board_members')
-    .select('role')
-    .eq('board_id', boardId)
-    .eq('user_id', user.id)
-    .single()
-
-  if (!callerMember || !['owner', 'manager'].includes(callerMember.role)) {
+  const callerMember = await requireBoardMember(supabase, boardId, user.id, { allowedRoles: ['owner', 'manager'] })
+  if (!callerMember) {
     return Response.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch (err) {
+    console.error('[api/invites] Admin client unavailable:', err)
+    return Response.json({ error: 'Service unavailable' }, { status: 503 })
   }
 
   // 4. Check if invitee is an existing user (query auth.users directly via admin client)
@@ -119,7 +121,7 @@ export async function POST(request: NextRequest) {
     .from('boards')
     .select('name')
     .eq('id', boardId)
-    .single()
+    .maybeSingle()
 
   const boardName = escapeHtml(board?.name ?? 'a board')
   const inviterName = escapeHtml(user.user_metadata?.full_name ?? user.email ?? 'Someone')

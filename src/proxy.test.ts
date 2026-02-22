@@ -2,7 +2,7 @@
  * Tests for proxy (Next.js auth middleware).
  * Verifies redirect logic for unauthenticated users and exempt paths.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const mockGetUser = vi.fn()
@@ -24,6 +24,12 @@ import { proxy } from './proxy'
 describe('proxy', () => {
   beforeEach(() => {
     mockGetUser.mockReset()
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://test.supabase.co')
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'test-anon-key')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   function makeRequest(pathname: string): NextRequest {

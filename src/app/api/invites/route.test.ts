@@ -15,6 +15,7 @@ const {
   mockGetUser,
   mockAdminFrom,
   mockEmailsSend,
+  mockRequireBoardMember,
 } = vi.hoisted(() => ({
   TEST_BOARD_ID: '11111111-1111-1111-1111-111111111111',
   TEST_USER_ID: 'user-abc-123',
@@ -22,6 +23,7 @@ const {
   mockGetUser: vi.fn(),
   mockAdminFrom: vi.fn(),
   mockEmailsSend: vi.fn(),
+  mockRequireBoardMember: vi.fn(),
 }))
 
 // ── Module mocks ─────────────────────────────────────────────────────────────
@@ -36,6 +38,10 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: vi.fn(() => ({
     from: mockAdminFrom,
   })),
+}))
+
+vi.mock('@/lib/supabase/requireBoardMember', () => ({
+  requireBoardMember: mockRequireBoardMember,
 }))
 
 vi.mock('@/lib/resend', () => ({
@@ -97,7 +103,7 @@ function mockBoardLookup(name: string) {
   return {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
-    single: vi.fn().mockResolvedValue({ data: { name }, error: null }),
+    maybeSingle: vi.fn().mockResolvedValue({ data: { name }, error: null }),
   }
 }
 
@@ -147,9 +153,11 @@ describe('POST /api/invites', () => {
       error: null,
     })
 
-    // Admin from() dispatches based on table
+    // requireBoardMember returns the member row (caller is owner by default)
+    mockRequireBoardMember.mockResolvedValue({ role: 'owner' })
+
+    // Admin from() dispatches based on table (board_members check moved to supabase)
     mockAdminFrom.mockImplementation((table: string) => {
-      if (table === 'board_members') return mockMemberCheck('owner')
       if (table === 'auth.users') return mockUserLookup(null) // no existing user by default
       if (table === 'boards') return mockBoardLookup('My Board')
       if (table === 'board_invites') return mockInviteUpsert()
@@ -224,28 +232,19 @@ describe('POST /api/invites', () => {
 
   describe('authorization', () => {
     it('returns 403 when caller has no membership', async () => {
-      mockAdminFrom.mockImplementation((table: string) => {
-        if (table === 'board_members') return mockMemberCheck(null)
-        return {}
-      })
+      mockRequireBoardMember.mockResolvedValueOnce(null)
       const res = await POST(makeRequest(VALID_BODY))
       expect(res.status).toBe(403)
     })
 
     it('returns 403 when caller is a viewer', async () => {
-      mockAdminFrom.mockImplementation((table: string) => {
-        if (table === 'board_members') return mockMemberCheck('viewer')
-        return {}
-      })
+      mockRequireBoardMember.mockResolvedValueOnce(null) // viewer filtered out by allowedRoles
       const res = await POST(makeRequest(VALID_BODY))
       expect(res.status).toBe(403)
     })
 
     it('returns 403 when caller is an editor', async () => {
-      mockAdminFrom.mockImplementation((table: string) => {
-        if (table === 'board_members') return mockMemberCheck('editor')
-        return {}
-      })
+      mockRequireBoardMember.mockResolvedValueOnce(null) // editor filtered out by allowedRoles
       const res = await POST(makeRequest(VALID_BODY))
       expect(res.status).toBe(403)
     })
@@ -256,13 +255,7 @@ describe('POST /api/invites', () => {
     })
 
     it('allows manager to invite', async () => {
-      mockAdminFrom.mockImplementation((table: string) => {
-        if (table === 'board_members') return mockMemberCheck('manager')
-        if (table === 'auth.users') return mockUserLookup(null)
-        if (table === 'boards') return mockBoardLookup('My Board')
-        if (table === 'board_invites') return mockInviteUpsert()
-        return {}
-      })
+      mockRequireBoardMember.mockResolvedValueOnce({ role: 'manager' })
       const res = await POST(makeRequest(VALID_BODY))
       expect(res.status).toBe(201)
     })
@@ -274,8 +267,7 @@ describe('POST /api/invites', () => {
     beforeEach(() => {
       mockAdminFrom.mockImplementation((table: string) => {
         if (table === 'board_members') {
-          const chain = mockMemberCheck('owner')
-          return { ...chain, upsert: vi.fn().mockResolvedValue({ error: null }) }
+          return { upsert: vi.fn().mockResolvedValue({ error: null }) }
         }
         if (table === 'auth.users') return mockUserLookup('existing-user-id')
         return {}
@@ -296,8 +288,7 @@ describe('POST /api/invites', () => {
     it('returns 500 when member upsert fails', async () => {
       mockAdminFrom.mockImplementation((table: string) => {
         if (table === 'board_members') {
-          const chain = mockMemberCheck('owner')
-          return { ...chain, upsert: vi.fn().mockResolvedValue({ error: { message: 'db error' } }) }
+          return { upsert: vi.fn().mockResolvedValue({ error: { message: 'db error' } }) }
         }
         if (table === 'auth.users') return mockUserLookup('existing-user-id')
         return {}

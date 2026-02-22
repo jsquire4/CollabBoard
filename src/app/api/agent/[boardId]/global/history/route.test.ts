@@ -23,7 +23,7 @@ vi.mock('@/lib/supabase/server', () => ({
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
-          single: mockMemberSingle,
+          maybeSingle: mockMemberSingle,
         }
       }
       return {}

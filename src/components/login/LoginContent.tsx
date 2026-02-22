@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -27,7 +27,10 @@ export function LoginContent() {
   const [password, setPassword] = useState('')
   const [emailError, setEmailError] = useState<string | null>(null)
   const [isSignUp, setIsSignUp] = useState(false)
+  const [isForgotPassword, setIsForgotPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [showCheckEmail, setShowCheckEmail] = useState(false)
+  const [showResetEmailSent, setShowResetEmailSent] = useState(false)
 
   const handleLogin = async () => {
     await supabase.auth.signInWithOAuth({
@@ -45,10 +48,15 @@ export function LoginContent() {
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({ email, password })
+        const { data, error } = await supabase.auth.signUp({ email, password })
         if (error) {
           setEmailError(friendlyError(error.message))
           return
+        }
+        if (data?.session) {
+          router.push(returnTo)
+        } else {
+          setShowCheckEmail(true)
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -56,8 +64,26 @@ export function LoginContent() {
           setEmailError(friendlyError(error.message))
           return
         }
+        router.push(returnTo)
       }
-      router.push(returnTo)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleForgotPasswordSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setEmailError(null)
+    setIsLoading(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      if (error) {
+        setEmailError(friendlyError(error.message))
+        return
+      }
+      setShowResetEmailSent(true)
     } finally {
       setIsLoading(false)
     }
@@ -117,74 +143,162 @@ export function LoginContent() {
             </p>
           )}
 
-          {/* Google sign-in button */}
-          <div className="mt-8">
-            <GoogleSignInButton onClick={handleLogin} />
-          </div>
-
-          {/* Divider */}
-          <div className="mt-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-charcoal/10" />
-            <span className="text-xs text-charcoal/40">or</span>
-            <div className="h-px flex-1 bg-charcoal/10" />
-          </div>
-
-          {/* Email/password form */}
-          <form onSubmit={handleEmailSubmit} className="mt-6 space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-charcoal/70">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-charcoal/20 bg-white px-3 py-2 text-sm text-charcoal placeholder:text-charcoal/30 focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
-                placeholder="you@example.com"
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-charcoal/70">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-charcoal/20 bg-white px-3 py-2 text-sm text-charcoal placeholder:text-charcoal/30 focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
-                placeholder="••••••••"
-              />
-            </div>
-
-            {emailError && (
-              <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-100">
-                {emailError}
+          {/* Check email verification notice */}
+          {showCheckEmail && (
+            <div role="status" className="mt-6 rounded-lg bg-navy/5 border border-navy/20 px-4 py-4">
+              <p className="text-sm font-medium text-charcoal">
+                Check your email
               </p>
-            )}
+              <p className="mt-1 text-sm text-charcoal/70">
+                We sent a verification link to <strong>{email}</strong>. Click the link to verify your account and sign in.
+              </p>
+              <p className="mt-3 text-xs text-charcoal/50">
+                Didn&apos;t receive it? Check your spam folder or try signing up again.
+              </p>
+            </div>
+          )}
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90 disabled:opacity-50 transition-colors"
-            >
-              {isLoading ? (isSignUp ? 'Creating account…' : 'Signing in…') : (isSignUp ? 'Create account' : 'Sign in')}
-            </button>
-          </form>
+          {/* Reset password email sent notice */}
+          {showResetEmailSent && (
+            <div role="status" className="mt-6 rounded-lg bg-navy/5 border border-navy/20 px-4 py-4">
+              <p className="text-sm font-medium text-charcoal">
+                Check your email
+              </p>
+              <p className="mt-1 text-sm text-charcoal/70">
+                We sent a password reset link to <strong>{email}</strong>. Click the link to set a new password.
+              </p>
+              <p className="mt-3 text-xs text-charcoal/50">
+                Didn&apos;t receive it? Check your spam folder or try again.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setShowResetEmailSent(false); setIsForgotPassword(false) }}
+                className="mt-3 text-sm text-navy hover:underline"
+              >
+                Back to sign in
+              </button>
+            </div>
+          )}
 
-          <p className="mt-4 text-center text-sm text-charcoal/50">
-            {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
-            <button
-              type="button"
-              onClick={() => { setIsSignUp(!isSignUp); setEmailError(null) }}
-              className="text-navy hover:underline"
-            >
-              {isSignUp ? 'Sign in' : 'Sign up'}
-            </button>
-          </p>
+          {/* Google sign-in + email form (hidden when forgot password flow active) */}
+          {!showResetEmailSent && (
+            <>
+              <div className="mt-8">
+                <GoogleSignInButton onClick={handleLogin} />
+              </div>
+
+              <div className="mt-6 flex items-center gap-3">
+                <div className="h-px flex-1 bg-charcoal/10" />
+                <span className="text-xs text-charcoal/40">or</span>
+                <div className="h-px flex-1 bg-charcoal/10" />
+              </div>
+
+              {isForgotPassword ? (
+                <form onSubmit={handleForgotPasswordSubmit} className="mt-6 space-y-4">
+                  <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-charcoal/70">
+                      Email
+                    </label>
+                    <input
+                      id="email"
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="mt-1 block w-full rounded-lg border border-charcoal/20 bg-white px-3 py-2 text-sm text-charcoal placeholder:text-charcoal/30 focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
+                      placeholder="you@example.com"
+                    />
+                  </div>
+                  {emailError && (
+                    <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-100">
+                      {emailError}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90 disabled:opacity-50 transition-colors"
+                  >
+                    {isLoading ? 'Sending…' : 'Send reset link'}
+                  </button>
+                  <p className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => { setIsForgotPassword(false); setEmailError(null) }}
+                      className="text-sm text-navy hover:underline"
+                    >
+                      Back to sign in
+                    </button>
+                  </p>
+                </form>
+              ) : (
+                <>
+                  <form onSubmit={handleEmailSubmit} className="mt-6 space-y-4">
+                    <div>
+                      <label htmlFor="email" className="block text-sm font-medium text-charcoal/70">
+                        Email
+                      </label>
+                      <input
+                        id="email"
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="mt-1 block w-full rounded-lg border border-charcoal/20 bg-white px-3 py-2 text-sm text-charcoal placeholder:text-charcoal/30 focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
+                        placeholder="you@example.com"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="password" className="block text-sm font-medium text-charcoal/70">
+                        Password
+                      </label>
+                      <input
+                        id="password"
+                        type="password"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="mt-1 block w-full rounded-lg border border-charcoal/20 bg-white px-3 py-2 text-sm text-charcoal placeholder:text-charcoal/30 focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
+                        placeholder="••••••••"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setIsForgotPassword(true)}
+                        className="mt-1 text-xs text-charcoal/50 hover:text-navy hover:underline"
+                      >
+                        Forgot your password?
+                      </button>
+                    </div>
+
+                    {emailError && (
+                      <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-100">
+                        {emailError}
+                      </p>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className="w-full rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90 disabled:opacity-50 transition-colors"
+                    >
+                      {isLoading ? (isSignUp ? 'Creating account…' : 'Signing in…') : (isSignUp ? 'Create account' : 'Sign in')}
+                    </button>
+                  </form>
+
+                  <p className="mt-4 text-center text-sm text-charcoal/50">
+                    {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+                    <button
+                      type="button"
+                      onClick={() => { setIsSignUp(!isSignUp); setEmailError(null); setShowCheckEmail(false); setIsForgotPassword(false) }}
+                      className="text-navy hover:underline"
+                    >
+                      {isSignUp ? 'Sign in' : 'Sign up'}
+                    </button>
+                  </p>
+                </>
+              )}
+            </>
+          )}
 
           {/* Footer note */}
           <p className="mt-8 text-xs text-charcoal/40">

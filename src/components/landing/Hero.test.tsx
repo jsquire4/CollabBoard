@@ -27,13 +27,6 @@ describe('Hero', () => {
       expect(link).toHaveAttribute('href', '/login')
     })
 
-    it('renders "See it in action" CTA linking to #features', () => {
-      render(<Hero isAuthenticated={false} />)
-      const link = screen.getByRole('link', { name: /see it in action/i })
-      expect(link).toBeInTheDocument()
-      expect(link).toHaveAttribute('href', '#features')
-    })
-
     it('does not render "Open Theorem" CTA', () => {
       render(<Hero isAuthenticated={false} />)
       expect(screen.queryByRole('link', { name: /open theorem/i })).not.toBeInTheDocument()
@@ -53,10 +46,6 @@ describe('Hero', () => {
       expect(screen.queryByRole('link', { name: /start thinking/i })).not.toBeInTheDocument()
     })
 
-    it('does not render "See it in action" CTA', () => {
-      render(<Hero isAuthenticated={true} />)
-      expect(screen.queryByRole('link', { name: /see it in action/i })).not.toBeInTheDocument()
-    })
   })
 
   it('renders the badge with Theorem capability copy', () => {

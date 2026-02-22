@@ -56,21 +56,13 @@ export function Hero({ isAuthenticated }: HeroProps) {
             <ArrowIcon />
           </Link>
         ) : (
-          <>
-            <Link
-              href="/login"
-              className="inline-flex items-center gap-2 rounded-xl bg-navy px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-navy/30 transition-all hover:bg-navy/90 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-navy focus:ring-offset-2"
-            >
-              Start thinking
-              <ArrowIcon />
-            </Link>
-            <Link
-              href="#features"
-              className="inline-flex items-center gap-2 rounded-xl border border-navy px-8 py-3.5 text-base font-semibold text-navy transition-all hover:bg-navy/5 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-navy focus:ring-offset-2"
-            >
-              See it in action
-            </Link>
-          </>
+          <Link
+            href="/login"
+            className="inline-flex items-center gap-2 rounded-xl bg-navy px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-navy/30 transition-all hover:bg-navy/90 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-navy focus:ring-offset-2"
+          >
+            Start thinking
+            <ArrowIcon />
+          </Link>
         )}
       </div>
 

@@ -158,7 +158,8 @@ describe('LoginContent', () => {
     expect(mockPush).toHaveBeenCalledWith('/boards')
   })
 
-  it('calls signUp on sign-up submit and redirects to /boards', async () => {
+  it('calls signUp on sign-up submit and shows check email when confirmation required', async () => {
+    mockSignUp.mockResolvedValueOnce({ data: { user: {}, session: null }, error: null })
     const user = userEvent.setup()
     render(<LoginContent />)
     await user.click(screen.getByRole('button', { name: /sign up/i }))
@@ -169,6 +170,19 @@ describe('LoginContent', () => {
       email: 'new@example.com',
       password: 'password123',
     })
+    expect(screen.getByText(/check your email/i)).toBeInTheDocument()
+    expect(screen.getByText(/new@example\.com/)).toBeInTheDocument()
+    expect(mockPush).not.toHaveBeenCalled()
+  })
+
+  it('redirects after signUp when confirmations disabled (session present)', async () => {
+    mockSignUp.mockResolvedValueOnce({ data: { user: {}, session: {} }, error: null })
+    const user = userEvent.setup()
+    render(<LoginContent />)
+    await user.click(screen.getByRole('button', { name: /sign up/i }))
+    await user.type(screen.getByLabelText(/email/i), 'new@example.com')
+    await user.type(screen.getByLabelText(/password/i), 'password123')
+    await user.click(screen.getByRole('button', { name: /create account/i }))
     expect(mockPush).toHaveBeenCalledWith('/boards')
   })
 
@@ -244,7 +258,8 @@ describe('LoginContent', () => {
       expect(mockPush).toHaveBeenCalledWith('/boards')
     })
 
-    it('redirects to returnTo after successful signUp', async () => {
+    it('redirects to returnTo after successful signUp when session present', async () => {
+      mockSignUp.mockResolvedValueOnce({ data: { user: {}, session: {} }, error: null })
       mockSearchParams = new URLSearchParams({ returnTo: '/invite/accept?id=xyz' })
       const user = userEvent.setup()
       render(<LoginContent />)

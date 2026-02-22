@@ -36,7 +36,7 @@ describe('RichTextToolbar', () => {
     ;(editor.isActive as ReturnType<typeof vi.fn>).mockImplementation((name: string) => name === 'bold')
     const { container } = render(<RichTextToolbar editor={editor} />)
     const boldButton = container.querySelectorAll('button')[0]
-    expect(boldButton.className).toContain('bg-navy/15')
+    expect(boldButton.className).toContain('bg-white/20')
   })
 
   it('prevents blur via mouseDown preventDefault on wrapper', () => {
@@ -115,7 +115,7 @@ describe('RichTextToolbar', () => {
     })
     const { getByTitle } = render(<RichTextToolbar editor={editor} />)
     const centerButton = getByTitle('Align center')
-    expect(centerButton.className).toContain('bg-navy/15')
+    expect(centerButton.className).toContain('bg-white/20')
   })
 
   it('calls setTextAlign("left") on align left click', () => {

@@ -409,7 +409,8 @@ function MergedShapesGroupButton({ isOpen, activePreset, isActive, sides, onSide
       iconPath: 'M12 2L22.5 9.6 18.5 21.4H5.5L1.5 9.6Z',
     }
     onPresetSelect(preset)
-  }, [sides, onPresetSelect])
+    onClose()
+  }, [sides, onPresetSelect, onClose])
 
   return (
     <div ref={containerRef}>

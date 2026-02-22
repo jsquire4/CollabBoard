@@ -339,7 +339,7 @@ describe('boardsApi', () => {
       expect(result).toBeNull()
     })
 
-    it('returns role when membership exists', async () => {
+    it('returns role and can_use_agents when membership exists', async () => {
       mockAuthGetUser.mockResolvedValue({
         data: { user: { id: 'u1' } },
       })
@@ -351,7 +351,7 @@ describe('boardsApi', () => {
               eq: vi.fn(() => ({
                 eq: vi.fn(() => ({
                   maybeSingle: vi.fn(() =>
-                    Promise.resolve({ data: { role: 'editor' }, error: null })
+                    Promise.resolve({ data: { role: 'editor', can_use_agents: true }, error: null })
                   ),
                 })),
               })),
@@ -363,7 +363,7 @@ describe('boardsApi', () => {
 
       const result = await fetchBoardRole('board-1')
 
-      expect(result).toBe('editor')
+      expect(result).toEqual({ role: 'editor', can_use_agents: true })
     })
   })
 

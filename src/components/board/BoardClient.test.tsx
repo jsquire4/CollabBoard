@@ -71,6 +71,7 @@ describe('BoardClient', () => {
     boardId: 'board-1',
     boardName: 'Test Board',
     userRole: 'editor' as const,
+    canUseAgents: true,
     displayName: 'Test User',
   }
 

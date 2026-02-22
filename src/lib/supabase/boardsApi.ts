@@ -108,18 +108,27 @@ async function acceptPendingInvites(userId: string, email: string) {
   }
 }
 
-export async function fetchBoardRole(boardId: string): Promise<BoardRole | null> {
+export interface BoardMemberRole {
+  role: BoardRole
+  can_use_agents: boolean
+}
+
+export async function fetchBoardRole(boardId: string): Promise<BoardMemberRole | null> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
   const { data } = await supabase
     .from('board_members')
-    .select('role')
+    .select('role, can_use_agents')
     .eq('board_id', boardId)
     .eq('user_id', user.id)
     .maybeSingle()
 
-  return (data?.role as BoardRole) ?? null
+  if (!data) return null
+  return {
+    role: data.role as BoardRole,
+    can_use_agents: data.can_use_agents ?? false,
+  }
 }
 

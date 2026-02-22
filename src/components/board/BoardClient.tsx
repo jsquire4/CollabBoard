@@ -71,6 +71,7 @@ interface BoardClientProps {
   boardId: string
   boardName: string
   userRole: BoardRole
+  canUseAgents: boolean
   displayName: string
   initialGridSize?: number
   initialGridSubdivisions?: number
@@ -82,7 +83,7 @@ interface BoardClientProps {
   initialSubdivisionColor?: string
 }
 
-export function BoardClient({ userId, boardId, boardName, userRole, displayName, initialGridSize = 40, initialGridSubdivisions = 1, initialGridVisible = true, initialSnapToGrid = false, initialGridStyle = 'lines', initialCanvasColor = '#FAF8F4', initialGridColor = '#E8E3DA', initialSubdivisionColor = '#E8E3DA' }: BoardClientProps) {
+export function BoardClient({ userId, boardId, boardName, userRole, canUseAgents, displayName, initialGridSize = 40, initialGridSubdivisions = 1, initialGridVisible = true, initialSnapToGrid = false, initialGridStyle = 'lines', initialCanvasColor = '#FAF8F4', initialGridColor = '#E8E3DA', initialSubdivisionColor = '#E8E3DA' }: BoardClientProps) {
   const channel = useRealtimeChannel(boardId)
   const { onlineUsers, trackPresence, updatePresence } = usePresence(channel, userId, userRole, displayName)
   const userCount = onlineUsers.length + 1 // include self
@@ -213,8 +214,9 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
   // Auto-route points ref: populated by Canvas during render, used by handleWaypointInsert
   const autoRoutePointsRef = useRef<Map<string, number[]>>(new Map())
 
-  // Cmd+G — toggle global board assistant
+  // Cmd+G — toggle global board assistant (only when canUseAgents)
   useEffect(() => {
+    if (!canUseAgents) return
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'g') {
         e.preventDefault()
@@ -223,7 +225,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [])
+  }, [canUseAgents])
 
   // Subscribe LAST — after all hooks have registered their .on() listeners.
   const { connectionStatus } = useConnectionManager({ channel, trackPresence, reconcileOnReconnect, supabaseRef })
@@ -869,7 +871,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     onDeleteRowAt: handleDeleteRowAt,
     onAddColumnAt: handleAddColumnAt,
     onDeleteColumnAt: handleDeleteColumnAt,
-    onAgentClick: handleAgentClick,
+    onAgentClick: canUseAgents ? handleAgentClick : undefined,
     onApiConfigChange: handleApiConfigChange,
     onCommentOpen: handleCommentOpen,
     onEmptyCanvasClick: handleEmptyCanvasClick,
@@ -898,7 +900,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     handleCellTextUpdate, handleTableDataChange,
     handleAddRow, handleDeleteRow, handleAddColumn, handleDeleteColumn,
     handleAddRowAt, handleDeleteRowAt, handleAddColumnAt, handleDeleteColumnAt,
-    handleAgentClick, handleApiConfigChange, handleCommentOpen,
+    canUseAgents, handleAgentClick, handleApiConfigChange, handleCommentOpen,
     handleEmptyCanvasClick,
   ])
 
@@ -986,17 +988,19 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
           onClose={() => setRadialPicker(null)}
         />
       )}
-      {/* Global Agent toggle button */}
-      <button
-        onClick={() => setGlobalAgentOpen(prev => !prev)}
-        className="fixed bottom-16 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-navy text-parchment shadow-lg hover:bg-navy/80 border border-transparent dark:border-white/10"
-        aria-label="Toggle global board assistant (Cmd+G)"
-        title="Board Assistant (⌘G)"
-      >
-        <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-        </svg>
-      </button>
+      {/* Global Agent toggle button — only when user has can_use_agents */}
+      {canUseAgents && (
+        <button
+          onClick={() => setGlobalAgentOpen(prev => !prev)}
+          className="fixed bottom-16 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-navy text-parchment shadow-lg hover:bg-navy/80 border border-transparent dark:border-white/10"
+          aria-label="Toggle global board assistant (Cmd+G)"
+          title="Board Assistant (⌘G)"
+        >
+          <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          </svg>
+        </button>
+      )}
       {/* NOTE: File Library and Slide Filmstrip buttons are hidden while these
           features are still in development. The panels and supporting code remain
           intact — just uncomment the buttons below when ready to ship.

@@ -128,7 +128,7 @@ describe('BoardPage', () => {
       },
       from: mockFrom,
     })
-    mockFetchBoardRole.mockResolvedValue('editor')
+    mockFetchBoardRole.mockResolvedValue({ role: 'editor', can_use_agents: true })
     mockGetUserDisplayName.mockReturnValue('Test User')
 
     const result = await BoardPage({

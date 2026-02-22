@@ -30,9 +30,9 @@ export default async function BoardPage({ params }: BoardPageProps) {
 
   if (!board) notFound()
 
-  const userRole = await fetchBoardRole(id)
+  const member = await fetchBoardRole(id)
 
-  if (!userRole) notFound()
+  if (!member) notFound()
 
   const displayName = getUserDisplayName(user)
 
@@ -41,7 +41,8 @@ export default async function BoardPage({ params }: BoardPageProps) {
       userId={user.id}
       boardId={board.id}
       boardName={board.name}
-      userRole={userRole}
+      userRole={member.role}
+      canUseAgents={member.can_use_agents}
       displayName={displayName}
       initialGridSize={board.grid_size}
       initialGridSubdivisions={board.grid_subdivisions}

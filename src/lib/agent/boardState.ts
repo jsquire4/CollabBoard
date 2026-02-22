@@ -38,9 +38,9 @@ const BOARD_OBJECT_COLUMNS = [
   'field_clocks',
 ].join(',')
 
-/** Sentinel sender_id that tells the Realtime broadcast handler on the client
- *  to skip applying this change (the agent already wrote it to the DB and the
- *  client will receive the Realtime INSERT/UPDATE separately via the board channel). */
+/** Sentinel sender_id used by the server-side agent when broadcasting changes.
+ *  The client broadcast handler applies these like any peer's changes (the
+ *  sender_id !== userId filter does not suppress them). */
 export const AGENT_SENDER_ID = '__agent__'
 
 export async function loadBoardState(boardId: string): Promise<BoardState> {
@@ -94,7 +94,7 @@ export function broadcastChanges(boardId: string, changes: BoardChange[]) {
         topic: `board:${boardId}`,
         event: 'board:sync',
         payload: { changes, sender_id: AGENT_SENDER_ID },
-        private: true,
+        private: false,
       }],
     }),
   }).catch(err => {

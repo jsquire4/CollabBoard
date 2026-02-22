@@ -552,8 +552,78 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
       .sort((a, b) => (a.slide_index ?? 0) - (b.slide_index ?? 0))
   , [objects])
 
-  // Stable empty map — placeholder until comment counts subscription is wired
-  const emptyCommentCounts = useMemo(() => new Map<string, number>(), [])
+  // ── Comment counts — aggregated on mount, kept live via Realtime ──
+  const [commentCounts, setCommentCounts] = useState<Map<string, number>>(new Map())
+
+  useEffect(() => {
+    const supabase = supabaseRef.current
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let cancelled = false
+
+    const loadCounts = async () => {
+      const { data, error } = await supabase
+        .from('comments')
+        .select('object_id')
+        .eq('board_id', boardId)
+        .is('resolved_at', null)
+      if (cancelled) return
+      if (error) {
+        console.error('[commentCounts] Failed to load:', error)
+        return
+      }
+      const map = new Map<string, number>()
+      for (const row of (data ?? []) as { object_id: string }[]) {
+        map.set(row.object_id, (map.get(row.object_id) ?? 0) + 1)
+      }
+      setCommentCounts(map)
+    }
+
+    void loadCounts()
+
+    channel = supabase
+      .channel(`comment-counts:${boardId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'comments', filter: `board_id=eq.${boardId}` },
+        (payload) => {
+          const c = payload.new as { object_id: string; resolved_at: string | null }
+          if (c.resolved_at !== null) return
+          setCommentCounts(prev => {
+            const next = new Map(prev)
+            next.set(c.object_id, (next.get(c.object_id) ?? 0) + 1)
+            return next
+          })
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'comments', filter: `board_id=eq.${boardId}` },
+        (payload) => {
+          const prevRow = payload.old as { object_id: string; resolved_at: string | null }
+          const nextRow = payload.new as { object_id: string; resolved_at: string | null }
+          const wasOpen = prevRow.resolved_at === null
+          const isOpen = nextRow.resolved_at === null
+          if (wasOpen === isOpen) return
+          setCommentCounts(prev => {
+            const m = new Map(prev)
+            const cur = m.get(nextRow.object_id) ?? 0
+            if (wasOpen && !isOpen) {
+              if (cur <= 1) m.delete(nextRow.object_id)
+              else m.set(nextRow.object_id, cur - 1)
+            } else {
+              m.set(nextRow.object_id, cur + 1)
+            }
+            return m
+          })
+        },
+      )
+      .subscribe()
+
+    return () => {
+      cancelled = true
+      if (channel) { void channel.unsubscribe(); channel = null }
+    }
+  }, [boardId])
 
   // ── Board context (read-only shared state for child components) ──
   const boardContextValue: BoardContextValue = useMemo(() => ({
@@ -566,7 +636,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     isObjectLocked,
     gridSize, gridSubdivisions, gridVisible, snapToGrid, gridStyle,
     canvasColor, gridColor, subdivisionColor, uiDarkMode,
-    commentCounts: emptyCommentCounts,
+    commentCounts,
     dragPositionsRef,
   }), [
     objects, selectedIds, activeGroupId, sortedObjects, remoteSelections,
@@ -577,7 +647,7 @@ export function BoardClient({ userId, boardId, boardName, userRole, displayName,
     isObjectLocked,
     gridSize, gridSubdivisions, gridVisible, snapToGrid, gridStyle,
     canvasColor, gridColor, subdivisionColor, uiDarkMode,
-    emptyCommentCounts,
+    commentCounts,
     dragPositionsRef,
   ])
 

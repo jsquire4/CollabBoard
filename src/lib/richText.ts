@@ -2,7 +2,7 @@ import type { TipTapDoc, TipTapNode } from '@/types/board'
 import { generateHTML } from '@tiptap/html'
 import { TIPTAP_EXTENSIONS } from '@/lib/richtext/extensions'
 
-export const RICH_TEXT_ENABLED = process.env.NEXT_PUBLIC_RICH_TEXT_ENABLED === 'true'
+export const RICH_TEXT_ENABLED = true
 
 /** Recursively extract plain text from a TipTap document JSON. */
 export function extractPlainText(doc: TipTapDoc): string {

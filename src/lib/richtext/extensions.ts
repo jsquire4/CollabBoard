@@ -6,7 +6,44 @@ import { TaskList } from '@tiptap/extension-task-list'
 import { TaskItem } from '@tiptap/extension-task-item'
 import { Underline } from '@tiptap/extension-underline'
 import { TextAlign } from '@tiptap/extension-text-align'
+import { FontFamily } from '@tiptap/extension-font-family'
+import { Extension } from '@tiptap/core'
 import type { Extensions } from '@tiptap/react'
+
+/** Custom FontSize extension — stores fontSize on the textStyle mark. */
+const FontSize = Extension.create({
+  name: 'fontSize',
+  addOptions() {
+    return { types: ['textStyle'] }
+  },
+  addGlobalAttributes() {
+    return [
+      {
+        types: this.options.types as string[],
+        attributes: {
+          fontSize: {
+            default: null,
+            parseHTML: (element: HTMLElement) => element.style.fontSize || null,
+            renderHTML: (attrs: Record<string, unknown>) =>
+              attrs.fontSize ? { style: `font-size: ${attrs.fontSize}` } : {},
+          },
+        },
+      },
+    ]
+  },
+  addCommands() {
+    return {
+      setFontSize:
+        (size: string) =>
+        ({ chain }: { chain: () => import('@tiptap/core').ChainedCommands }) =>
+          chain().setMark('textStyle', { fontSize: size }).run(),
+      unsetFontSize:
+        () =>
+        ({ chain }: { chain: () => import('@tiptap/core').ChainedCommands }) =>
+          chain().setMark('textStyle', { fontSize: null }).run(),
+    }
+  },
+})
 
 /**
  * Single source of truth for TipTap extensions.
@@ -19,6 +56,8 @@ export const TIPTAP_EXTENSIONS: Extensions = [
   }),
   TextStyle,
   Color,
+  FontFamily,
+  FontSize,
   Highlight.configure({ multicolor: true }),
   TaskList,
   TaskItem.configure({ nested: true }),

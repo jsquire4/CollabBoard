@@ -166,6 +166,8 @@ export function useCursors(
 
     const handler = ({ payload }: { payload: RemoteCursorData }) => {
       if (payload.user_id === userId) return
+      // Guard against malformed cursor payloads (NaN, Infinity, or missing coords)
+      if (!isFinite(payload.x) || !isFinite(payload.y)) return
       receiveCursorFromBroadcast(payload.user_id, { x: payload.x, y: payload.y })
     }
 
@@ -196,11 +198,15 @@ export function useCursors(
     if (now - lastSendRef.current < throttleMsRef.current) return
     lastSendRef.current = now
 
-    channel.send({
-      type: 'broadcast',
-      event: 'cursor',
-      payload: { x, y, user_id: userId },
-    })
+    try {
+      channel.send({
+        type: 'broadcast',
+        event: 'cursor',
+        payload: { x, y, user_id: userId },
+      })
+    } catch (err) {
+      console.warn('[Realtime] cursor channel.send() threw unexpectedly:', err)
+    }
   }, [channel, userId, isDraggingRef])
 
   // Send cursor position bypassing the drag suppression check (for keepalive during held drag)
@@ -212,11 +218,15 @@ export function useCursors(
     if (now - lastSendRef.current < throttleMsRef.current) return
     lastSendRef.current = now
 
-    channel.send({
-      type: 'broadcast',
-      event: 'cursor',
-      payload: { x, y, user_id: userId },
-    })
+    try {
+      channel.send({
+        type: 'broadcast',
+        event: 'cursor',
+        payload: { x, y, user_id: userId },
+      })
+    } catch (err) {
+      console.warn('[Realtime] cursor channel.send() threw unexpectedly (direct):', err)
+    }
   }, [channel, userId])
 
   const getDragCursorPos = useCallback(() => lastPosRef.current, [])

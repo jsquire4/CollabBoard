@@ -63,7 +63,10 @@ export function useCanvasOverlayPosition(
     left = Math.max(margin, Math.min(left, vw - elWidth - margin))
     top = Math.max(margin, Math.min(top, vh - elHeight - margin))
 
-    setPos({ top, left })
+    setPos(prev => {
+      if (prev !== null && prev.top === top && prev.left === left) return prev
+      return { top, left }
+    })
   }, [bbox, stagePos, stageScale, gap, margin, elementRef])
 
   return pos

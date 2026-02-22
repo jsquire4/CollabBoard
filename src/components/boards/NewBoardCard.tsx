@@ -29,6 +29,7 @@ export function NewBoardCard({
           autoFocus
           type="text"
           value={newName}
+          maxLength={100}
           onChange={(e) => onNameChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') onCreate()

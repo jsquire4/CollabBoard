@@ -170,6 +170,7 @@ export function BoardCard({
               autoFocus
               type="text"
               value={editName}
+              maxLength={100}
               onChange={(e) => onEditNameChange(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') onRename(board.id)

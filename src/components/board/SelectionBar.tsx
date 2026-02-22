@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useMemo } from 'react'
+import { useRef, useState, useMemo, useLayoutEffect } from 'react'
 import { useBoardContext } from '@/contexts/BoardContext'
 import { useBoardMutations } from '@/contexts/BoardMutationsContext'
 import { selectionBBox } from '@/lib/geometry/bbox'
@@ -239,12 +239,11 @@ export function SelectionBar({
   // ── Conditional animation: only animate the very first appearance ──
   const barWasVisibleRef = useRef(false)
   const justAppeared = barPos !== null && !barWasVisibleRef.current
-  // Update the ref after render (not in an effect, so it's synchronous after paint)
-  if (barPos !== null) {
-    barWasVisibleRef.current = true
-  } else {
-    barWasVisibleRef.current = false
-  }
+
+  // Sync the ref AFTER commit so concurrent-mode teardown can't mutate it mid-render
+  useLayoutEffect(() => {
+    barWasVisibleRef.current = barPos !== null
+  })
 
   if (selectedIds.size === 0) return null
 

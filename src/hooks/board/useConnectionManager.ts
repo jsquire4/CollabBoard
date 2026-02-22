@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ConnectionStatus } from '@/components/ui/ConnectionBanner'
+import { clearAutoRefreshAttempted } from '@/lib/recoveryStorage'
 
 const LOG_PREFIX = '[Realtime]'
 
@@ -12,6 +13,7 @@ interface UseConnectionManagerParams {
   trackPresence: () => void
   reconcileOnReconnect: () => void
   supabaseRef: React.MutableRefObject<SupabaseClient>
+  onDisconnect?: () => void
 }
 
 export function useConnectionManager({
@@ -19,8 +21,10 @@ export function useConnectionManager({
   trackPresence,
   reconcileOnReconnect,
   supabaseRef,
+  onDisconnect,
 }: UseConnectionManagerParams): {
   connectionStatus: ConnectionStatus
+  retryConnection: () => void
 } {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connected')
   const hasConnectedRef = useRef(false)
@@ -45,6 +49,7 @@ export function useConnectionManager({
       if (attempt > MAX_RECONNECT_ATTEMPTS) {
         console.error(`${LOG_PREFIX} All ${MAX_RECONNECT_ATTEMPTS} reconnect attempts exhausted (last trigger: ${triggerEvent}). Giving up.`)
         setConnectionStatus('disconnected')
+        onDisconnect?.()
         return
       }
       // Clear any pending timer to avoid duplicate reconnects
@@ -84,6 +89,7 @@ export function useConnectionManager({
         }
         reconnectAttemptRef.current = 0
         setConnectionStatus('connected')
+        clearAutoRefreshAttempted()
         trackPresence()
         if (wasReconnect) {
           reconcileOnReconnect()
@@ -110,7 +116,16 @@ export function useConnectionManager({
       }
       reconnectAttemptRef.current = 0
     }
-  }, [channel, trackPresence, reconcileOnReconnect])
+  }, [channel, trackPresence, reconcileOnReconnect, onDisconnect])
+
+  const retryConnection = useCallback(() => {
+    if (!channel) return
+    reconnectAttemptRef.current = 0
+    setConnectionStatus('reconnecting')
+    connectStartRef.current = Date.now()
+    supabaseRef.current.realtime.disconnect()
+    channel.subscribe()
+  }, [channel, supabaseRef])
 
   // Auth expiry detection
   useEffect(() => {
@@ -123,5 +138,5 @@ export function useConnectionManager({
     return () => subscription.unsubscribe()
   }, [supabaseRef])
 
-  return { connectionStatus }
+  return { connectionStatus, retryConnection }
 }

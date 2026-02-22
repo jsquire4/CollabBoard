@@ -617,8 +617,14 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
     channel, userId, selectedIds, onlineUsers,
   })
 
+  const getRecoveryData = useCallback(() => ({
+    objects: objectsRef.current,
+    fieldClocks: fieldClocksRef.current,
+  }), [])
+
   return {
     objects,
+    getRecoveryData,
     selectedIds,
     activeGroupId,
     sortedObjects,

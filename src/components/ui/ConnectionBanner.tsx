@@ -8,9 +8,11 @@ interface ConnectionBannerProps {
   status: ConnectionStatus
   /** Delay in ms before showing the reconnecting banner (default 2000) */
   showDelay?: number
+  /** Called when user clicks Retry (disconnected state). Triggers reconnect attempt. */
+  onRetry?: () => void
 }
 
-export function ConnectionBanner({ status, showDelay = 2000 }: ConnectionBannerProps) {
+export function ConnectionBanner({ status, showDelay = 2000, onRetry }: ConnectionBannerProps) {
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
@@ -33,7 +35,7 @@ export function ConnectionBanner({ status, showDelay = 2000 }: ConnectionBannerP
   const config = {
     disconnected: {
       bg: 'bg-amber-500',
-      text: 'Connection lost. Attempting to reconnect...',
+      text: 'Connection lost. Your work is saved.',
     },
     reconnecting: {
       bg: 'bg-amber-500',
@@ -48,8 +50,26 @@ export function ConnectionBanner({ status, showDelay = 2000 }: ConnectionBannerP
   const { bg, text } = config[status]
 
   return (
-    <div className={`${bg} px-4 py-2 text-center text-sm font-medium text-white`}>
-      {text}
+    <div className={`${bg} flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-2 text-center text-sm font-medium text-white`}>
+      <span>{text}</span>
+      {status === 'disconnected' && onRetry && (
+        <>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded border border-white/80 px-2 py-0.5 font-medium hover:bg-white/20"
+          >
+            Retry
+          </button>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded border border-white/80 px-2 py-0.5 font-medium hover:bg-white/20"
+          >
+            Refresh
+          </button>
+        </>
+      )}
     </div>
   )
 }

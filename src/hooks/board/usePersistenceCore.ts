@@ -8,6 +8,7 @@ import { FieldClocks } from '@/lib/crdt/merge'
 import { CRDT_ENABLED } from '@/hooks/board/useBroadcast'
 import { BoardLogger } from '@/lib/logger'
 import { BOARD_OBJECT_SELECT } from '@/hooks/board/persistenceConstants'
+import { getRecovery, clearRecovery } from '@/lib/recoveryStorage'
 
 export interface UsePersistenceCoreDeps {
   boardId: string
@@ -38,43 +39,13 @@ export function usePersistenceCore({
 
   // ── Load ────────────────────────────────────────────────────────
 
-  const loadObjects = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('board_objects')
-      .select(BOARD_OBJECT_SELECT)
-      .eq('board_id', boardId)
-      .is('deleted_at', null)
-      .limit(5000) as unknown as { data: (BoardObject & { field_clocks?: FieldClocks })[] | null; error: { message: string } | null }
-
-    if (error) {
-      log.error({ message: 'Failed to load board objects', operation: 'loadObjects', error })
-      notify('Failed to load board')
-      return
-    }
-
-    if (data && data.length === 5000) {
-      console.warn('Board object limit reached (5000). Some objects may not be loaded.')
-      notify('This board has too many objects to display all of them (limit: 5000).')
-    }
-
-    const map = new Map<string, BoardObject>()
-    const clocksMap = new Map<string, FieldClocks>()
-    for (const obj of data ?? []) {
-      map.set(obj.id, obj as BoardObject)
-      if (CRDT_ENABLED && obj.field_clocks && typeof obj.field_clocks === 'object') {
-        clocksMap.set(obj.id, obj.field_clocks as FieldClocks)
-      }
-    }
-    setObjects(map)
-    if (CRDT_ENABLED) {
-      fieldClocksRef.current = clocksMap
-    }
-  }, [boardId, log, notify])
-
-  // ── Reconcile on reconnect (CRDT Phase 3) ─────────────────────
+  const loadObjectsRef = useRef<() => Promise<void>>(null!)
 
   const reconcileOnReconnect = useCallback(async () => {
-    if (!CRDT_ENABLED) return
+    if (!CRDT_ENABLED) {
+      await loadObjectsRef.current()
+      return
+    }
 
     const { data: dbObjects, error } = await supabase
       .from('board_objects')
@@ -84,6 +55,7 @@ export function usePersistenceCore({
 
     if (error) {
       log.warn({ message: 'Failed to fetch DB state for reconciliation', operation: 'reconcileOnReconnect', error })
+      await loadObjectsRef.current()
       return
     }
 
@@ -138,8 +110,57 @@ export function usePersistenceCore({
       }
     }
 
-    await loadObjects()
-  }, [boardId, loadObjects, log])
+    await loadObjectsRef.current()
+  }, [boardId, log])
+
+  const loadObjects = useCallback(async () => {
+    const recovery = getRecovery(boardId)
+    if (recovery) {
+      const map = new Map<string, BoardObject>(recovery.objects)
+      const clocksMap = new Map<string, FieldClocks>(recovery.fieldClocks)
+      objectsRef.current = map
+      setObjects(map)
+      if (CRDT_ENABLED) {
+        fieldClocksRef.current = clocksMap
+      }
+      clearRecovery(boardId)
+      await reconcileOnReconnect()
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('board_objects')
+      .select(BOARD_OBJECT_SELECT)
+      .eq('board_id', boardId)
+      .is('deleted_at', null)
+      .limit(5000) as unknown as { data: (BoardObject & { field_clocks?: FieldClocks })[] | null; error: { message: string } | null }
+
+    if (error) {
+      log.error({ message: 'Failed to load board objects', operation: 'loadObjects', error })
+      notify('Failed to load board')
+      return
+    }
+
+    if (data && data.length === 5000) {
+      console.warn('Board object limit reached (5000). Some objects may not be loaded.')
+      notify('This board has too many objects to display all of them (limit: 5000).')
+    }
+
+    const map = new Map<string, BoardObject>()
+    const clocksMap = new Map<string, FieldClocks>()
+    for (const obj of data ?? []) {
+      map.set(obj.id, obj as BoardObject)
+      if (CRDT_ENABLED && obj.field_clocks && typeof obj.field_clocks === 'object') {
+        clocksMap.set(obj.id, obj.field_clocks as FieldClocks)
+      }
+    }
+    setObjects(map)
+    if (CRDT_ENABLED) {
+      fieldClocksRef.current = clocksMap
+    }
+  }, [boardId, log, notify, reconcileOnReconnect])
+
+  loadObjectsRef.current = loadObjects
 
   return {
     persistPromisesRef,

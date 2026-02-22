@@ -53,6 +53,7 @@ import { CommentThread } from './CommentThread'
 // TODO: Re-enable when drag-and-drop file upload is further developed
 // import { FileDropZone } from './FileDropZone'
 import { canvasTransform } from '@/lib/canvasTransform'
+import { saveRecovery, hasAutoRefreshBeenAttempted, setAutoRefreshAttempted } from '@/lib/recoveryStorage'
 
 // Konva is client-only — must disable SSR
 const Canvas = dynamic(() => import('./Canvas').then(mod => ({ default: mod.Canvas })), {
@@ -157,7 +158,7 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
   }, [updatePresence])
 
   const {
-    objects, selectedIds, activeGroupId, sortedObjects,
+    objects, getRecoveryData, selectedIds, activeGroupId, sortedObjects,
     addObject, updateObject, deleteSelected, duplicateSelected,
     selectObject, selectObjects, clearSelection,
     enterGroup, exitGroup,
@@ -259,7 +260,21 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
   }, [effectiveCanUseAgents])
 
   // Subscribe LAST — after all hooks have registered their .on() listeners.
-  const { connectionStatus } = useConnectionManager({ channel, trackPresence, reconcileOnReconnect, supabaseRef })
+  const onDisconnect = useCallback(() => {
+    const { objects: objs, fieldClocks } = getRecoveryData()
+    saveRecovery(boardId, objs, fieldClocks)
+    if (!hasAutoRefreshBeenAttempted()) {
+      setAutoRefreshAttempted()
+      window.location.reload()
+    }
+  }, [boardId, getRecoveryData])
+  const { connectionStatus, retryConnection } = useConnectionManager({
+    channel,
+    trackPresence,
+    reconcileOnReconnect,
+    supabaseRef,
+    onDisconnect,
+  })
 
   const canEdit = userRole !== 'viewer'
 
@@ -968,7 +983,7 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
         onResetZoom={resetZoom}
         onToggleSnapToGrid={() => updateBoardSettings({ snap_to_grid: !snapToGrid })}
       />
-      <ConnectionBanner status={connectionStatus} />
+      <ConnectionBanner status={connectionStatus} onRetry={retryConnection} />
       {activeGroupId && (
         <div className="absolute left-1/2 top-16 z-10 -translate-x-1/2">
           <GroupBreadcrumb activeGroupId={activeGroupId} onExit={exitGroup} />

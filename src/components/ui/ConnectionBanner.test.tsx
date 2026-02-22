@@ -14,7 +14,14 @@ describe('ConnectionBanner', () => {
   it('shows disconnected message immediately', () => {
     render(<ConnectionBanner status="disconnected" />)
     expect(screen.getByText(/connection lost/i)).toBeInTheDocument()
-    expect(screen.getByText(/attempting to reconnect/i)).toBeInTheDocument()
+    expect(screen.getByText(/your work is saved/i)).toBeInTheDocument()
+  })
+
+  it('shows Retry and Refresh buttons when disconnected and onRetry provided', () => {
+    const onRetry = vi.fn()
+    render(<ConnectionBanner status="disconnected" onRetry={onRetry} />)
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /refresh/i })).toBeInTheDocument()
   })
 
   it('shows reconnecting message after delay', () => {

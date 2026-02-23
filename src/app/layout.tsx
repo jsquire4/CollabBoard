@@ -14,7 +14,8 @@ const dmSerifDisplay = DM_Serif_Display({
   subsets: ["latin"],
 });
 
-const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://theoremai.app";
+const rawUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://theoremai.app";
+const baseUrl = rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`;
 const ogImageUrl = `${baseUrl}/theorem_sm_vf-rs.png`;
 
 export const metadata: Metadata = {

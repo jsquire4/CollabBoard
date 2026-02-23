@@ -554,7 +554,10 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
   // ── Frame containment ───────────────────────────────────────────
 
   const checkFrameContainment = useCallback((id: string) => {
-    const obj = objects.get(id)
+    // Use objectsRef so we read the latest state when this runs (e.g. after drag end).
+    // The callback is often deferred via setTimeout; objects from closure would be stale.
+    const currentObjects = objectsRef.current
+    const obj = currentObjects.get(id)
     if (!obj || obj.type === 'frame') return
 
     let centerX: number, centerY: number
@@ -562,18 +565,24 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
       centerX = (obj.x + obj.x2) / 2
       centerY = (obj.y + obj.y2) / 2
     } else {
-      centerX = obj.x + obj.width / 2
-      centerY = obj.y + obj.height / 2
+      centerX = obj.x + (obj.width ?? 0) / 2
+      centerY = obj.y + (obj.height ?? 0) / 2
     }
 
+    const frames = Array.from(currentObjects.values())
+      .filter((o): o is BoardObject => o.type === 'frame')
+      .sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0))
+
     let bestFrame: BoardObject | null = null
-    for (const frame of framesDesc) {
+    for (const frame of frames) {
       if (frame.id === id) continue
+      const fw = frame.width ?? 0
+      const fh = frame.height ?? 0
       if (
         centerX >= frame.x &&
-        centerX <= frame.x + frame.width &&
+        centerX <= frame.x + fw &&
         centerY >= frame.y &&
-        centerY <= frame.y + frame.height
+        centerY <= frame.y + fh
       ) {
         bestFrame = frame
         break
@@ -582,12 +591,12 @@ export function useBoardState(userId: string, boardId: string, userRole: BoardRo
 
     const newParentId = bestFrame?.id ?? null
     if (obj.parent_id !== newParentId) {
-      const currentParent = obj.parent_id ? objects.get(obj.parent_id) : null
+      const currentParent = obj.parent_id ? currentObjects.get(obj.parent_id) : null
       if (!currentParent || currentParent.type === 'frame') {
         updateObject(id, { parent_id: newParentId })
       }
     }
-  }, [objects, framesDesc, updateObject])
+  }, [updateObject])
 
   /** Assign parent_id to objects whose center is inside the frame but not yet children.
    *  Called at frame drag start so all contained objects move with the frame. */

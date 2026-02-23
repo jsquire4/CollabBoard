@@ -14,16 +14,17 @@ const dmSerifDisplay = DM_Serif_Display({
   subsets: ["latin"],
 });
 
-const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://theorem.app";
+const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://theoremai.app";
 
 export const metadata: Metadata = {
   title: "Theorem",
-  description: "An intelligent strategy canvas.",
+  description: "An intelligent strategy canvas for teams that think in frameworks. AI-powered synthesis, real-time collaboration, and a structured workspace.",
   openGraph: {
-    title: "Theorem — An intelligent strategy canvas",
-    description: "An intelligent strategy canvas.",
+    title: "Theorem — Where hypotheses become theorems",
+    description: "An intelligent strategy canvas for teams that think in frameworks. AI-powered synthesis, real-time collaboration, and a structured workspace.",
     url: baseUrl,
     siteName: "Theorem",
+    type: "website",
     images: [
       {
         url: `${baseUrl}/theorem_sm_vf-rs.png`,
@@ -35,8 +36,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Theorem — An intelligent strategy canvas",
-    description: "An intelligent strategy canvas.",
+    title: "Theorem — Where hypotheses become theorems",
+    description: "An intelligent strategy canvas for teams that think in frameworks. AI-powered synthesis, real-time collaboration, and a structured workspace.",
   },
 };
 

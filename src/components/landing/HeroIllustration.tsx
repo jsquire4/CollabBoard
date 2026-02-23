@@ -13,170 +13,170 @@ export function HeroIllustration() {
       {/* Shapes — Theorem palette: parchment, navy tint, leather tint */}
       <g transform="rotate(-8 -20 10)">
         <rect x="-50" y="-25" width="70" height="38" rx="4" fill="var(--color-parchment-dark)" stroke="var(--color-parchment-border)" strokeWidth="1.5" />
-        <text x="-42" y="-5" fontSize="10" fontWeight="600" fill="var(--color-charcoal)">Ideas</text>
+        <text x="-42" y="-5" fontSize="10" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Ideas</text>
       </g>
       <g transform="rotate(5 680 15)">
         <rect x="600" y="-20" width="90" height="36" rx="4" fill="#DBE4F3" stroke="var(--color-navy)" strokeWidth="1.5" strokeOpacity="0.3" />
-        <text x="608" y="2" fontSize="10" fontWeight="600" fill="var(--color-charcoal)">Backlog</text>
+        <text x="608" y="2" fontSize="10" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Backlog</text>
       </g>
       <g transform="rotate(-3 -30 200)">
         <rect x="-70" y="160" width="58" height="50" rx="4" fill="#FAF0E1" stroke="var(--color-leather)" strokeWidth="1.5" strokeOpacity="0.6" />
-        <text x="-62" y="188" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Notes</text>
+        <text x="-62" y="188" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Notes</text>
       </g>
       <g transform="rotate(6 650 380)">
         <rect x="590" y="350" width="95" height="48" rx="4" fill="var(--color-parchment-dark)" stroke="var(--color-parchment-border)" strokeWidth="1.5" />
-        <text x="598" y="375" fontSize="10" fontWeight="600" fill="var(--color-charcoal)">Done</text>
+        <text x="598" y="375" fontSize="10" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Done</text>
       </g>
       <g transform="rotate(-5 50 380)">
         <rect x="-10" y="340" width="80" height="55" rx="4" fill="#FAF0E1" stroke="var(--color-leather)" strokeWidth="1.5" strokeOpacity="0.6" />
-        <text x="-2" y="368" fontSize="10" fontWeight="600" fill="var(--color-charcoal)">Review</text>
+        <text x="-2" y="368" fontSize="10" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Review</text>
       </g>
       <g transform="rotate(4 120 60)">
         <rect x="50" y="25" width="75" height="42" rx="4" fill="var(--color-parchment-dark)" stroke="var(--color-parchment-border)" strokeWidth="1.5" />
-        <text x="58" y="50" fontSize="10" fontWeight="600" fill="var(--color-charcoal)">Big Idea</text>
+        <text x="58" y="50" fontSize="10" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Big Idea</text>
       </g>
       <g transform="rotate(-2 180 130)">
         <rect x="130" y="95" width="68" height="48" rx="4" fill="#DBE4F3" stroke="var(--color-navy)" strokeWidth="1.5" strokeOpacity="0.3" />
-        <text x="138" y="118" fontSize="10" fontWeight="700" fill="var(--color-charcoal)">Project</text>
+        <text x="138" y="118" fontSize="10" fontWeight="700" fill="var(--color-charcoal)" aria-hidden="true">Project</text>
       </g>
       <g transform="rotate(3 500 100)">
         <rect x="455" y="55" width="72" height="40" rx="4" fill="#FAF0E1" stroke="var(--color-leather)" strokeWidth="1.5" strokeOpacity="0.6" />
-        <text x="463" y="78" fontSize="10" fontWeight="600" fill="var(--color-charcoal)">TODO</text>
+        <text x="463" y="78" fontSize="10" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">TODO</text>
       </g>
       <g transform="rotate(-4 480 250)">
         <rect x="430" y="215" width="70" height="52" rx="4" fill="var(--color-parchment-dark)" stroke="var(--color-parchment-border)" strokeWidth="1.5" />
-        <text x="438" y="240" fontSize="10" fontWeight="600" fill="var(--color-charcoal)">Goals</text>
+        <text x="438" y="240" fontSize="10" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Goals</text>
       </g>
       <g transform="rotate(2 150 300)">
         <rect x="95" y="270" width="78" height="44" rx="4" fill="#DBE4F3" stroke="var(--color-navy)" strokeWidth="1.5" strokeOpacity="0.3" />
-        <text x="103" y="295" fontSize="10" fontWeight="600" fill="var(--color-charcoal)">Capture</text>
+        <text x="103" y="295" fontSize="10" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Capture</text>
       </g>
       <g transform="rotate(-6 520 320)">
         <rect x="470" y="285" width="110" height="50" rx="4" fill="var(--color-parchment-dark)" stroke="var(--color-parchment-border)" strokeWidth="1.5" />
-        <text x="515" y="312" fontSize="11" fontWeight="700" fill="var(--color-charcoal)" textAnchor="middle">Brainstorm</text>
+        <text x="515" y="312" fontSize="11" fontWeight="700" fill="var(--color-charcoal)" textAnchor="middle" aria-hidden="true">Brainstorm</text>
       </g>
       <g transform="rotate(7 80 120)">
         <rect x="30" y="85" width="55" height="35" rx="4" fill="#FAF0E1" stroke="var(--color-leather)" strokeWidth="1.5" strokeOpacity="0.6" />
-        <text x="38" y="106" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Q1</text>
+        <text x="38" y="106" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Q1</text>
       </g>
       <g transform="rotate(-4 580 180)">
         <rect x="545" y="145" width="60" height="38" rx="4" fill="var(--color-parchment-dark)" stroke="var(--color-parchment-border)" strokeWidth="1.5" />
-        <text x="553" y="168" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Later</text>
+        <text x="553" y="168" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Later</text>
       </g>
       {/* Additional shapes */}
       <g transform="rotate(6 -45 350)">
         <rect x="-85" y="320" width="65" height="42" rx="4" fill="#DBE4F3" stroke="var(--color-navy)" strokeWidth="1.5" strokeOpacity="0.3" />
-        <text x="-77" y="344" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Blockers</text>
+        <text x="-77" y="344" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Blockers</text>
       </g>
       <g transform="rotate(-3 680 -10)">
         <rect x="640" y="-35" width="72" height="40" rx="4" fill="#FAF0E1" stroke="var(--color-leather)" strokeWidth="1.5" strokeOpacity="0.6" />
-        <text x="648" y="-12" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Sprint</text>
+        <text x="648" y="-12" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Sprint</text>
       </g>
       <g transform="rotate(4 320 50)">
         <rect x="280" y="15" width="58" height="36" rx="4" fill="var(--color-parchment-dark)" stroke="var(--color-parchment-border)" strokeWidth="1.5" />
-        <text x="288" y="38" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">MVP</text>
+        <text x="288" y="38" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">MVP</text>
       </g>
       <g transform="rotate(-5 420 350)">
         <rect x="375" y="325" width="70" height="42" rx="4" fill="#FAF0E1" stroke="var(--color-leather)" strokeWidth="1.5" strokeOpacity="0.6" />
-        <text x="383" y="348" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Feedback</text>
+        <text x="383" y="348" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Feedback</text>
       </g>
       <g transform="rotate(3 -20 80)">
         <rect x="-55" y="55" width="62" height="38" rx="4" fill="#DBE4F3" stroke="var(--color-navy)" strokeWidth="1.5" strokeOpacity="0.3" />
-        <text x="-47" y="78" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Scope</text>
+        <text x="-47" y="78" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Scope</text>
       </g>
       <g transform="rotate(-2 620 250)">
         <rect x="575" y="220" width="68" height="45" rx="4" fill="var(--color-parchment-dark)" stroke="var(--color-parchment-border)" strokeWidth="1.5" />
-        <text x="583" y="244" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Launch</text>
+        <text x="583" y="244" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Launch</text>
       </g>
       <g transform="rotate(5 100 350)">
         <rect x="55" y="330" width="72" height="40" rx="4" fill="#DBE4F3" stroke="var(--color-navy)" strokeWidth="1.5" strokeOpacity="0.3" />
-        <text x="63" y="353" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Next Steps</text>
+        <text x="63" y="353" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Next Steps</text>
       </g>
       <g transform="rotate(-7 380 80)">
         <rect x="340" y="50" width="65" height="38" rx="4" fill="#FAF0E1" stroke="var(--color-leather)" strokeWidth="1.5" strokeOpacity="0.6" />
-        <text x="348" y="72" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Research</text>
+        <text x="348" y="72" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Research</text>
       </g>
       <g transform="rotate(2 200 280)">
         <rect x="165" y="255" width="58" height="36" rx="4" fill="var(--color-parchment-dark)" stroke="var(--color-parchment-border)" strokeWidth="1.5" />
-        <text x="173" y="277" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Draft</text>
+        <text x="173" y="277" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Draft</text>
       </g>
       <g transform="rotate(-4 550 380)">
         <rect x="505" y="355" width="75" height="42" rx="4" fill="#DBE4F3" stroke="var(--color-navy)" strokeWidth="1.5" strokeOpacity="0.3" />
-        <text x="513" y="378" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Phase 2</text>
+        <text x="513" y="378" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Phase 2</text>
       </g>
       <g transform="rotate(6 50 250)">
         <rect x="-15" y="225" width="55" height="35" rx="4" fill="#FAF0E1" stroke="var(--color-leather)" strokeWidth="1.5" strokeOpacity="0.6" />
-        <text x="-7" y="247" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">UX</text>
+        <text x="-7" y="247" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">UX</text>
       </g>
       <g transform="rotate(-3 620 100)">
         <rect x="585" y="75" width="60" height="38" rx="4" fill="var(--color-parchment-dark)" stroke="var(--color-parchment-border)" strokeWidth="1.5" />
-        <text x="593" y="97" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Design</text>
+        <text x="593" y="97" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Design</text>
       </g>
       {/* Left group */}
       <g transform="rotate(-5 -140 50)">
         <rect x="-190" y="15" width="75" height="42" rx="4" fill="#FAF0E1" stroke="var(--color-leather)" strokeWidth="1.5" strokeOpacity="0.6" />
-        <text x="-182" y="40" fontSize="10" fontWeight="600" fill="var(--color-charcoal)">Roadmap</text>
+        <text x="-182" y="40" fontSize="10" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Roadmap</text>
       </g>
       <g transform="rotate(4 -120 180)">
         <rect x="-180" y="155" width="68" height="45" rx="4" fill="#DBE4F3" stroke="var(--color-navy)" strokeWidth="1.5" strokeOpacity="0.3" />
-        <text x="-172" y="180" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Spec</text>
+        <text x="-172" y="180" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Spec</text>
       </g>
       <g transform="rotate(-3 -150 320)">
         <rect x="-210" y="290" width="72" height="48" rx="4" fill="var(--color-parchment-dark)" stroke="var(--color-parchment-border)" strokeWidth="1.5" />
-        <text x="-202" y="315" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Explore</text>
+        <text x="-202" y="315" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Explore</text>
       </g>
       <g transform="rotate(6 -80 -20)">
         <rect x="-130" y="-55" width="65" height="38" rx="4" fill="#FAF0E1" stroke="var(--color-leather)" strokeWidth="1.5" strokeOpacity="0.6" />
-        <text x="-122" y="-32" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Wishlist</text>
+        <text x="-122" y="-32" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Wishlist</text>
       </g>
       <g transform="rotate(-2 -170 420)">
         <rect x="-230" y="395" width="70" height="42" rx="4" fill="#DBE4F3" stroke="var(--color-navy)" strokeWidth="1.5" strokeOpacity="0.3" />
-        <text x="-222" y="418" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Archive</text>
+        <text x="-222" y="418" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Archive</text>
       </g>
       <g transform="rotate(5 -50 100)">
         <rect x="-100" y="75" width="58" height="36" rx="4" fill="var(--color-parchment-dark)" stroke="var(--color-parchment-border)" strokeWidth="1.5" />
-        <text x="-92" y="97" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Bugs</text>
+        <text x="-92" y="97" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Bugs</text>
       </g>
       <g transform="rotate(-4 -130 250)">
         <rect x="-195" y="225" width="62" height="40" rx="4" fill="#FAF0E1" stroke="var(--color-leather)" strokeWidth="1.5" strokeOpacity="0.6" />
-        <text x="-187" y="248" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Pivot</text>
+        <text x="-187" y="248" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Pivot</text>
       </g>
       <g transform="rotate(3 -200 150)">
         <rect x="-260" y="125" width="70" height="42" rx="4" fill="#DBE4F3" stroke="var(--color-navy)" strokeWidth="1.5" strokeOpacity="0.3" />
-        <text x="-252" y="148" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Q2</text>
+        <text x="-252" y="148" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Q2</text>
       </g>
       {/* Right group */}
       <g transform="rotate(-4 680 60)">
         <rect x="620" y="25" width="75" height="42" rx="4" fill="var(--color-parchment-dark)" stroke="var(--color-parchment-border)" strokeWidth="1.5" />
-        <text x="628" y="50" fontSize="10" fontWeight="600" fill="var(--color-charcoal)">Timeline</text>
+        <text x="628" y="50" fontSize="10" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Timeline</text>
       </g>
       <g transform="rotate(5 820 200)">
         <rect x="760" y="175" width="68" height="48" rx="4" fill="#DBE4F3" stroke="var(--color-navy)" strokeWidth="1.5" strokeOpacity="0.3" />
-        <text x="768" y="200" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Milestone</text>
+        <text x="768" y="200" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Milestone</text>
       </g>
       <g transform="rotate(-3 780 350)">
         <rect x="720" y="325" width="72" height="45" rx="4" fill="#FAF0E1" stroke="var(--color-leather)" strokeWidth="1.5" strokeOpacity="0.6" />
-        <text x="728" y="350" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Shipped</text>
+        <text x="728" y="350" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Shipped</text>
       </g>
       <g transform="rotate(6 900 -15)">
         <rect x="840" y="-50" width="70" height="38" rx="4" fill="var(--color-parchment-dark)" stroke="var(--color-parchment-border)" strokeWidth="1.5" />
-        <text x="848" y="-27" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Priority</text>
+        <text x="848" y="-27" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Priority</text>
       </g>
       <g transform="rotate(-2 650 420)">
         <rect x="585" y="395" width="78" height="42" rx="4" fill="#DBE4F3" stroke="var(--color-navy)" strokeWidth="1.5" strokeOpacity="0.3" />
-        <text x="593" y="418" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Follow-up</text>
+        <text x="593" y="418" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Follow-up</text>
       </g>
       <g transform="rotate(4 830 100)">
         <rect x="770" y="75" width="65" height="40" rx="4" fill="#FAF0E1" stroke="var(--color-leather)" strokeWidth="1.5" strokeOpacity="0.6" />
-        <text x="778" y="98" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">R&amp;D</text>
+        <text x="778" y="98" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">R&amp;D</text>
       </g>
       <g transform="rotate(-5 750 280)">
         <rect x="685" y="255" width="58" height="38" rx="4" fill="var(--color-parchment-dark)" stroke="var(--color-parchment-border)" strokeWidth="1.5" />
-        <text x="693" y="280" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Beta</text>
+        <text x="693" y="280" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Beta</text>
       </g>
       <g transform="rotate(3 950 180)">
         <rect x="890" y="155" width="68" height="45" rx="4" fill="#DBE4F3" stroke="var(--color-navy)" strokeWidth="1.5" strokeOpacity="0.3" />
-        <text x="898" y="180" fontSize="9" fontWeight="600" fill="var(--color-charcoal)">Ideation</text>
+        <text x="898" y="180" fontSize="9" fontWeight="600" fill="var(--color-charcoal)" aria-hidden="true">Ideation</text>
       </g>
     </svg>
   )

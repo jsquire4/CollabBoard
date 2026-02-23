@@ -482,8 +482,6 @@ export const TableShape = memo(function TableShape({
           <>
             <Rect width={tableWidth} height={TABLE_TITLE_HEIGHT}
               fill="rgba(232,227,218,0.18)" cornerRadius={[4, 4, 0, 0]} listening={false} />
-            <Rect name="titlebg" width={tableWidth} height={TABLE_TITLE_HEIGHT}
-              fill="transparent" listening={true} />
             {!isEditingTitle && (
               <RichTextBlocks
                 richText={object.rich_text ?? null}
@@ -497,6 +495,9 @@ export const TableShape = memo(function TableShape({
                 excludeBlockTypes={TITLE_EXCLUDE_TYPES}
               />
             )}
+            {/* Hit area on top so double-click reaches titlebg handler (not swallowed by RichTextBlocks clip group) */}
+            <Rect name="titlebg" width={tableWidth} height={TABLE_TITLE_HEIGHT}
+              fill="transparent" listening={true} />
           </>
         )
       })()}

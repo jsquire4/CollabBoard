@@ -813,7 +813,7 @@ export function Canvas() {
         contextMenu={contextMenu}
         setContextMenu={setContextMenu}
         onCellKeyDown={handleCellKeyDown}
-        isEditingText={!!editingId}
+        isEditingText={!!editingId || !!cellEditingId}
         richTextEditor={richTextEditing.editor}
         boardId={boardId}
         onApiConfigChange={onApiConfigChange}

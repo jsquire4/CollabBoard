@@ -401,6 +401,7 @@ export function ContextMenu({
       ref={menuRef}
       role="menu"
       aria-label="Shape actions"
+      data-keeps-rich-text-alive="true"
       className="flex flex-col gap-1"
       style={{ position: 'fixed', top: pos.y, left: pos.x, zIndex: 200 }}
     >

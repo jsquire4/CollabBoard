@@ -7,7 +7,8 @@ import { getTextCharLimit } from '@/hooks/board/useTextEditing'
 import type { ContextMenuState } from '@/hooks/board/useContextMenu'
 import { useDrawInteraction, ConnectorHintData, ConnectorDrawingRefs } from '@/hooks/board/useDrawInteraction'
 
-/** Table cell textarea — stays open when clicking text styles menu ([data-keeps-rich-text-alive]) */
+/** Table cell textarea — stays open when clicking text styles menu ([data-keeps-rich-text-alive]).
+ * Uses mousedown for click-outside (primary). onBlur deferred check handles tab-away. */
 function TableCellTextarea({
   textareaRef,
   value,
@@ -27,10 +28,13 @@ function TableCellTextarea({
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
 
-  const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
-    const related = e.relatedTarget as Node | null
-    if (related && (related as HTMLElement).closest?.('[data-keeps-rich-text-alive]')) return
-    onFinish()
+  const handleBlur = () => {
+    requestAnimationFrame(() => {
+      const active = document.activeElement
+      if (wrapperRef.current?.contains(active)) return
+      if (active && (active as HTMLElement).closest?.('[data-keeps-rich-text-alive]')) return
+      onFinish()
+    })
   }
 
   useEffect(() => {
@@ -42,12 +46,12 @@ function TableCellTextarea({
     }
     let listenerAdded = false
     const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleMouseDown)
+      document.addEventListener('mousedown', handleMouseDown, true)
       listenerAdded = true
     }, 100)
     return () => {
       clearTimeout(timer)
-      if (listenerAdded) document.removeEventListener('mousedown', handleMouseDown)
+      if (listenerAdded) document.removeEventListener('mousedown', handleMouseDown, true)
     }
   }, [onFinish])
 

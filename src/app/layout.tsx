@@ -15,8 +15,10 @@ const dmSerifDisplay = DM_Serif_Display({
 });
 
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://theoremai.app";
+const ogImageUrl = `${baseUrl}/theorem_sm_vf-rs.png`;
 
 export const metadata: Metadata = {
+  metadataBase: new URL(baseUrl),
   title: "Theorem",
   description: "An intelligent strategy canvas for teams that think in frameworks. AI-powered synthesis, real-time collaboration, and a structured workspace.",
   openGraph: {
@@ -27,7 +29,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: `${baseUrl}/theorem_sm_vf-rs.png`,
+        url: ogImageUrl,
         width: 1200,
         height: 630,
         alt: "Theorem — An intelligent strategy canvas",
@@ -48,6 +50,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <meta name="image" property="og:image" content={ogImageUrl} />
+      </head>
       <body
         className={`${geistSans.variable} ${dmSerifDisplay.variable} antialiased`}
       >

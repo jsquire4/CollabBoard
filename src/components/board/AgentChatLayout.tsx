@@ -29,9 +29,12 @@ export interface AgentChatLayoutProps {
   onInputChange: (value: string) => void
   inputPlaceholder?: string
 
+  /** Pending quick action pills (shown in input area, user can remove before send) */
+  pendingPills?: { id: string; label: string }[]
+  onRemovePending?: (id: string) => void
+
   /** Actions */
   onSend: () => void
-  isLoading: boolean
 }
 
 /**
@@ -50,8 +53,9 @@ export function AgentChatLayout({
   input,
   onInputChange,
   inputPlaceholder = 'Type a message… (Enter to send)',
+  pendingPills,
+  onRemovePending,
   onSend,
-  isLoading,
 }: AgentChatLayoutProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -95,23 +99,49 @@ export function AgentChatLayout({
       )}
 
       {/* Input row */}
-      <div className={`${quickActions ? '' : 'border-t border-parchment-border '}p-3 flex gap-2 shrink-0`}>
-        <textarea
-          className="flex-1 resize-none rounded border border-parchment-border bg-white px-3 py-2 text-sm text-charcoal placeholder-charcoal/30 focus:outline-none focus:ring-1 focus:ring-navy/30 disabled:opacity-50"
-          rows={2}
-          placeholder={inputPlaceholder}
-          value={input}
-          onChange={e => onInputChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={isLoading}
-        />
-        <button
-          onClick={onSend}
-          disabled={isLoading || !input.trim()}
-          className="px-3 py-2 rounded bg-navy text-parchment text-sm font-medium border border-navy hover:bg-navy/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          Send
-        </button>
+      <div className={`${quickActions ? '' : 'border-t border-parchment-border '}p-3 flex flex-col gap-2 shrink-0`}>
+        {pendingPills && pendingPills.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {pendingPills.map(pill => (
+              <span
+                key={pill.id}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border border-navy/20 bg-navy/5 text-charcoal"
+              >
+                {pill.label}
+                {onRemovePending && (
+                  <button
+                    type="button"
+                    onClick={() => onRemovePending(pill.id)}
+                    className="p-0.5 rounded-full hover:bg-navy/10 transition-colors"
+                    aria-label={`Remove ${pill.label}`}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <textarea
+            className="flex-1 resize-none rounded border border-parchment-border bg-white px-3 py-2 text-sm text-charcoal placeholder-charcoal/30 focus:outline-none focus:ring-2 focus:ring-navy/40 focus:border-navy/30 disabled:opacity-50 transition-shadow"
+            rows={2}
+            placeholder={inputPlaceholder}
+            value={input}
+            onChange={e => onInputChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+          <button
+            onClick={onSend}
+            disabled={!input.trim() && (!pendingPills || pendingPills.length === 0)}
+          aria-label="Send message"
+          className="px-3 py-2 rounded bg-gradient-to-r from-navy to-navy/90 text-parchment text-sm font-medium border border-navy/80 hover:from-brg hover:to-brg/90 hover:border-brg/80 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+          >
+            Send
+          </button>
+        </div>
       </div>
     </div>
   )

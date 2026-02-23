@@ -9,11 +9,15 @@ import { extractPlainText, plainTextToTipTap } from '@/lib/richText'
 import type { TipTapDoc } from '@/types/board'
 import { STICKY_TITLE_CHAR_LIMIT } from './useTextEditing'
 import { useSyncRef } from '@/hooks/useSyncRef'
-import { TEXTAREA_BASE_STYLE } from '@/lib/textConstants'
+import { parseTableData, setTableName, serializeTableData } from '@/lib/table/tableUtils'
+import { TABLE_TITLE_HEIGHT } from '@/lib/table/tableTypes'
 
 export interface RichTextBeforeState {
   text: string
   rich_text: string | null
+  title?: string | null
+  title_rich_text?: string | null
+  table_data?: string | null
 }
 
 export interface UseRichTextEditingDeps {
@@ -25,6 +29,8 @@ export interface UseRichTextEditingDeps {
   onUpdateText: (id: string, text: string) => void
   onUpdateTitle: (id: string, title: string) => void
   onUpdateRichText: (id: string, json: string, before: RichTextBeforeState) => void
+  onUpdateTitleRichText: (id: string, title: string, titleRichText: string, before: RichTextBeforeState) => void
+  onUpdateTableTitle: (id: string, tableData: string, richText: string, before: RichTextBeforeState) => void
   onEditingChange?: (isEditing: boolean) => void
   onActivity?: () => void
   pendingEditId?: string | null
@@ -37,6 +43,7 @@ export function useRichTextEditing({
   enabled = true,
   shapeRefs,
   onUpdateText, onUpdateTitle, onUpdateRichText,
+  onUpdateTitleRichText, onUpdateTableTitle,
   onEditingChange, onActivity,
   pendingEditId, onPendingEditConsumed,
   tryEnterGroup,
@@ -58,7 +65,7 @@ export function useRichTextEditing({
   // Ref for onUpdateText so the useEditor onUpdate closure always calls the latest version
   const onUpdateTextRef = useSyncRef(onUpdateText)
 
-  // For plain text textarea (title editing)
+  // For plain text textarea (title editing — legacy fallback, kept for compat)
   const [editText, setEditText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [textareaStyle, setTextareaStyle] = useState<React.CSSProperties>({})
@@ -76,7 +83,12 @@ export function useRichTextEditing({
       if (!id) return
       const doc = ed.getJSON() as TipTapDoc
       const plain = extractPlainText(doc)
-      onUpdateTextRef.current(id, plain)
+      // For title field, broadcast as title update; for text field, broadcast as text update
+      if (editingFieldRef.current === 'title') {
+        onUpdateTitleRef.current(id, plain)
+      } else {
+        onUpdateTextRef.current(id, plain)
+      }
     },
   }, [enabled])
 
@@ -85,6 +97,9 @@ export function useRichTextEditing({
   const editTextRef = useSyncRef(editText)
   const onUpdateTitleRef = useSyncRef(onUpdateTitle)
   const onUpdateRichTextRef = useSyncRef(onUpdateRichText)
+  const onUpdateTitleRichTextRef = useSyncRef(onUpdateTitleRichText)
+  const onUpdateTableTitleRef = useSyncRef(onUpdateTableTitle)
+  const objectsRef = useSyncRef(objects)
 
   // Commit the current edit (if any) — reads from refs so it can be called from handleStartEdit
   const commitCurrentEdit = useCallback(() => {
@@ -96,14 +111,39 @@ export function useRichTextEditing({
       focusTimerRef.current = null
     }
 
+    const before = beforeEditRef.current
+    if (!before) return
+
     if (editingFieldRef.current === 'title') {
-      onUpdateTitleRef.current(id, editTextRef.current.slice(0, STICKY_TITLE_CHAR_LIMIT))
+      // Title editing now uses TipTap
+      if (editor && !editor.isDestroyed) {
+        const doc = editor.getJSON() as TipTapDoc
+        const json = JSON.stringify(doc)
+        const plain = extractPlainText(doc).slice(0, STICKY_TITLE_CHAR_LIMIT)
+        const obj = objectsRef.current.get(id)
+
+        if (obj?.type === 'sticky_note') {
+          // Sticky note: title + title_rich_text
+          onUpdateTitleRichTextRef.current(id, plain, json, before)
+        } else if (obj?.type === 'table') {
+          // Table: table_data.name + rich_text
+          const tableData = parseTableData(obj.table_data)
+          if (tableData) {
+            const newData = setTableName(tableData, plain)
+            onUpdateTableTitleRef.current(id, serializeTableData(newData), json, before)
+          } else {
+            // table_data is corrupted — fall back to updating rich_text only
+            onUpdateRichTextRef.current(id, json, before)
+          }
+        } else {
+          // Frame and others: text + rich_text
+          onUpdateRichTextRef.current(id, json, before)
+        }
+      }
     } else {
       if (editor && !editor.isDestroyed) {
         const doc = editor.getJSON() as TipTapDoc
         const json = JSON.stringify(doc)
-        const before = beforeEditRef.current
-        if (!before) return // edit started without a captured before-state — skip to avoid wiping content
         onUpdateRichTextRef.current(id, json, before)
       }
     }
@@ -129,35 +169,91 @@ export function useRichTextEditing({
     }
 
     // Capture object state BEFORE editing begins for correct undo
-    beforeEditRef.current = { text: obj.text, rich_text: obj.rich_text ?? null }
+    beforeEditRef.current = {
+      text: obj.text,
+      rich_text: obj.rich_text ?? null,
+      title: obj.title ?? null,
+      title_rich_text: obj.title_rich_text ?? null,
+      table_data: obj.table_data ?? null,
+    }
 
     setEditingId(id)
     setEditingField(field)
 
     if (field === 'title') {
-      // Title stays plain text
-      if (!textNode) return // title editing requires the Konva Text node for positioning
-      const initialText = (obj.title ?? 'Note').slice(0, STICKY_TITLE_CHAR_LIMIT)
-      setEditText(initialText)
+      // Title now uses TipTap editor
+      let doc: TipTapDoc
+      if (obj.type === 'sticky_note') {
+        // Sticky note: use title_rich_text
+        if (obj.title_rich_text) {
+          try { doc = JSON.parse(obj.title_rich_text) as TipTapDoc } catch {
+            doc = plainTextToTipTap(obj.title || 'Note')
+          }
+        } else {
+          doc = plainTextToTipTap(obj.title || 'Note')
+        }
+      } else if (obj.type === 'table') {
+        // Table: use rich_text for title
+        const tableData = parseTableData(obj.table_data)
+        const tableName = tableData?.name || ''
+        if (obj.rich_text) {
+          try { doc = JSON.parse(obj.rich_text) as TipTapDoc } catch {
+            doc = plainTextToTipTap(tableName)
+          }
+        } else {
+          doc = plainTextToTipTap(tableName)
+        }
+      } else {
+        // Frame: use rich_text for title
+        if (obj.rich_text) {
+          try { doc = JSON.parse(obj.rich_text) as TipTapDoc } catch {
+            doc = plainTextToTipTap(obj.text || 'Frame')
+          }
+        } else {
+          doc = plainTextToTipTap(obj.text || 'Frame')
+        }
+      }
 
-      const textRect = textNode.getClientRect()
-      const fontFamily = obj.font_family || 'sans-serif'
-      const textColor = obj.text_color ?? '#374151'
-      const textAlign = (obj.text_align ?? 'left') as React.CSSProperties['textAlign']
-      setTextareaStyle({
-        ...TEXTAREA_BASE_STYLE,
-        top: `${textRect.y}px`,
-        left: `${textRect.x}px`,
-        width: `${textRect.width}px`,
-        height: `${textRect.height}px`,
-        fontSize: `${14 * stageScale}px`,
-        fontFamily,
-        fontWeight: 'bold',
-        fontStyle: 'normal',
-        textAlign,
-        color: textColor,
-        lineHeight: '1.3',
-      })
+      if (editor && !editor.isDestroyed) {
+        editor.commands.setContent(doc)
+        focusTimerRef.current = setTimeout(() => {
+          focusTimerRef.current = null
+          if (editor && !editor.isDestroyed) {
+            editor.commands.focus('end')
+          }
+        }, 0)
+      }
+
+      // Compute overlay position for title
+      const konvaNode = shapeRefs.current.get(id)
+      if (konvaNode) {
+        const groupRect = (konvaNode as Konva.Group).getClientRect()
+        const titlePadX = 10
+        const titlePadY = obj.type === 'sticky_note' ? 8 : 6
+        const titleFontSize = obj.type === 'sticky_note' ? 14 : 13
+        // Table title: positioned at top of shape
+        const titleH = obj.type === 'table' ? TABLE_TITLE_HEIGHT : (titlePadY + titleFontSize * 1.3 + titlePadY)
+
+        setOverlayStyle({
+          position: 'absolute',
+          left: groupRect.x + titlePadX * stageScale,
+          top: groupRect.y + titlePadY * stageScale,
+          width: (obj.width - titlePadX * 2) * stageScale,
+          minHeight: (titleH - titlePadY * 2) * stageScale,
+          maxHeight: (titleH - titlePadY * 2) * stageScale,
+          overflowY: 'hidden',
+          fontSize: `${titleFontSize * stageScale}px`,
+          fontFamily: obj.font_family ?? 'sans-serif',
+          fontWeight: 'bold',
+          color: obj.text_color ?? (obj.type === 'sticky_note' ? '#374151' : 'rgba(28,28,30,0.55)'),
+          lineHeight: 1.3,
+          outline: 'none',
+          pointerEvents: 'auto',
+          wordBreak: 'break-word',
+          transform: obj.rotation ? `rotate(${obj.rotation}deg)` : undefined,
+          transformOrigin: obj.rotation ? `${-titlePadX * stageScale}px ${-titlePadY * stageScale}px` : undefined,
+        })
+      }
     } else {
       // Rich text editing — initialize TipTap editor
       let doc: TipTapDoc
@@ -207,7 +303,7 @@ export function useRichTextEditing({
         transformOrigin: obj.rotation ? `${-padding}px ${-(topOffset + padding)}px` : undefined,
       })
     }
-  }, [objects, stageScale, canEdit, tryEnterGroup, onActivity, editor, commitCurrentEdit])
+  }, [objects, stageScale, canEdit, tryEnterGroup, onActivity, editor, commitCurrentEdit, shapeRefs])
 
   const handleFinishEdit = useCallback(() => {
     commitCurrentEdit()
@@ -242,13 +338,6 @@ export function useRichTextEditing({
     if (tryEnterGroup(id)) return
     startGeometricTextEdit(id)
   }, [tryEnterGroup, startGeometricTextEdit])
-
-  // Focus textarea when title editing starts
-  useEffect(() => {
-    if (editingId && editingField === 'title' && textareaRef.current) {
-      textareaRef.current.focus()
-    }
-  }, [editingId, editingField])
 
   // Notify parent when editing state changes
   useEffect(() => {

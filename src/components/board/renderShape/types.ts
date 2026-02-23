@@ -13,6 +13,7 @@ export interface BaseShapeCallbacks {
   handleContextMenu: (id: string, clientX: number, clientY: number) => void
   handleShapeDoubleClick: (id: string) => void
   handleStartEdit: (id: string, textNode: Konva.Text | null, field?: 'title' | 'text') => void
+  handleToggleTask?: (id: string, blockIndex: number, checked: boolean) => void
   shapeDragBoundFunc?: (pos: { x: number; y: number }) => { x: number; y: number }
 }
 

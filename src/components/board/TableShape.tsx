@@ -5,7 +5,11 @@ import { TableObject } from '@/types/board'
 import { useBoardContext } from '@/contexts/BoardContext'
 import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
 import { parseTableData, getColumnXOffsets, getRowYOffsets, getTableWidth, getTableHeight, resizeColumn, resizeRow, serializeTableData } from '@/lib/table/tableUtils'
-import { DEFAULT_HEADER_HEIGHT, MIN_COL_WIDTH, MIN_ROW_HEIGHT, TableData } from '@/lib/table/tableTypes'
+import { DEFAULT_HEADER_HEIGHT, TABLE_TITLE_HEIGHT, MIN_COL_WIDTH, MIN_ROW_HEIGHT, TableData } from '@/lib/table/tableTypes'
+import { RichTextBlocks } from './RichTextBlocks'
+import type { Block } from '@/lib/richText/tipTapToBlocks'
+
+const TITLE_EXCLUDE_TYPES: Block['type'][] = ['bulletItem', 'orderedItem', 'taskItem']
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -148,7 +152,9 @@ function ColumnControls({
 interface TableShapeProps extends Omit<ShapeProps, 'object'> {
   object: TableObject
   onStartCellEdit?: (id: string, textNode: Konva.Text, row: number, col: number) => void
+  onStartEdit?: (id: string, node: Konva.Text | null, field?: 'text' | 'title') => void
   isEditing?: boolean
+  editingField?: 'text' | 'title'
   editingCellCoords?: { row: number; col: number } | null
   onTableDataChange?: (id: string, tableData: string) => void
   onAddRowAt?: (id: string, beforeIndex: number) => void
@@ -179,8 +185,10 @@ export const TableShape = memo(function TableShape({
   editable = true,
   dragBoundFunc,
   isEditing = false,
+  editingField,
   editingCellCoords,
   onStartCellEdit,
+  onStartEdit,
   onTableDataChange,
   onAddRowAt,
   onDeleteRowAt,
@@ -262,6 +270,11 @@ export const TableShape = memo(function TableShape({
     if (!onStartCellEdit || !data) return
     const target = e.target
     const name = target.name?.() || ''
+
+    if (name === 'titlebg') {
+      onStartEdit?.(object.id, null, 'title')
+      return
+    }
 
     if (name.startsWith('cell:')) {
       const parts = name.split(':')
@@ -417,8 +430,9 @@ export const TableShape = memo(function TableShape({
     }
 
     // Check col boundaries only when in/near header row and no row boundary found
+    const titleOff = currentData.name ? TABLE_TITLE_HEIGHT : 0
     let newColBoundary: number | null = null
-    if (newRowBoundary === null && y >= -BOUNDARY_ZONE && y < DEFAULT_HEADER_HEIGHT + BOUNDARY_ZONE) {
+    if (newRowBoundary === null && y >= titleOff - BOUNDARY_ZONE && y < titleOff + DEFAULT_HEADER_HEIGHT + BOUNDARY_ZONE) {
       for (let k = 0; k < currentData.columns.length; k++) {
         if (Math.abs(x - colXOffsetsRef.current[k]) < BOUNDARY_ZONE) {
           newColBoundary = k
@@ -440,6 +454,9 @@ export const TableShape = memo(function TableShape({
     setHoveredBtn(null)
   }, [])
 
+  const titleOffset = data.name ? TABLE_TITLE_HEIGHT : 0
+  const headerCorners = data.name ? [0, 0, 0, 0] as const : [4, 4, 0, 0] as const
+
   return (
     <Group
       ref={(node) => { groupRef.current = node; shapeRef(object.id, node) }}
@@ -452,16 +469,40 @@ export const TableShape = memo(function TableShape({
       onContextMenu={(e) => { e.evt.preventDefault(); onContextMenu(object.id, e.evt.clientX, e.evt.clientY) }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      onMouseEnter={() => groupRef.current?.moveToTop()}
       opacity={object.opacity ?? 1}
     >
       {/* Background */}
       <Rect width={tableWidth} height={tableHeight} fill={object.color || '#FFFFFF'} cornerRadius={4}
         {...shadow} stroke={outline.stroke} strokeWidth={outline.strokeWidth} dash={outline.dash} listening={false} />
 
+      {/* Title bar (when table has a name) */}
+      {data.name && (() => {
+        const isEditingTitle = isEditing && editingField === 'title'
+        return (
+          <>
+            <Rect width={tableWidth} height={TABLE_TITLE_HEIGHT}
+              fill="rgba(232,227,218,0.18)" cornerRadius={[4, 4, 0, 0]} listening={false} />
+            <Rect name="titlebg" width={tableWidth} height={TABLE_TITLE_HEIGHT}
+              fill="transparent" listening={true} />
+            {!isEditingTitle && (
+              <RichTextBlocks
+                richText={object.rich_text ?? null}
+                plainText={data.name}
+                x={CELL_PAD} y={2}
+                width={tableWidth - CELL_PAD * 2} height={TABLE_TITLE_HEIGHT - 4}
+                baseFontSize={HEADER_FONT_SIZE} baseFontFamily="sans-serif"
+                baseColor={HEADER_TEXT_COLOR} align="left"
+                verticalAlign="middle"
+                excludeBlockTypes={TITLE_EXCLUDE_TYPES}
+              />
+            )}
+          </>
+        )
+      })()}
+
       {/* Header row background */}
-      <Rect y={0} width={tableWidth} height={DEFAULT_HEADER_HEIGHT}
-        fill={data.header_bg || HEADER_BG} cornerRadius={[4, 4, 0, 0]} listening={false} />
+      <Rect y={titleOffset} width={tableWidth} height={DEFAULT_HEADER_HEIGHT}
+        fill={data.header_bg || HEADER_BG} cornerRadius={headerCorners as unknown as [number, number, number, number]} listening={false} />
 
       {/* Header hit areas — transparent, listening Rects so double-click anywhere in the
           header cell area triggers editing, even when the column name text is empty */}
@@ -469,7 +510,7 @@ export const TableShape = memo(function TableShape({
         <Rect
           key={`hdrbg-${col.id}`}
           name={`hdrbg:${colIdx}`}
-          x={colXOffsets[colIdx]} y={0}
+          x={colXOffsets[colIdx]} y={titleOffset}
           width={col.width} height={DEFAULT_HEADER_HEIGHT}
           fill="transparent"
           listening={true}
@@ -478,18 +519,18 @@ export const TableShape = memo(function TableShape({
 
       {/* Header cells — hidden when editing that column's name */}
       {data.columns.map((col, colIdx) => (
-        !isEditingCell(-1, colIdx) && (
-          <Text
-            key={`header-${col.id}`}
-            name={`header:${colIdx}`}
-            x={colXOffsets[colIdx] + CELL_PAD} y={CELL_PAD}
-            width={col.width - CELL_PAD * 2} height={DEFAULT_HEADER_HEIGHT - CELL_PAD * 2}
-            text={col.name} fontSize={HEADER_FONT_SIZE} fontStyle="bold"
-            fill={data.header_text_color || HEADER_TEXT_COLOR}
-            align="left" verticalAlign="middle" wrap="none" ellipsis={true}
-            listening={true} perfectDrawEnabled={false} transformsEnabled="position"
-          />
-        )
+          !isEditingCell(-1, colIdx) && (
+            <Text
+              key={`header-${col.id}`}
+              name={`header:${colIdx}`}
+              x={colXOffsets[colIdx] + CELL_PAD} y={titleOffset + CELL_PAD}
+              width={col.width - CELL_PAD * 2} height={DEFAULT_HEADER_HEIGHT - CELL_PAD * 2}
+              text={col.name} fontSize={HEADER_FONT_SIZE} fontStyle="bold"
+              fill={data.header_text_color || HEADER_TEXT_COLOR}
+              align="left" verticalAlign="middle" wrap="none" ellipsis={true}
+              listening={true} perfectDrawEnabled={false} transformsEnabled="position"
+            />
+          )
       ))}
 
       {/* Body cells */}
@@ -519,7 +560,10 @@ export const TableShape = memo(function TableShape({
 
       {/* Grid lines */}
       <Line points={[0, 0, tableWidth, 0]} stroke={GRID_COLOR} strokeWidth={1} listening={false} />
-      <Line points={[0, DEFAULT_HEADER_HEIGHT, tableWidth, DEFAULT_HEADER_HEIGHT]} stroke={GRID_COLOR} strokeWidth={1} listening={false} />
+      {titleOffset > 0 && (
+        <Line points={[0, titleOffset, tableWidth, titleOffset]} stroke={GRID_COLOR} strokeWidth={1} listening={false} />
+      )}
+      <Line points={[0, titleOffset + DEFAULT_HEADER_HEIGHT, tableWidth, titleOffset + DEFAULT_HEADER_HEIGHT]} stroke={GRID_COLOR} strokeWidth={1} listening={false} />
       {rowYOffsets.map((y, i) => i > 0 ? (
         <Line key={`hline-${i}`} points={[0, y, tableWidth, y]} stroke={GRID_COLOR} strokeWidth={1} listening={false} />
       ) : null)}
@@ -588,15 +632,17 @@ export const TableShape = memo(function TableShape({
           Horizontal layout: + is left, − is right, separated by |.
           Panel is centred on (colXOffsets[k], 0) — the column's left edge. */}
       {editable && !isEditing && hoveredColBoundary !== null && data.columns[hoveredColBoundary] && (
-        <ColumnControls
-          k={hoveredColBoundary}
-          panelX={colXOffsets[hoveredColBoundary]}
-          btnBg={btnBg} btnBorder={btnBorder} btnSep={btnSep} btnHover={btnHover}
-          hoveredBtn={hoveredBtn} setHoveredBtn={setHoveredBtn}
-          objectId={object.id}
-          onAddColumnAt={onAddColumnAt}
-          onDeleteColumnAt={onDeleteColumnAt}
-        />
+        <Group y={titleOffset}>
+          <ColumnControls
+            k={hoveredColBoundary}
+            panelX={colXOffsets[hoveredColBoundary]}
+            btnBg={btnBg} btnBorder={btnBorder} btnSep={btnSep} btnHover={btnHover}
+            hoveredBtn={hoveredBtn} setHoveredBtn={setHoveredBtn}
+            objectId={object.id}
+            onAddColumnAt={onAddColumnAt}
+            onDeleteColumnAt={onDeleteColumnAt}
+          />
+        </Group>
       )}
     </Group>
   )

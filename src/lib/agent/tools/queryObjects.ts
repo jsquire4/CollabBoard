@@ -3,6 +3,7 @@
  */
 
 import { loadBoardState } from '@/lib/agent/boardState'
+import { parseTableData } from '@/lib/table/tableUtils'
 import { makeToolDef, getConnectedObjectIds } from './helpers'
 import { getFrameObjectsSchema, emptySchema } from './schemas'
 import type { ToolDef } from './types'
@@ -11,7 +12,7 @@ export const queryObjectTools: ToolDef[] = [
 
   makeToolDef(
     'getBoardState',
-    'Get the full board state — returns all non-deleted objects with their id, type, position, size, text, color, and parent. Use this to understand the current board contents before making changes.',
+    'Return all board objects: id, type, x, y, width, height, text, color, parent_id.',
     emptySchema,
     async (ctx, _args) => {
       // Refresh state so subsequent tools see up-to-date data
@@ -20,18 +21,25 @@ export const queryObjectTools: ToolDef[] = [
 
       const objects = Array.from(freshState.objects.values())
         .filter(obj => !obj.deleted_at)
-        .map(obj => ({
-          id: obj.id,
-          type: obj.type,
-          x: Math.round(obj.x),
-          y: Math.round(obj.y),
-          width: obj.width,
-          height: obj.height,
-          text: obj.text || undefined,
-          title: obj.title || undefined,
-          color: obj.color,
-          parent_id: obj.parent_id || undefined,
-        }))
+        .map(obj => {
+          const base = {
+            id: obj.id,
+            type: obj.type,
+            x: Math.round(obj.x),
+            y: Math.round(obj.y),
+            width: obj.width,
+            height: obj.height,
+            text: obj.text || undefined,
+            title: obj.title || undefined,
+            color: obj.color,
+            parent_id: obj.parent_id || undefined,
+          } as Record<string, unknown>
+          if (obj.type === 'table' && obj.table_data) {
+            const td = parseTableData(obj.table_data)
+            if (td?.name) base.table_name = td.name
+          }
+          return base
+        })
 
       return { objectCount: objects.length, objects }
     },
@@ -39,7 +47,7 @@ export const queryObjectTools: ToolDef[] = [
 
   makeToolDef(
     'getConnectedObjects',
-    'Get the objects connected to you via data connectors. Returns only objects in your visibility scope. Use this to understand what you can see and interact with.',
+    'Return objects connected via data connectors (per-agent scope).',
     emptySchema,
     async (ctx, _args) => {
       // Refresh state so subsequent tools see up-to-date data
@@ -55,23 +63,30 @@ export const queryObjectTools: ToolDef[] = [
           .filter(obj => connectedIds.has(obj.id))[Symbol.iterator]()
       }
 
-      const objects = Array.from(objectsIter).map(obj => ({
-        id: obj.id,
-        type: obj.type,
-        x: Math.round(obj.x),
-        y: Math.round(obj.y),
-        width: obj.width,
-        height: obj.height,
-        text: obj.text || undefined,
-        title: obj.title || undefined,
-        color: obj.color,
-        parent_id: obj.parent_id || undefined,
-        connect_start_id: obj.connect_start_id || undefined,
-        connect_end_id: obj.connect_end_id || undefined,
-        storage_path: obj.storage_path || undefined,
-        file_name: obj.file_name || undefined,
-        mime_type: obj.mime_type || undefined,
-      }))
+      const objects = Array.from(objectsIter).map(obj => {
+        const base = {
+          id: obj.id,
+          type: obj.type,
+          x: Math.round(obj.x),
+          y: Math.round(obj.y),
+          width: obj.width,
+          height: obj.height,
+          text: obj.text || undefined,
+          title: obj.title || undefined,
+          color: obj.color,
+          parent_id: obj.parent_id || undefined,
+          connect_start_id: obj.connect_start_id || undefined,
+          connect_end_id: obj.connect_end_id || undefined,
+          storage_path: obj.storage_path || undefined,
+          file_name: obj.file_name || undefined,
+          mime_type: obj.mime_type || undefined,
+        } as Record<string, unknown>
+        if (obj.type === 'table' && obj.table_data) {
+          const td = parseTableData(obj.table_data)
+          if (td?.name) base.table_name = td.name
+        }
+        return base
+      })
 
       return { objectCount: objects.length, objects }
     },
@@ -79,7 +94,7 @@ export const queryObjectTools: ToolDef[] = [
 
   makeToolDef(
     'getFrameObjects',
-    'Get all objects contained within a frame. Use this to inspect frame contents before making changes.',
+    'Return objects inside a frame.',
     getFrameObjectsSchema,
     async (ctx, { frameId }) => {
       // Scope check: if agent is scoped, frame must be connected

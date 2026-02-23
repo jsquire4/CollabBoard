@@ -303,7 +303,7 @@ describe('createObjects', () => {
 
       const result = await getTool(createObjectTools, 'createTable').executor(ctx, { columns: 3, rows: 4 })
 
-      expect(mockCreateDefaultTableData).toHaveBeenCalledWith(3, 4)
+      expect(mockCreateDefaultTableData).toHaveBeenCalledWith(3, 4, undefined)
       expect(mockSerializeTableData).toHaveBeenCalledOnce()
       expect(mockBuildAndInsertObject).toHaveBeenCalledOnce()
       const [, type, fields] = mockBuildAndInsertObject.mock.calls[0]
@@ -518,7 +518,7 @@ describe('editObjects', () => {
       expect(result).toMatchObject({ id: 'obj-1', text: 'new text' })
     })
 
-    it('updates title only — does not call plainTextToTipTap', async () => {
+    it('updates title and title_rich_text', async () => {
       const obj = makeBoardObject({ id: 'obj-1' })
       const ctx = makeCtx(new Map([['obj-1', obj]]))
 
@@ -527,9 +527,10 @@ describe('editObjects', () => {
         title: 'New Title',
       })
 
-      expect(mockPlainTextToTipTap).not.toHaveBeenCalled()
+      expect(mockPlainTextToTipTap).toHaveBeenCalledWith('New Title')
       const [, , updates] = mockUpdateFields.mock.calls[0]
       expect(updates.title).toBe('New Title')
+      expect(updates.title_rich_text).toBeDefined()
       expect(result).toMatchObject({ id: 'obj-1', title: 'New Title' })
     })
 
@@ -898,6 +899,44 @@ describe('queryObjects', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe('layoutObjects', () => {
+  describe('precomputePlacements', () => {
+    it('returns placements for quickActionIds using fresh board state', async () => {
+      mockLoadBoardState.mockResolvedValue({
+        boardId: 'board-1',
+        objects: new Map(),
+        fieldClocks: new Map(),
+      })
+
+      const ctx = makeCtx()
+      const result = await getTool(layoutObjectTools, 'precomputePlacements').executor(ctx, {
+        quickActionIds: ['swot', 'swot'],
+      }) as { placements: Array<{ actionId: string; index: number; origin: { x: number; y: number }; cells: unknown[] }> }
+
+      expect(mockLoadBoardState).toHaveBeenCalledWith('board-1')
+      expect(result.placements).toHaveLength(2)
+      expect(result.placements[0].actionId).toBe('swot')
+      expect(result.placements[0].origin).toEqual(expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }))
+      expect(result.placements[0].cells).toHaveLength(4)
+      expect(result.placements[1].actionId).toBe('swot')
+      expect(result.placements[1].origin).not.toEqual(result.placements[0].origin)
+    })
+
+    it('returns single placement when user clarifies to one action', async () => {
+      mockLoadBoardState.mockResolvedValue({
+        boardId: 'board-1',
+        objects: new Map(),
+        fieldClocks: new Map(),
+      })
+
+      const ctx = makeCtx()
+      const result = await getTool(layoutObjectTools, 'precomputePlacements').executor(ctx, {
+        quickActionIds: ['swot'],
+      }) as { placements: unknown[] }
+
+      expect(result.placements).toHaveLength(1)
+    })
+  })
+
   describe('layoutObjects', () => {
     it('arranges objects in grid layout with correct math', async () => {
       const obj1 = makeBoardObject({ id: 'o1', type: 'sticky_note', width: 150, height: 150, deleted_at: null })
@@ -1006,6 +1045,30 @@ describe('layoutObjects', () => {
       const secondCall = mockUpdateFields.mock.calls[1]
       expect(firstCall[2]).toMatchObject({ x: 50, y: 50 })
       expect(secondCall[2]).toMatchObject({ x: 50, y: 160 })
+    })
+
+    it('circle layout arranges objects in a circle', async () => {
+      const obj1 = makeBoardObject({ id: 'o1', type: 'sticky_note', width: 100, height: 100, deleted_at: null })
+      const obj2 = makeBoardObject({ id: 'o2', type: 'sticky_note', width: 100, height: 100, deleted_at: null })
+      const obj3 = makeBoardObject({ id: 'o3', type: 'sticky_note', width: 100, height: 100, deleted_at: null })
+      const freshState = {
+        boardId: 'board-1',
+        objects: new Map([['o1', obj1], ['o2', obj2], ['o3', obj3]]),
+        fieldClocks: new Map(),
+      }
+      mockLoadBoardState.mockResolvedValue(freshState)
+
+      const ctx = makeCtx()
+      const result = await getTool(layoutObjectTools, 'layoutObjects').executor(ctx, {
+        objectIds: ['o1', 'o2', 'o3'],
+        layout: 'circle',
+        startX: 100,
+        startY: 100,
+      }) as { success?: boolean; movedCount?: number }
+
+      expect(result.success).toBe(true)
+      expect(result.movedCount).toBe(3)
+      expect(mockUpdateFields).toHaveBeenCalledTimes(3)
     })
 
     it('returns { error } on invalid args (missing layout)', async () => {

@@ -22,6 +22,8 @@ export interface TableRow {
 
 /** The full table data structure stored in board_objects.table_data as JSONB */
 export interface TableData {
+  /** Optional table name/title for user display and agent reference. Stub: not yet wired in UI. */
+  name?: string | null
   columns: TableColumn[]
   rows: TableRow[]
   header_bg?: string
@@ -29,6 +31,7 @@ export interface TableData {
 }
 
 // Constants
+export const TABLE_TITLE_HEIGHT = 28
 export const MIN_COL_WIDTH = 40
 export const MIN_ROW_HEIGHT = 24
 export const DEFAULT_COL_WIDTH = 120

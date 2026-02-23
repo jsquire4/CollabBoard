@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useRef, useCallback, useEffect, useMemo } from 'react'
 import { Stage, Layer, Transformer, Rect as KonvaRect, Group as KonvaGroup, Line as KonvaLine, Circle as KonvaCircle } from 'react-konva'
 import Konva from 'konva'
 import { canvasTransform } from '@/lib/canvasTransform'
@@ -28,8 +28,6 @@ import { RemoteSelectionHighlights } from './RemoteSelectionHighlights'
 import { LockIconOverlay } from './LockIconOverlay'
 import { ObjectIndicators } from './ObjectIndicators'
 import { CanvasOverlays } from './CanvasOverlays'
-import { RichTextStaticLayer } from './RichTextStaticLayer'
-import { RICH_TEXT_ENABLED } from '@/lib/richText'
 
 // ── VertexEditHandles ────────────────────────────────────────────────────────
 // Renders draggable vertex handles and midpoint "insert vertex" handles for the
@@ -102,7 +100,7 @@ export function Canvas() {
   const {
     onDrawShape, onCancelTool,
     onSelect, onSelectObjects, onClearSelection, onEnterGroup, onExitGroup,
-    onDragEnd, onDragMove, onUpdateText, onUpdateTitle, onUpdateRichText, onEditorReady, onTransformEnd,
+    onDragEnd, onDragMove, onUpdateText, onUpdateTitle, onUpdateRichText, onUpdateTitleRichText, onUpdateTableTitle, onEditorReady, onTransformEnd,
     onDelete, onDuplicate, onCopy, onPaste, onColorChange,
     onBringToFront, onBringForward, onSendBackward, onSendToBack,
     onGroup, onUngroup, canGroup, canUngroup,
@@ -175,8 +173,6 @@ export function Canvas() {
   const objectsRef = useRef(objects)
   objectsRef.current = objects
 
-  // Track shapes being resized so static DOM overlays can hide during transform
-  const [transformingIds, setTransformingIds] = useState<Set<string>>(new Set())
 
   // ── Extracted hooks ────────────────────────────────────────────────
 
@@ -286,24 +282,25 @@ export function Canvas() {
     return false
   }, [objects, selectedIds, activeGroupId, onEnterGroup])
 
-  // Text editing: use rich text hook when feature is enabled, otherwise use plain text
+  // Plain text editing: used for table cells only
   const plainTextEditing = useTextEditing({
     objects, stageScale, canEdit, stageRef, shapeRefs,
     onUpdateText, onUpdateTitle, onEditingChange, onActivity,
     onUpdateTableCell,
-    pendingEditId: RICH_TEXT_ENABLED ? undefined : pendingEditId,
-    onPendingEditConsumed: RICH_TEXT_ENABLED ? undefined : onPendingEditConsumed,
     tryEnterGroup,
   })
 
+  // Rich text editing: used for all shape body text
   const richTextEditing = useRichTextEditing({
     objects, stageScale, canEdit, shapeRefs,
-    enabled: RICH_TEXT_ENABLED,
+    enabled: true,
     onUpdateText, onUpdateTitle,
-    onUpdateRichText: onUpdateRichText ?? ((_id: string, _json: string, _before: { text: string; rich_text: string | null }) => {}),
+    onUpdateRichText,
+    onUpdateTitleRichText,
+    onUpdateTableTitle,
     onEditingChange, onActivity,
-    pendingEditId: RICH_TEXT_ENABLED ? pendingEditId : undefined,
-    onPendingEditConsumed: RICH_TEXT_ENABLED ? onPendingEditConsumed : undefined,
+    pendingEditId,
+    onPendingEditConsumed,
     tryEnterGroup,
   })
 
@@ -312,7 +309,7 @@ export function Canvas() {
     textareaStyle, textareaRef,
     handleStartEdit, handleFinishEdit,
     handleShapeDoubleClick, startGeometricTextEdit,
-  } = RICH_TEXT_ENABLED ? richTextEditing : plainTextEditing
+  } = richTextEditing
 
   // Table cell handlers and coords always use plain text editing (table cells are never rich text)
   const {
@@ -327,7 +324,7 @@ export function Canvas() {
 
   // Expose editor ref to parent
   useEffect(() => {
-    if (RICH_TEXT_ENABLED && richTextEditing.editor && onEditorReady) {
+    if (richTextEditing.editor && onEditorReady) {
       onEditorReady(richTextEditing.editor)
     }
   }, [richTextEditing.editor, onEditorReady])
@@ -392,7 +389,6 @@ export function Canvas() {
 
     tr.nodes([])
     tr.getLayer()?.batchDraw()
-    if (RICH_TEXT_ENABLED) setTransformingIds(new Set())
   }, [effectiveNodeIds, editingId, shiftHeld])
 
   const handleStageClick = useCallback((e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
@@ -500,10 +496,41 @@ export function Canvas() {
     editingField, editingCellCoords,
   }), [selectedIds, isObjectLocked, canEdit, cellEditingId, editingId, editingField, editingCellCoords])
 
+  const handleToggleTask = useCallback((id: string, blockIndex: number, checked: boolean) => {
+    const obj = objects.get(id)
+    if (!obj?.rich_text || !onUpdateRichText) return
+    try {
+      const doc = JSON.parse(obj.rich_text)
+      // Walk doc to find the Nth task item and toggle its checked attr
+      const counter = { value: 0 }
+      function walkToggle(node: { type?: string; attrs?: Record<string, unknown>; content?: unknown[] }): boolean {
+        if (node.type === 'taskItem') {
+          if (counter.value === blockIndex) {
+            if (!node.attrs) node.attrs = {}
+            node.attrs.checked = checked
+            return true
+          }
+          counter.value++
+        }
+        if (node.content) {
+          for (const child of node.content) {
+            if (walkToggle(child as { type?: string; attrs?: Record<string, unknown>; content?: unknown[] })) return true
+          }
+        }
+        return false
+      }
+      walkToggle(doc)
+      const newJson = JSON.stringify(doc)
+      onUpdateRichText(id, newJson, { text: obj.text ?? '', rich_text: obj.rich_text })
+    } catch {
+      // Invalid JSON, ignore
+    }
+  }, [objects, onUpdateRichText])
+
   const shapeCallbacks: ShapeCallbacks = useMemo(() => ({
     handleShapeDragEnd, handleShapeDragMove, handleShapeDragStart,
     handleShapeSelect, handleShapeRef, onTransformEnd, handleContextMenu,
-    handleShapeDoubleClick, handleStartEdit, shapeDragBoundFunc,
+    handleShapeDoubleClick, handleStartEdit, handleToggleTask, shapeDragBoundFunc,
     onEndpointDragMove, onEndpointDragEnd,
     onWaypointDragEnd, onWaypointInsert, onWaypointDelete,
     getAutoRoutePoints, autoRoutePointsRef,
@@ -514,7 +541,7 @@ export function Canvas() {
   }), [
     handleShapeDragEnd, handleShapeDragMove, handleShapeDragStart,
     handleShapeSelect, handleShapeRef, onTransformEnd, handleContextMenu,
-    handleShapeDoubleClick, handleStartEdit, shapeDragBoundFunc,
+    handleShapeDoubleClick, handleStartEdit, handleToggleTask, shapeDragBoundFunc,
     onEndpointDragMove, onEndpointDragEnd,
     onWaypointDragEnd, onWaypointInsert, onWaypointDelete,
     getAutoRoutePoints, autoRoutePointsRef,
@@ -523,42 +550,6 @@ export function Canvas() {
     onAgentClick,
   ])
 
-  // ── RICH_TEXT_ENABLED — centralised flag checks ──────────────────────────────
-  //
-  // The flag is checked in several structurally distinct places:
-  //   • Hook arguments (plainTextEditing / richTextEditing setup, lines ~187-208):
-  //     each hook receives complementary subsets of pendingEditId/onPendingEditConsumed,
-  //     so each ternary is load-bearing and cannot be collapsed further.
-  //   • useEffect guards (editor-ready notification, line ~215; transformingIds reset,
-  //     line ~343): both are single conditional statements, already minimal.
-  //   • Transformer event handlers (onTransformStart / onTransform / onTransformEnd):
-  //     three adjacent ternaries that all guard rich-text–specific side effects —
-  //     consolidated below into richTextTransformHandlers and spread onto Transformer.
-  //   • JSX gate for RichTextStaticLayer + TipTapEditorOverlay (line ~729):
-  //     already a single block-level check, no further reduction possible.
-  //
-  // Net reduction: 3 scattered ternaries → 1 object literal checked once.
-
-  const richTextTransformHandlers = RICH_TEXT_ENABLED
-    ? {
-        onTransformStart: () => {
-          const tr = trRef.current
-          if (!tr) return
-          const ids = new Set<string>()
-          for (const node of tr.nodes()) {
-            const id = reverseShapeRefs.current.get(node)
-            if (id) ids.add(id)
-          }
-          if (ids.size > 0) setTransformingIds(ids)
-        },
-        // No onTransform override — let Konva's native scale flow work.
-        // The DOM overlay is hidden during transforms (transformingIds → opacity 0),
-        // so there's no need to reflow it mid-drag. onTransformEnd handles cleanup.
-        onTransformEnd: () => {
-          setTransformingIds(new Set())
-        },
-      }
-    : {}
 
   return (
     <div
@@ -756,7 +747,6 @@ export function Canvas() {
                 }
                 return newBox
               }}
-              {...richTextTransformHandlers}
             />
           )}
 
@@ -785,38 +775,26 @@ export function Canvas() {
         <Layer ref={cursorLayerRef} listening={false} />
       </Stage>
 
-      {RICH_TEXT_ENABLED && (
-        <>
-          <RichTextStaticLayer
-            visibleObjects={visibleObjects}
-            editingId={editingId}
-            transformingIds={transformingIds}
-            stagePos={stagePos}
-            stageScale={stageScale}
-          />
-          <div
-            className="absolute top-0 left-0"
-            style={{
-              pointerEvents: 'none',
-              transform: `translate(${stagePos.x}px, ${stagePos.y}px) scale(${stageScale})`,
-              transformOrigin: '0 0',
-              zIndex: 2,
-            }}
-          >
-            <TipTapEditorOverlay
-              editor={richTextEditing.editor}
-              editingId={editingId}
-              editingField={editingField ?? 'text'}
-              overlayStyle={richTextEditing.overlayStyle}
-              onFinish={handleFinishEdit}
-            />
-          </div>
-        </>
-      )}
+      <div
+        className="absolute top-0 left-0"
+        style={{
+          pointerEvents: 'none',
+          transform: `translate(${stagePos.x}px, ${stagePos.y}px) scale(${stageScale})`,
+          transformOrigin: '0 0',
+          zIndex: 2,
+        }}
+      >
+        <TipTapEditorOverlay
+          editor={richTextEditing.editor}
+          editingId={editingId}
+          editingField={editingField ?? 'text'}
+          overlayStyle={richTextEditing.overlayStyle}
+          onFinish={handleFinishEdit}
+        />
+      </div>
 
       <CanvasOverlays
         editingId={cellEditingId ?? editingId}
-        editingField={editingField}
         editText={cellEditingId ? cellEditText : editText}
         setEditText={cellEditingId ? cellSetEditText : setEditText}
         textareaRef={cellEditingId ? cellTextareaRef : textareaRef}
@@ -824,7 +802,6 @@ export function Canvas() {
         handleFinishEdit={cellEditingId ? cellHandleFinishEdit : handleFinishEdit}
         isCellEditing={!!cellEditingId}
         onUpdateText={onUpdateText}
-        onUpdateTitle={onUpdateTitle}
         objects={objects}
         connectorHint={connectorHint}
         stageScale={stageScale}
@@ -837,7 +814,7 @@ export function Canvas() {
         setContextMenu={setContextMenu}
         onCellKeyDown={handleCellKeyDown}
         isEditingText={!!editingId}
-        richTextEditor={RICH_TEXT_ENABLED ? richTextEditing.editor : null}
+        richTextEditor={richTextEditing.editor}
         boardId={boardId}
         onApiConfigChange={onApiConfigChange}
       />

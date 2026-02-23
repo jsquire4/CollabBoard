@@ -26,7 +26,9 @@ export interface BoardMutationsContextValue {
   // Text
   onUpdateText: (id: string, text: string) => void
   onUpdateTitle: (id: string, title: string) => void
-  onUpdateRichText?: (id: string, json: string, before: { text: string; rich_text: string | null }) => void
+  onUpdateRichText: (id: string, json: string, before: { text: string; rich_text: string | null; title?: string | null; title_rich_text?: string | null; table_data?: string | null }) => void
+  onUpdateTitleRichText: (id: string, title: string, titleRichText: string, before: { text: string; rich_text: string | null; title?: string | null; title_rich_text?: string | null }) => void
+  onUpdateTableTitle: (id: string, tableData: string, richText: string, before: { text: string; rich_text: string | null; table_data?: string | null }) => void
   onEditorReady?: (editor: Editor) => void
 
   // Transform

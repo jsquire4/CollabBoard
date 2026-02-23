@@ -1,12 +1,6 @@
-import { describe, it, expect, vi } from 'vitest'
-import { extractPlainText, plainTextToTipTap, generateStaticHTML, isEmptyRichText } from '@/lib/richText'
+import { describe, it, expect } from 'vitest'
+import { extractPlainText, plainTextToTipTap, isEmptyRichText } from '@/lib/richText'
 import type { TipTapDoc } from '@/types/board'
-
-// Use server version of generateHTML in test environment (jsdom doesn't support browser version)
-vi.mock('@tiptap/html', async () => {
-  const server = await import('@tiptap/html/server')
-  return { generateHTML: server.generateHTML }
-})
 
 describe('extractPlainText', () => {
   it('extracts text from a simple paragraph', () => {
@@ -120,36 +114,6 @@ describe('plainTextToTipTap', () => {
   })
 })
 
-describe('generateStaticHTML', () => {
-  it('returns HTML for a valid doc', () => {
-    const doc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }] }
-    const html = generateStaticHTML(JSON.stringify(doc))
-    expect(html).toContain('Hello')
-    expect(html).toMatch(/<p[\s>]/)
-  })
-
-  it('returns empty string for invalid JSON', () => {
-    expect(generateStaticHTML('not valid json')).toBe('')
-  })
-
-  it('returns empty string for null-ish input', () => {
-    expect(generateStaticHTML('')).toBe('')
-  })
-
-  it('renders bold marks as <strong>', () => {
-    const doc = {
-      type: 'doc',
-      content: [{
-        type: 'paragraph',
-        content: [{ type: 'text', text: 'Bold', marks: [{ type: 'bold' }] }],
-      }],
-    }
-    const html = generateStaticHTML(JSON.stringify(doc))
-    expect(html).toContain('Bold')
-    expect(html).toMatch(/<strong[\s>]/)
-    expect(html).toContain('</strong>')
-  })
-})
 
 describe('isEmptyRichText', () => {
   it('returns true for null', () => {

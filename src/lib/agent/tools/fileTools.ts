@@ -12,7 +12,7 @@ export const fileTools: ToolDef[] = [
 
   makeToolDef(
     'describeImage',
-    'Describe an image that has been uploaded to the board. Pass the object ID of a file-type board object with an image MIME type.',
+    'Describe image in file object. Pass objectId of image file.',
     describeImageSchema,
     async (ctx, { objectId }) => {
       if (ctx.agentObjectId && !getConnectedObjectIds(ctx.state, ctx.agentObjectId).has(objectId)) {
@@ -51,7 +51,7 @@ export const fileTools: ToolDef[] = [
 
   makeToolDef(
     'readFileContent',
-    'Read the text content of an uploaded file (text, markdown, CSV, or PDF). Returns the file content as text.',
+    'Read file content (text, markdown, CSV, PDF).',
     readFileContentSchema,
     async (ctx, { objectId }) => {
       if (ctx.agentObjectId && !getConnectedObjectIds(ctx.state, ctx.agentObjectId).has(objectId)) {

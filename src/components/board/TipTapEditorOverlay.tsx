@@ -22,7 +22,7 @@ export function TipTapEditorOverlay({
 
   // Handle Escape to finish editing
   useEffect(() => {
-    if (!editingId || editingField === 'title') return
+    if (!editingId) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !e.isComposing) {
@@ -33,11 +33,11 @@ export function TipTapEditorOverlay({
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [editingId, editingField, onFinish])
+  }, [editingId, onFinish])
 
   // Handle clicks outside editor to finish editing
   useEffect(() => {
-    if (!editingId || editingField === 'title') return
+    if (!editingId) return
 
     const handleMouseDown = (e: MouseEvent) => {
       const target = e.target as Node
@@ -59,9 +59,9 @@ export function TipTapEditorOverlay({
       clearTimeout(timer)
       if (listenerAdded) document.removeEventListener('mousedown', handleMouseDown)
     }
-  }, [editingId, editingField, onFinish])
+  }, [editingId, onFinish])
 
-  if (!editingId || editingField === 'title' || !editor) return null
+  if (!editingId || !editor) return null
 
   return (
     <div

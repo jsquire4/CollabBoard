@@ -3,22 +3,19 @@ import { BoardObject } from '@/types/board'
 import { ContextMenu } from './ContextMenu'
 import { SelectionBar } from './SelectionBar'
 import { ApiObjectOverlay } from './ApiObjectOverlay'
-import { getTextCharLimit, STICKY_TITLE_CHAR_LIMIT } from '@/hooks/board/useTextEditing'
-import { RICH_TEXT_ENABLED } from '@/lib/richText'
+import { getTextCharLimit } from '@/hooks/board/useTextEditing'
 import type { ContextMenuState } from '@/hooks/board/useContextMenu'
 import { useDrawInteraction, ConnectorHintData, ConnectorDrawingRefs } from '@/hooks/board/useDrawInteraction'
 
 interface CanvasOverlaysProps {
-  // Textarea editing
+  // Textarea editing (table cell editing only — title/body use TipTapEditorOverlay)
   editingId: string | null
-  editingField?: 'title' | 'text'
   editText: string
   setEditText: (text: string) => void
   textareaRef: React.RefObject<HTMLTextAreaElement | null>
   textareaStyle: React.CSSProperties
   handleFinishEdit: () => void
   onUpdateText: (id: string, text: string) => void
-  onUpdateTitle: (id: string, title: string) => void
   objects: Map<string, BoardObject>
 
   // Connector hint
@@ -43,8 +40,8 @@ interface CanvasOverlaysProps {
 }
 
 export function CanvasOverlays({
-  editingId, editingField, editText, setEditText, textareaRef, textareaStyle,
-  handleFinishEdit, onUpdateText, onUpdateTitle, objects,
+  editingId, editText, setEditText, textareaRef, textareaStyle,
+  handleFinishEdit, onUpdateText, objects,
   connectorHint, stageScale, stagePos, connectorDrawingRefs,
   contextMenu, setContextMenu,
   onCellKeyDown,
@@ -82,18 +79,16 @@ export function CanvasOverlays({
           ))}
         </div>
       )}
-      {/* Textarea overlay for editing text (skip for rich text body editing — handled by TipTapEditorOverlay).
-          Always shown for table cell editing regardless of RICH_TEXT_ENABLED. */}
-      {editingId && (!RICH_TEXT_ENABLED || editingField === 'title' || isCellEditing) && (
+      {/* Textarea overlay for table cell editing.
+          Body and title text editing is handled by TipTapEditorOverlay. */}
+      {editingId && isCellEditing && (
         <textarea
           ref={textareaRef}
           value={editText}
-          maxLength={editingField === 'title' ? STICKY_TITLE_CHAR_LIMIT : (editingId ? getTextCharLimit(objects.get(editingId)?.type ?? '') : undefined)}
+          maxLength={editingId ? getTextCharLimit(objects.get(editingId)?.type ?? '') : undefined}
           onChange={e => {
             let value = e.target.value
-            if (editingField === 'title') {
-              value = value.slice(0, STICKY_TITLE_CHAR_LIMIT)
-            } else if (editingId) {
+            if (editingId) {
               const limit = getTextCharLimit(objects.get(editingId)?.type ?? '')
               if (limit !== undefined) {
                 value = value.slice(0, limit)
@@ -101,11 +96,7 @@ export function CanvasOverlays({
             }
             setEditText(value)
             if (editingId) {
-              if (editingField === 'title') {
-                onUpdateTitle(editingId, value)
-              } else {
-                onUpdateText(editingId, value)
-              }
+              onUpdateText(editingId, value)
             }
           }}
           onBlur={handleFinishEdit}

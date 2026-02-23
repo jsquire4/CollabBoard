@@ -1,8 +1,4 @@
 import type { TipTapDoc, TipTapNode } from '@/types/board'
-import { generateHTML } from '@tiptap/html'
-import { TIPTAP_EXTENSIONS } from '@/lib/richtext/extensions'
-
-export const RICH_TEXT_ENABLED = true
 
 /** Recursively extract plain text from a TipTap document JSON. */
 export function extractPlainText(doc: TipTapDoc): string {
@@ -32,17 +28,6 @@ export function plainTextToTipTap(text: string): TipTapDoc {
       type: 'paragraph',
       ...(line ? { content: [{ type: 'text', text: line }] } : {}),
     })),
-  }
-}
-
-/** Generate static HTML from a JSON-serialized TipTap doc string. */
-export function generateStaticHTML(json: string): string {
-  if (!json) return ''
-  try {
-    const doc = JSON.parse(json) as TipTapDoc
-    return generateHTML(doc, TIPTAP_EXTENSIONS)
-  } catch {
-    return ''
   }
 }
 

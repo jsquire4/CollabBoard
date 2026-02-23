@@ -43,8 +43,8 @@ describe('TipTapEditorOverlay', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('renders nothing when editingField is title', () => {
-    const { container } = render(
+  it('renders editor content when editingField is title', () => {
+    const { getByTestId } = render(
       <TipTapEditorOverlay
         editor={createMockEditor()}
         editingId="some-id"
@@ -53,7 +53,7 @@ describe('TipTapEditorOverlay', () => {
         onFinish={vi.fn()}
       />
     )
-    expect(container.firstChild).toBeNull()
+    expect(getByTestId('editor-content')).toBeDefined()
   })
 
   it('renders nothing when editor is null', () => {

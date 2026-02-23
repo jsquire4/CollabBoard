@@ -101,10 +101,10 @@ export function AgentChatPanel({
 
   const handleSend = useCallback(() => {
     const trimmed = input.trim()
-    if (!trimmed || isLoading) return
+    if (!trimmed) return
     sendMessage(trimmed)
     setInput('')
-  }, [input, isLoading, sendMessage])
+  }, [input, sendMessage])
 
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -173,7 +173,6 @@ export function AgentChatPanel({
       onInputChange={setInput}
       inputPlaceholder="Ask this agent… (Enter to send)"
       onSend={handleSend}
-      isLoading={isLoading}
     />
   )
 }

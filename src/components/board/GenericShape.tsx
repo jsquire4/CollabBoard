@@ -4,11 +4,12 @@ import Konva from 'konva'
 import { BoardObject } from '@/types/board'
 import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
 import { shapeRegistry } from './shapeRegistry'
-import { RICH_TEXT_ENABLED } from '@/lib/richText'
+import { RichTextBlocks } from './RichTextBlocks'
 
 interface GenericShapeProps extends ShapeProps {
-  onStartEdit?: (id: string, node: Konva.Text) => void
+  onStartEdit?: (id: string, node: Konva.Text | null) => void
   isEditing?: boolean
+  onToggleTask?: (blockIndex: number, checked: boolean) => void
 }
 
 export const GenericShape = memo(function GenericShape({
@@ -26,6 +27,7 @@ export const GenericShape = memo(function GenericShape({
   dragBoundFunc,
   onStartEdit,
   isEditing = false,
+  onToggleTask,
 }: GenericShapeProps) {
   const def = shapeRegistry.get(object.type)
   if (!def) return null
@@ -35,7 +37,7 @@ export const GenericShape = memo(function GenericShape({
 
   const outline = getOutlineProps(object, isSelected)
   const shadow = getShadowProps(object)
-  const hasText = !!object.text
+  const hasText = !!object.text || !!object.rich_text
   const padding = object.text_padding ?? 8
   const w = object.width
   const h = object.height
@@ -181,16 +183,10 @@ export const GenericShape = memo(function GenericShape({
     onDragMove?.(object.id, e.target.x(), e.target.y())
   }
 
-  const handleDblClick = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+  const handleDblClick = () => {
     if (onStartEdit) {
-      const stage = e.target.getStage()
-      if (!stage) return
-      const group = e.target.findAncestor('Group') || e.target
-      const textNode = (group as Konva.Group).findOne('Text') as Konva.Text
-      if (textNode) {
-        onStartEdit(object.id, textNode)
-        return
-      }
+      onStartEdit(object.id, null)
+      return
     }
     onDoubleClick?.(object.id)
   }
@@ -222,21 +218,20 @@ export const GenericShape = memo(function GenericShape({
       opacity={object.opacity ?? 1}
     >
       {renderPrimitive(true)}
-      {!isEditing && !(RICH_TEXT_ENABLED && object.rich_text) && (
-        <Text
+      {!isEditing && (
+        <RichTextBlocks
+          richText={object.rich_text ?? null}
+          plainText={object.text || ''}
           x={inset.x}
           y={inset.y}
           width={inset.width}
           height={inset.height}
-          text={object.text || ''}
-          align={object.text_align ?? 'center'}
-          verticalAlign={object.text_vertical_align ?? 'middle'}
-          fill={object.text_color ?? '#000000'}
-          fontSize={object.font_size ?? 16}
-          fontFamily={object.font_family ?? 'sans-serif'}
-          fontStyle={object.font_style ?? 'normal'}
-          wrap="word"
-          listening={false}
+          baseFontSize={object.font_size ?? 16}
+          baseFontFamily={object.font_family ?? 'sans-serif'}
+          baseColor={object.text_color ?? '#000000'}
+          align={(object.text_align as 'left' | 'center' | 'right' | undefined) ?? 'left'}
+          verticalAlign="middle"
+          onToggleTask={onToggleTask}
         />
       )}
     </Group>

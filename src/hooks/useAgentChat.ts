@@ -21,24 +21,55 @@ export type AgentChatMode =
   | { type: 'agent'; agentObjectId: string }
   | { type: 'global' }
 
+const PLACEHOLDER_PHRASES = [
+  "Got it! Working on that…",
+  "On it!",
+  "One sec…",
+  "Let me handle that.",
+  "Working on it…",
+  "Got it — give me a moment.",
+] as const
+
+const ERROR_MESSAGES = [
+  "Sorry, I can't do that right now.",
+  "Hmm… something's wrong, please try again later.",
+] as const
+
+const pickPlaceholder = () =>
+  PLACEHOLDER_PHRASES[Math.floor(Math.random() * PLACEHOLDER_PHRASES.length)]
+
 interface UseAgentChatOptions {
   boardId: string
   mode: AgentChatMode
   enabled?: boolean
   /** Viewport center for position hints (per-agent only) */
   viewportCenter?: { x: number; y: number }
+  /** Selected object IDs (global mode) — scopes board state and enables selection tools */
+  selectedIds?: string[]
 }
 
-export function useAgentChat({ boardId, mode, enabled = true, viewportCenter }: UseAgentChatOptions) {
+export function useAgentChat({ boardId, mode, enabled = true, viewportCenter, selectedIds }: UseAgentChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const queueRef = useRef<{
+    message: string
+    displayText?: string
+    quickActionIds: string[]
+    assistantId: string
+    placeholderContent: string
+  }[]>([])
   const greetedRef = useRef(false)
   const loadedRef = useRef(false)
   const messageIdRef = useRef(0)
+  const messagesRef = useRef<ChatMessage[]>([])
 
   const nextId = () => `msg-${++messageIdRef.current}`
+
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
 
   // ── Reset when per-agent chat is closed ────────────────────
 
@@ -58,6 +89,7 @@ export function useAgentChat({ boardId, mode, enabled = true, viewportCenter }: 
   const consumeSSE = useCallback(async (
     response: Response,
     assistantId: string,
+    placeholderContent?: string,
   ) => {
     const reader = response.body?.getReader()
     if (!reader) return
@@ -86,7 +118,13 @@ export function useAgentChat({ boardId, mode, enabled = true, viewportCenter }: 
             if (event.type === 'text-delta') {
               setMessages(prev => prev.map(m =>
                 m.id === assistantId
-                  ? { ...m, content: m.content + event.text }
+                  ? {
+                      ...m,
+                      content:
+                        placeholderContent && m.content === placeholderContent
+                          ? event.text
+                          : m.content + event.text,
+                    }
                   : m,
               ))
             } else if (event.type === 'tool-call') {
@@ -110,6 +148,15 @@ export function useAgentChat({ boardId, mode, enabled = true, viewportCenter }: 
               ))
             } else if (event.type === 'error') {
               setError(event.error)
+              setMessages(prev => prev.map(m =>
+                m.id === assistantId
+                  ? {
+                      ...m,
+                      content: ERROR_MESSAGES[Math.floor(Math.random() * ERROR_MESSAGES.length)],
+                      isStreaming: false,
+                    }
+                  : m,
+              ))
             }
           } catch {
             // Skip malformed SSE events
@@ -128,13 +175,14 @@ export function useAgentChat({ boardId, mode, enabled = true, viewportCenter }: 
     }
   }, [])
 
-  // ── Send message ──────────────────────────────────────────
+  // ── Send message (queueable) ───────────────────────────────────────────────
 
-  const sendMessage = useCallback(async (message: string, displayText?: string) => {
-    if (!message.trim() || isLoading) return
-
-    setError(null)
-    setIsLoading(true)
+  const sendMessage = useCallback(async (
+    message: string,
+    displayText?: string,
+    quickActionIds?: string | string[],
+  ) => {
+    if (!message.trim()) return
 
     const userMsg: ChatMessage = {
       id: nextId(),
@@ -142,58 +190,108 @@ export function useAgentChat({ boardId, mode, enabled = true, viewportCenter }: 
       content: displayText ?? message,
     }
     const assistantId = nextId()
+    const ids = Array.isArray(quickActionIds) ? quickActionIds : quickActionIds ? [quickActionIds] : []
+    const usePlaceholder = ids.length > 0
+    const placeholderContent = usePlaceholder ? pickPlaceholder() : ''
     const assistantMsg: ChatMessage = {
       id: assistantId,
       role: 'assistant',
-      content: '',
+      content: placeholderContent,
       isStreaming: true,
     }
 
-    setMessages(prev => [...prev, userMsg, assistantMsg])
+    if (isLoading) {
+      setMessages(prev => [...prev, userMsg, assistantMsg])
+      queueRef.current.push({ message, displayText, quickActionIds: ids, assistantId, placeholderContent })
+      return
+    }
 
-    const abort = new AbortController()
-    abortRef.current = abort
+    const processOne = async (
+      msg: string,
+      asstId: string,
+      qaIds?: string[],
+      placeholderContent?: string,
+      history?: ChatMessage[],
+    ) => {
+      setError(null)
+      setIsLoading(true)
 
-    const url = mode.type === 'global'
-      ? `/api/agent/${boardId}/global`
-      : `/api/agent/${boardId}`
+      const abort = new AbortController()
+      abortRef.current = abort
 
-    const requestBody = mode.type === 'global'
-      ? { message, ...(viewportCenter ? { viewportCenter } : {}) }
-      : {
-          message,
-          agentObjectId: mode.agentObjectId,
-          ...(viewportCenter ? { viewportCenter } : {}),
+      const url = mode.type === 'global'
+        ? `/api/agent/${boardId}/global`
+        : `/api/agent/${boardId}`
+
+      const queuedPreviews = queueRef.current.map(q =>
+        q.displayText ?? (q.message.length > 60 ? q.message.slice(0, 57) + '…' : q.message),
+      )
+
+      const requestBody = mode.type === 'global'
+        ? {
+            message: msg,
+            ...(viewportCenter ? { viewportCenter } : {}),
+            ...(qaIds && qaIds.length > 0 ? { quickActionIds: qaIds } : {}),
+            ...(selectedIds && selectedIds.length > 0 ? { selectedIds } : {}),
+            ...(queuedPreviews.length > 0 ? { queuedPreviews } : {}),
+            ...(history && history.length > 0
+              ? { conversationHistory: history.map(m => ({ role: m.role, content: m.content || '' })) }
+              : {}),
+          }
+        : {
+            message: msg,
+            agentObjectId: mode.agentObjectId,
+            ...(viewportCenter ? { viewportCenter } : {}),
+          }
+
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+          signal: abort.signal,
+        })
+
+        if (!res.ok) {
+          const text = await res.text()
+          throw new Error(text || `HTTP ${res.status}`)
         }
 
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-        signal: abort.signal,
-      })
-
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(text || `HTTP ${res.status}`)
+        await consumeSSE(res, asstId, placeholderContent || undefined)
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return
+        const errorMsg = (err as Error).message || 'Failed to send message'
+        setError(errorMsg)
+        const fallbackMsg = ERROR_MESSAGES[Math.floor(Math.random() * ERROR_MESSAGES.length)]
+        setMessages(prev => prev.map(m =>
+          m.id === asstId
+            ? { ...m, content: fallbackMsg, isStreaming: false }
+            : m,
+        ))
+      } finally {
+        setIsLoading(false)
+        abortRef.current = null
+        const next = queueRef.current.shift()
+        if (next) {
+          const msgs = messagesRef.current
+          const history = mode.type === 'global' && msgs.length >= 2
+            ? msgs.slice(0, -2)
+            : undefined
+          void processOne(
+            next.message,
+            next.assistantId,
+            next.quickActionIds,
+            next.placeholderContent,
+            history,
+          )
+        }
       }
-
-      await consumeSSE(res, assistantId)
-    } catch (err) {
-      if ((err as Error).name === 'AbortError') return
-      const errorMsg = (err as Error).message || 'Failed to send message'
-      setError(errorMsg)
-      setMessages(prev => prev.map(m =>
-        m.id === assistantId
-          ? { ...m, content: 'Sorry, something went wrong. Please try again.', isStreaming: false }
-          : m,
-      ))
-    } finally {
-      setIsLoading(false)
-      abortRef.current = null
     }
-  }, [boardId, mode, isLoading, consumeSSE, viewportCenter])
+
+    const history = messagesRef.current
+    setMessages(prev => [...prev, userMsg, assistantMsg])
+    void processOne(message, assistantId, ids, placeholderContent, history)
+  }, [boardId, mode, isLoading, consumeSSE, viewportCenter, selectedIds])
 
   // ── Load history + greet on mount ─────────────────────────
 
@@ -285,6 +383,7 @@ export function useAgentChat({ boardId, mode, enabled = true, viewportCenter }: 
   // ── Cancel ────────────────────────────────────────────────
 
   const cancel = useCallback(() => {
+    queueRef.current = []
     abortRef.current?.abort()
     setIsLoading(false)
   }, [])

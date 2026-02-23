@@ -21,7 +21,7 @@ export const editObjectTools: ToolDef[] = [
 
   makeToolDef(
     'moveObject',
-    'Move an object to a new position on the board.',
+    'Move object to x, y.',
     moveObjectSchema,
     async (ctx, { id, x, y }) => {
       if (ctx.agentObjectId && !getConnectedObjectIds(ctx.state, ctx.agentObjectId).has(id)) {
@@ -38,7 +38,7 @@ export const editObjectTools: ToolDef[] = [
 
   makeToolDef(
     'resizeObject',
-    'Resize an object on the board.',
+    'Resize object to width×height.',
     resizeObjectSchema,
     async (ctx, { id, width, height }) => {
       if (ctx.agentObjectId && !getConnectedObjectIds(ctx.state, ctx.agentObjectId).has(id)) {
@@ -55,7 +55,7 @@ export const editObjectTools: ToolDef[] = [
 
   makeToolDef(
     'updateText',
-    'Update the text content of an object. For sticky notes and frames, can also update the title.',
+    'Update object text and/or title.',
     updateTextSchema,
     async (ctx, { id, text, title }) => {
       if (ctx.agentObjectId && !getConnectedObjectIds(ctx.state, ctx.agentObjectId).has(id)) {
@@ -76,6 +76,9 @@ export const editObjectTools: ToolDef[] = [
       if (title !== undefined) {
         updates.title = title
         fields.push('title')
+        const titleRichTextDoc = plainTextToTipTap(title)
+        updates.title_rich_text = JSON.stringify(titleRichTextDoc)
+        fields.push('title_rich_text')
       }
 
       if (fields.length === 0) return { error: 'No updates provided' }
@@ -91,7 +94,7 @@ export const editObjectTools: ToolDef[] = [
 
   makeToolDef(
     'changeColor',
-    'Change the color of an object on the board. Color must be a valid hex value, e.g. #FF5733.',
+    'Set object color (hex, e.g. #FF5733).',
     changeColorSchema,
     async (ctx, { id, color }) => {
       if (ctx.agentObjectId && !getConnectedObjectIds(ctx.state, ctx.agentObjectId).has(id)) {
@@ -108,7 +111,7 @@ export const editObjectTools: ToolDef[] = [
 
   makeToolDef(
     'deleteObject',
-    'Delete an object from the board by marking it as deleted.',
+    'Delete object (soft delete).',
     deleteObjectSchema,
     async (ctx, { id }) => {
       if (ctx.agentObjectId && !getConnectedObjectIds(ctx.state, ctx.agentObjectId).has(id)) {

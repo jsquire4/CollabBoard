@@ -31,6 +31,7 @@ export interface BoardObjectText {
   text: string
   title?: string | null
   rich_text?: string | null // JSON-serialized TipTapDoc
+  title_rich_text?: string | null // JSON-serialized TipTapDoc for title field
   font_size: number
   font_family?: string
   font_style?: FontStyle

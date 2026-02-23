@@ -59,6 +59,9 @@ export function buildInsertRow(
   if (typeof row.rich_text === 'string') {
     try { row.rich_text = JSON.parse(row.rich_text) } catch { /* leave as-is */ }
   }
+  if (typeof row.title_rich_text === 'string') {
+    try { row.title_rich_text = JSON.parse(row.title_rich_text as string) } catch { /* leave as-is */ }
+  }
   return row
 }
 
@@ -108,6 +111,9 @@ export async function updateFields(
   }
   if (typeof row.rich_text === 'string') {
     try { row.rich_text = JSON.parse(row.rich_text as string) } catch { /* leave as-is */ }
+  }
+  if (typeof row.title_rich_text === 'string') {
+    try { row.title_rich_text = JSON.parse(row.title_rich_text as string) } catch { /* leave as-is */ }
   }
 
   const admin = createAdminClient()

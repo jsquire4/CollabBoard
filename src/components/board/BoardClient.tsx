@@ -21,7 +21,7 @@ import { useGridSettings } from '@/hooks/board/useGridSettings'
 import { useUndoExecution } from '@/hooks/board/useUndoExecution'
 import { createClient } from '@/lib/supabase/client'
 import { BoardObject, BoardObjectType } from '@/types/board'
-import { RICH_TEXT_ENABLED, extractPlainText } from '@/lib/richText'
+import { extractPlainText } from '@/lib/richText'
 import type { TipTapDoc } from '@/types/board'
 import type { Editor } from '@tiptap/react'
 import { BoardRole } from '@/types/sharing'
@@ -572,6 +572,20 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
     updateObject(id, { rich_text: json, text: plain })
   }, [canEdit, objects, updateObject, undoStack, markActivity])
 
+  const handleUpdateTitleRichText = useCallback((id: string, title: string, titleRichText: string, before: { text: string; rich_text: string | null; title?: string | null; title_rich_text?: string | null }) => {
+    if (!canEdit) return
+    markActivity()
+    undoStack.push({ type: 'update', patches: [{ id, before }] })
+    updateObject(id, { title, title_rich_text: titleRichText })
+  }, [canEdit, updateObject, undoStack, markActivity])
+
+  const handleUpdateTableTitle = useCallback((id: string, tableData: string, richText: string, before: { text: string; rich_text: string | null; table_data?: string | null }) => {
+    if (!canEdit) return
+    markActivity()
+    undoStack.push({ type: 'update', patches: [{ id, before }] })
+    updateObject(id, { table_data: tableData, rich_text: richText })
+  }, [canEdit, updateObject, undoStack, markActivity])
+
   const handleTransformEnd = useCallback((id: string, updates: Partial<BoardObject>) => {
     if (!canEdit) return
     markActivity()
@@ -852,8 +866,10 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
     onDragMove: handleDragMove,
     onUpdateText: handleUpdateText,
     onUpdateTitle: handleUpdateTitle,
-    onUpdateRichText: RICH_TEXT_ENABLED ? handleUpdateRichText : undefined,
-    onEditorReady: RICH_TEXT_ENABLED ? setRichTextEditor : undefined,
+    onUpdateRichText: handleUpdateRichText,
+    onUpdateTitleRichText: handleUpdateTitleRichText,
+    onUpdateTableTitle: handleUpdateTableTitle,
+    onEditorReady: setRichTextEditor,
     onTransformEnd: handleTransformEnd,
     onDelete: handleDelete,
     onDuplicate: handleDuplicate,
@@ -928,7 +944,7 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
     handleDrawShape, handleCancelTool,
     selectObject, selectObjects, clearSelection, enterGroup, exitGroup,
     handleDragStart, handleDragEnd, handleDragMove,
-    handleUpdateText, handleUpdateTitle, handleUpdateRichText, setRichTextEditor,
+    handleUpdateText, handleUpdateTitle, handleUpdateRichText, handleUpdateTitleRichText, handleUpdateTableTitle, setRichTextEditor,
     handleTransformEnd,
     handleDelete, handleDuplicate, handleCopy, handleCut, handlePaste,
     handleColorChange, handleTextStyleChange, handleBringToFront, handleBringForward, handleSendBackward, handleSendToBack,

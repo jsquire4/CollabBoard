@@ -5,7 +5,6 @@ import { useBoardContext } from '@/contexts/BoardContext'
 import { useBoardMutations } from '@/contexts/BoardMutationsContext'
 import { selectionBBox } from '@/lib/geometry/bbox'
 import { useCanvasOverlayPosition } from '@/hooks/board/useCanvasOverlayPosition'
-import { RICH_TEXT_ENABLED } from '@/lib/richText'
 import {
   readActiveState,
   EMPTY_ACTIVE,
@@ -297,7 +296,7 @@ export function SelectionBar({
 
   // Auto-open the Text group when entering text editing mode
   useEffect(() => {
-    if (isEditingText && RICH_TEXT_ENABLED) {
+    if (isEditingText) {
       setActiveGroup('text')
     }
   }, [isEditingText])
@@ -467,13 +466,11 @@ export function SelectionBar({
           {activeGroup === 'text' && (() => {
             const subs = [
               { id: 'txt-color', label: 'Color', icon: 'M7 2v11m4-11v11M5 4h8m-9 4h8' },
-              ...(RICH_TEXT_ENABLED ? [
-                { id: 'txt-font', label: 'Font', icon: 'M4 7V4h16v3M9 20h6M12 4v16' },
-                { id: 'txt-format', label: 'Format', icon: 'M6 4v16M6 4h8a4 4 0 010 8H6m0 0h9a4 4 0 010 8H6' },
-                { id: 'txt-heading', label: 'Heading', icon: 'M4 12h16M4 4v16M20 4v16' },
-                { id: 'txt-list', label: 'Lists', icon: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01' },
-                { id: 'txt-align', label: 'Align', icon: 'M3 6h18M3 10h12M3 14h18M3 18h12' },
-              ] : []),
+              { id: 'txt-font', label: 'Font', icon: 'M4 7V4h16v3M9 20h6M12 4v16' },
+              { id: 'txt-format', label: 'Format', icon: 'M6 4v16M6 4h8a4 4 0 010 8H6m0 0h9a4 4 0 010 8H6' },
+              { id: 'txt-heading', label: 'Heading', icon: 'M4 12h16M4 4v16M20 4v16' },
+              { id: 'txt-list', label: 'Lists', icon: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01' },
+              { id: 'txt-align', label: 'Align', icon: 'M3 6h18M3 10h12M3 14h18M3 18h12' },
             ]
             let idx = 0
             return subs.map(sub => (

@@ -313,6 +313,32 @@ describe('useAgentChat', () => {
     expect(result.current.isLoading).toBe(false)
   })
 
+  it('cancel() clears the message queue', async () => {
+    let resolveFirst: (() => void) = () => {}
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => new Promise(resolve => { resolveFirst = () => resolve(new Response('', { status: 200 })) }))
+      .mockImplementation(() => new Promise(() => {}))
+
+    const { result } = renderHook(() =>
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
+    )
+
+    // Send first message (starts loading)
+    act(() => { void result.current.sendMessage('first') })
+    // Queue second message
+    act(() => { void result.current.sendMessage('second') })
+
+    // Cancel should clear queue
+    act(() => { result.current.cancel() })
+
+    // Resolve the first fetch — the finally block should NOT start processing 'second'
+    resolveFirst()
+    await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+
+    // Only one fetch call — the queued 'second' was cleared
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('sets error message on HTTP error response', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
       Promise.resolve(new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 })),
@@ -416,5 +442,188 @@ describe('useAgentChat', () => {
     })
 
     await waitFor(() => expect(result.current.error).toBeNull())
+  })
+
+  // ── Quick action placeholder & pre-made responses ───────────────────────────
+
+  it('shows a placeholder phrase immediately when quick action is sent', () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}))
+
+    const { result } = renderHook(() =>
+      useAgentChat({ boardId: 'board-1', mode: { type: 'global' }, enabled: false }),
+    )
+
+    act(() => {
+      result.current.sendMessage('Add a sticky note', 'Add Sticky Note', 'sticky')
+    })
+
+    const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+    const validPlaceholders = [
+      'Got it! Working on that…', 'On it!', 'One sec…', 'Let me handle that.',
+      'Working on it…', 'Got it — give me a moment.',
+    ]
+    expect(validPlaceholders).toContain(assistantMsg?.content)
+    expect(assistantMsg?.isStreaming).toBe(true)
+  })
+
+  it('typed message (no quickActionId) shows empty assistant content initially', () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}))
+
+    const { result } = renderHook(() =>
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
+    )
+
+    act(() => {
+      result.current.sendMessage('Hello')
+    })
+
+    const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+    expect(assistantMsg?.content).toBe('')
+    expect(assistantMsg?.isStreaming).toBe(true)
+  })
+
+  it('sends conversationHistory with follow-up message (global mode)', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) =>
+      Promise.resolve(makeFakeSSE([{ type: 'text-delta', text: 'Done.' }, { type: 'done' }])),
+    )
+
+    const { result } = renderHook(() =>
+      useAgentChat({ boardId: 'board-1', mode: { type: 'global' }, enabled: false }),
+    )
+
+    await act(async () => {
+      await result.current.sendMessage('Create SWOT', 'SWOT Analysis', 'swot')
+    })
+    await waitFor(() => expect(result.current.messages).toHaveLength(2))
+
+    await act(async () => {
+      await result.current.sendMessage('Yes, create two')
+    })
+
+    const lastCall = fetchMock.mock.calls[fetchMock.mock.calls.length - 1]
+    const body = JSON.parse((lastCall?.[1] as RequestInit)?.body as string)
+    expect(body.conversationHistory).toBeDefined()
+    expect(body.conversationHistory).toHaveLength(2)
+    expect(body.conversationHistory[0].role).toBe('user')
+    expect(body.conversationHistory[0].content).toContain('SWOT')
+    expect(body.conversationHistory[1].role).toBe('assistant')
+    expect(body.message).toBe('Yes, create two')
+  })
+
+  it('replaces quick action placeholder when first text-delta arrives', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(makeFakeSSE([
+        { type: 'text-delta', text: 'I added a sticky note.' },
+        { type: 'text-delta', text: ' It\'s in the center.' },
+        { type: 'done' },
+      ])),
+    )
+
+    const { result } = renderHook(() =>
+      useAgentChat({ boardId: 'board-1', mode: { type: 'global' }, enabled: false }),
+    )
+
+    await act(async () => {
+      await result.current.sendMessage('Add a sticky', 'Add Sticky Note', 'sticky')
+    })
+
+    await waitFor(() => {
+      const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+      expect(assistantMsg?.content).toBe("I added a sticky note. It's in the center.")
+      expect(assistantMsg?.isStreaming).toBe(false)
+    })
+  })
+
+  it('replaces assistant message with pre-made error on SSE error event', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(makeFakeSSE([{ type: 'error', error: 'Rate limit' }])),
+    )
+
+    const { result } = renderHook(() =>
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
+    )
+
+    await act(async () => {
+      await result.current.sendMessage('Hi')
+    })
+
+    await waitFor(() => {
+      const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+      const preMade = ["Sorry, I can't do that right now.", "Hmm… something's wrong, please try again later."]
+      expect(preMade).toContain(assistantMsg?.content)
+      expect(assistantMsg?.isStreaming).toBe(false)
+    })
+  })
+
+  it('replaces assistant message with pre-made error on HTTP error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(new Response('Forbidden', { status: 403 })),
+    )
+
+    const { result } = renderHook(() =>
+      useAgentChat({ boardId: 'board-1', mode: { type: 'agent', agentObjectId: 'agent-1' }, enabled: false }),
+    )
+
+    await act(async () => {
+      await result.current.sendMessage('Hi')
+    })
+
+    await waitFor(() => {
+      const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+      const preMade = ["Sorry, I can't do that right now.", "Hmm… something's wrong, please try again later."]
+      expect(preMade).toContain(assistantMsg?.content)
+      expect(assistantMsg?.isStreaming).toBe(false)
+    })
+  })
+
+  it('queues messages when sent while loading and processes in order', async () => {
+    let resolveFirst: () => void
+    const firstPromise = new Promise<void>(r => { resolveFirst = r })
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() =>
+        firstPromise.then(() => makeFakeSSE([{ type: 'text-delta', text: 'First' }, { type: 'done' }])),
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve(makeFakeSSE([{ type: 'text-delta', text: 'Second' }, { type: 'done' }])),
+      )
+
+    const { result } = renderHook(() =>
+      useAgentChat({ boardId: 'board-1', mode: { type: 'global' }, enabled: false }),
+    )
+
+    act(() => { void result.current.sendMessage('First') })
+    act(() => { void result.current.sendMessage('Second') })
+
+    expect(result.current.messages.length).toBe(4)
+    expect(result.current.messages[0].content).toBe('First')
+    expect(result.current.messages[2].content).toBe('Second')
+
+    await act(async () => { resolveFirst!() })
+
+    await waitFor(() => {
+      const firstAssistant = result.current.messages.find((m, i) => m.role === 'assistant' && i === 1)
+      const secondAssistant = result.current.messages.find((m, i) => m.role === 'assistant' && i === 3)
+      expect(firstAssistant?.content).toBe('First')
+      expect(secondAssistant?.content).toBe('Second')
+    })
+  })
+
+  it('sends quickActionIds in request body for global mode', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => {
+      const body = JSON.parse((init?.body as string) ?? '{}')
+      expect(body.quickActionIds).toEqual(['swot'])
+      expect(body.message).toBeDefined()
+      return Promise.resolve(makeFakeSSE([{ type: 'done' }]))
+    })
+
+    const { result } = renderHook(() =>
+      useAgentChat({ boardId: 'board-1', mode: { type: 'global' }, enabled: false }),
+    )
+
+    await act(async () => {
+      await result.current.sendMessage('Create SWOT', 'SWOT Analysis', 'swot')
+    })
+
+    expect(fetchMock).toHaveBeenCalled()
   })
 })

@@ -230,6 +230,155 @@ describe('POST /api/agent/[boardId]/global', () => {
     expect(res.status).toBe(503)
   })
 
+  it('injects selection hint and filters board state when selectedIds provided', async () => {
+    const obj1 = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+    const obj2 = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+    const obj3 = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
+    mockLoadBoardState.mockResolvedValueOnce({
+      boardId: TEST_BOARD_ID,
+      objects: new Map([
+        [obj1, { id: obj1, type: 'sticky_note', board_id: TEST_BOARD_ID, x: 0, y: 0, width: 100, height: 100, text: 'A', title: null, color: '#FFEB3B', parent_id: null, deleted_at: null }],
+        [obj2, { id: obj2, type: 'sticky_note', board_id: TEST_BOARD_ID, x: 150, y: 0, width: 100, height: 100, text: 'B', title: null, color: '#FFEB3B', parent_id: null, deleted_at: null }],
+        [obj3, { id: obj3, type: 'sticky_note', board_id: TEST_BOARD_ID, x: 300, y: 0, width: 100, height: 100, text: 'C', title: null, color: '#FFEB3B', parent_id: null, deleted_at: null }],
+      ]),
+      fieldClocks: new Map(),
+    })
+
+    await POST(makeRequest({ message: 'Arrange these', selectedIds: [obj1, obj2] }), makeParams())
+    const config = mockRunAgentLoop.mock.calls[0][1]
+    const userMsg = config.messages.find((m: { role: string }) => m.role === 'user')
+    expect(userMsg.content).toContain('[Selection: 2 objects')
+    expect(userMsg.content).toContain(obj1)
+    expect(userMsg.content).toContain(obj2)
+    expect(userMsg.content).not.toContain(obj3)
+  })
+
+  it('accepts quickActionIds array and returns 200', async () => {
+    const res = await POST(makeRequest({
+      message: 'Add sticky and frame',
+      quickActionIds: ['sticky', 'frame'],
+    }), makeParams())
+
+    expect(res.status).toBe(200)
+    expect(mockRunAgentLoop).toHaveBeenCalledOnce()
+  })
+
+  it('injects queue hint when queuedPreviews provided', async () => {
+    await POST(makeRequest({
+      message: 'Add a sticky note',
+      queuedPreviews: ['Add Frame', 'Arrange in Grid'],
+    }), makeParams())
+
+    const config = mockRunAgentLoop.mock.calls[0][1]
+    const userMsg = config.messages.find((m: { role: string }) => m.role === 'user')
+    expect(userMsg.content).toContain('2 more request(s) queued')
+    expect(userMsg.content).toContain('Add Frame')
+    expect(userMsg.content).toContain('Arrange in Grid')
+  })
+
+  it('includes conversation history when conversationHistory provided (follow-up)', async () => {
+    await POST(makeRequest({
+      message: 'Yes, create two SWOTs',
+      conversationHistory: [
+        { role: 'user', content: 'SWOT Analysis, SWOT Analysis' },
+        { role: 'assistant', content: 'Did you mean to add two SWOT templates?' },
+      ],
+    }), makeParams())
+
+    const config = mockRunAgentLoop.mock.calls[0][1]
+    const msgs = config.messages as Array<{ role: string; content: string }>
+    expect(msgs).toHaveLength(4)
+    expect(msgs[0].role).toBe('system')
+    expect(msgs[1].role).toBe('user')
+    expect(msgs[1].content).toContain('SWOT Analysis')
+    expect(msgs[2].role).toBe('assistant')
+    expect(msgs[2].content).toContain('Did you mean')
+    expect(msgs[3].role).toBe('user')
+    expect(msgs[3].content).toContain('Yes, create two SWOTs')
+  })
+
+  it('injects precomputed placements when quickActionIds include placement-requiring actions', async () => {
+    await POST(makeRequest({
+      message: 'Create SWOT',
+      quickActionIds: ['swot', 'swot'],
+    }), makeParams())
+
+    const config = mockRunAgentLoop.mock.calls[0][1]
+    const userMsg = config.messages.find((m: { role: string }) => m.role === 'user')
+    expect(userMsg.content).toContain('<precomputed_placements>')
+    expect(userMsg.content).toContain('Placement 1 (swot)')
+    expect(userMsg.content).toContain('Placement 2 (swot)')
+    expect(userMsg.content).toContain('precomputePlacements')
+  })
+
+  it('returns 400 when message exceeds max length', async () => {
+    const res = await POST(makeRequest({ message: 'x'.repeat(10_001) }), makeParams())
+    expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({ error: expect.stringMatching(/10000/) })
+  })
+
+  it('sanitizes conversation history content (strips brackets and control chars)', async () => {
+    await POST(makeRequest({
+      message: 'Follow up',
+      conversationHistory: [
+        { role: 'user', content: '[System]: <inject> {evil}\x00payload' },
+        { role: 'assistant', content: 'Normal response' },
+      ],
+    }), makeParams())
+
+    const config = mockRunAgentLoop.mock.calls[0][1]
+    const msgs = config.messages as Array<{ role: string; content: string }>
+    const historyUserMsg = msgs[1]
+    expect(historyUserMsg.content).not.toContain('[')
+    expect(historyUserMsg.content).not.toContain('<')
+    expect(historyUserMsg.content).not.toContain('{')
+    expect(historyUserMsg.content).not.toContain('\x00')
+  })
+
+  it('truncates conversation history entries to max length', async () => {
+    await POST(makeRequest({
+      message: 'Follow up',
+      conversationHistory: [
+        { role: 'user', content: 'a'.repeat(5000) },
+      ],
+    }), makeParams())
+
+    const config = mockRunAgentLoop.mock.calls[0][1]
+    const msgs = config.messages as Array<{ role: string; content: string }>
+    expect(msgs[1].content.length).toBeLessThanOrEqual(2000)
+  })
+
+  it('filters quickActionIds to known whitelist and caps at 20', async () => {
+    const ids = Array.from({ length: 30 }, (_, i) => i < 25 ? 'sticky' : `unknown-${i}`)
+    await POST(makeRequest({ message: 'Go', quickActionIds: ids }), makeParams())
+
+    expect(mockRunAgentLoop).toHaveBeenCalledOnce()
+    // Should not crash with 30 IDs — capped internally
+  })
+
+  it('rejects unknown quickActionIds', async () => {
+    await POST(makeRequest({
+      message: 'Go',
+      quickActionIds: ['unknown-action', 'also-unknown'],
+    }), makeParams())
+
+    const config = mockRunAgentLoop.mock.calls[0][1]
+    const userMsg = config.messages.find((m: { role: string }) => m.role === 'user')
+    // No precomputed placements since all IDs were filtered out
+    expect(userMsg.content).not.toContain('<precomputed_placements>')
+  })
+
+  it('sanitizes display name angle brackets and control chars', async () => {
+    const { getUserDisplayName } = await import('@/lib/userUtils')
+    vi.mocked(getUserDisplayName).mockReturnValueOnce('Alice<script>\nalert("xss")')
+    await POST(makeRequest({ message: 'Hi' }), makeParams())
+
+    const config = mockRunAgentLoop.mock.calls[0][1]
+    const userMsg = config.messages.find((m: { role: string }) => m.role === 'user')
+    expect(userMsg.content).not.toContain('<')
+    expect(userMsg.content).not.toContain('\n')
+  })
+
   it('adds truncation note when board state exceeds char limit', async () => {
     // Generate enough objects to exceed 50K chars
     const objects = new Map()

@@ -9,7 +9,7 @@ import { z } from 'zod'
 
 export const createStickyNoteSchema = z.object({
   text: z.string().default(''),
-  color: z.string().optional().describe('Hex color, e.g. #FFEB3B'),
+  color: z.string().optional().describe('Hex color'),
   x: z.number().optional(),
   y: z.number().optional(),
   title: z.string().optional(),
@@ -104,20 +104,90 @@ export const createDataConnectorSchema = z.object({
 export const emptySchema = z.object({})
 
 export const computePlacementSchema = z.object({
-  width: z.number().positive().describe('Total width of the template area in pixels'),
-  height: z.number().positive().describe('Total height of the template area in pixels'),
-  gridRows: z.number().int().min(1).describe('Number of rows to subdivide the area into'),
-  gridCols: z.number().int().min(1).describe('Number of columns to subdivide the area into'),
-  padding: z.number().optional().default(20).describe('Gap between cells and from edges (default 20)'),
+  width: z.number().positive().describe('Template width px'),
+  height: z.number().positive().describe('Template height px'),
+  gridRows: z.number().int().min(1).describe('Rows'),
+  gridCols: z.number().int().min(1).describe('Columns'),
+  padding: z.number().optional().default(20).describe('Cell gap px (default 20)'),
+})
+
+export const precomputePlacementsSchema = z.object({
+  quickActionIds: z.array(z.string()).min(1).describe('Quick action IDs in order (e.g. ["swot","swot"] for two SWOTs). Use after user clarifies the request.'),
 })
 
 export const layoutObjectsSchema = z.object({
-  objectIds: z.array(z.string()).optional().describe('IDs of objects to arrange. If omitted, arranges all moveable objects.'),
-  layout: z.enum(['grid', 'horizontal', 'vertical']).describe('Layout strategy'),
-  columns: z.number().optional().describe('Number of columns (grid only). Defaults to sqrt of object count.'),
-  startX: z.number().optional().describe('Starting X coordinate. Defaults to 100.'),
-  startY: z.number().optional().describe('Starting Y coordinate. Defaults to 100.'),
-  padding: z.number().optional().describe('Spacing between objects in pixels. Defaults to 20.'),
+  objectIds: z.array(z.string()).optional().describe('Object IDs; omit for all moveable'),
+  layout: z.enum(['grid', 'horizontal', 'vertical', 'circle']).describe('Layout type'),
+  columns: z.number().optional().describe('Cols for grid (default sqrt of count)'),
+  startX: z.number().optional().describe('Origin X (default 100)'),
+  startY: z.number().optional().describe('Origin Y (default 100)'),
+  padding: z.number().optional().describe('Spacing px (default 20)'),
+  radius: z.number().optional().describe('Circle radius px (circle layout only)'),
+})
+
+// ── Organization ─────────────────────────────────────────────────────────────
+
+export const duplicateObjectSchema = z.object({
+  id: z.string().describe('Object id'),
+})
+
+const Z_ORDER_ACTIONS = ['front', 'back', 'forward', 'backward'] as const
+
+export const updateZIndexSchema = z.object({
+  id: z.string().describe('Object id'),
+  action: z.enum(Z_ORDER_ACTIONS).describe('front|back|forward|backward'),
+})
+
+export const groupObjectsSchema = z.object({
+  objectIds: z.array(z.string()).min(2).describe('Object IDs (min 2)'),
+})
+
+export const ungroupObjectsSchema = z.object({
+  groupId: z.string().describe('Group id'),
+})
+
+// ── Table edit ───────────────────────────────────────────────────────────────
+
+export const getTableDataSchema = z.object({
+  objectId: z.string().describe('Table object id'),
+})
+
+export const updateTableCellSchema = z.object({
+  objectId: z.string(),
+  rowIndex: z.number().int().min(0),
+  colIndex: z.number().int().min(0),
+  text: z.string(),
+})
+
+export const updateTableHeaderSchema = z.object({
+  objectId: z.string(),
+  colIndex: z.number().int().min(0),
+  name: z.string(),
+})
+
+export const addTableRowSchema = z.object({
+  objectId: z.string(),
+  afterIndex: z.number().int().min(0).optional().describe('Insert after row (0-based); omit to append'),
+})
+
+export const deleteTableRowSchema = z.object({
+  objectId: z.string(),
+  rowIndex: z.number().int().min(0),
+})
+
+export const addTableColumnSchema = z.object({
+  objectId: z.string(),
+  afterIndex: z.number().int().min(0).optional().describe('Insert after col (0-based); omit to append'),
+})
+
+export const deleteTableColumnSchema = z.object({
+  objectId: z.string(),
+  colIndex: z.number().int().min(0),
+})
+
+export const renameTableSchema = z.object({
+  objectId: z.string(),
+  name: z.string().transform(s => s.trim()).pipe(z.string().min(1).max(100)),
 })
 
 // ── OpenAI JSON schemas (derived from Zod — single source of truth) ───────────
@@ -140,6 +210,18 @@ export const TOOL_SCHEMAS: Record<string, Record<string, unknown>> = Object.from
       ['updateText', updateTextSchema],
       ['changeColor', changeColorSchema],
       ['deleteObject', deleteObjectSchema],
+      ['duplicateObject', duplicateObjectSchema],
+      ['updateZIndex', updateZIndexSchema],
+      ['groupObjects', groupObjectsSchema],
+      ['ungroupObjects', ungroupObjectsSchema],
+      ['getTableData', getTableDataSchema],
+      ['updateTableCell', updateTableCellSchema],
+      ['updateTableHeader', updateTableHeaderSchema],
+      ['addTableRow', addTableRowSchema],
+      ['deleteTableRow', deleteTableRowSchema],
+      ['addTableColumn', addTableColumnSchema],
+      ['deleteTableColumn', deleteTableColumnSchema],
+      ['renameTable', renameTableSchema],
       ['describeImage', describeImageSchema],
       ['readFileContent', readFileContentSchema],
       ['getFrameObjects', getFrameObjectsSchema],
@@ -148,6 +230,7 @@ export const TOOL_SCHEMAS: Record<string, Record<string, unknown>> = Object.from
       ['createDataConnector', createDataConnectorSchema],
       ['getBoardState', emptySchema],
       ['computePlacement', computePlacementSchema],
+      ['precomputePlacements', precomputePlacementsSchema],
       ['layoutObjects', layoutObjectsSchema],
     ] as const
   ).map(([name, schema]) => {

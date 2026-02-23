@@ -1,13 +1,17 @@
 import { memo } from 'react'
-import { Group, Rect, Text, Line } from 'react-konva'
+import { Group, Rect, Line } from 'react-konva'
 import Konva from 'konva'
 import { ShapeProps, handleShapeTransformEnd, getOutlineProps, getShadowProps, areShapePropsEqual } from './shapeUtils'
-import { RICH_TEXT_ENABLED } from '@/lib/richText'
+import { RichTextBlocks } from './RichTextBlocks'
+import type { Block } from '@/lib/richText/tipTapToBlocks'
+
+const TITLE_EXCLUDE_TYPES: Block['type'][] = ['bulletItem', 'orderedItem', 'taskItem']
 
 interface StickyNoteProps extends ShapeProps {
   onStartEdit: (id: string, node: Konva.Text | null, field?: 'text' | 'title') => void
   isEditing?: boolean
   editingField?: 'text' | 'title'
+  onToggleTask?: (blockIndex: number, checked: boolean) => void
 }
 
 const TITLE_PAD_X = 10
@@ -31,6 +35,7 @@ export const StickyNote = memo(function StickyNote({
   dragBoundFunc,
   isEditing = false,
   editingField,
+  onToggleTask,
 }: StickyNoteProps) {
   const handleDragStart = () => onDragStart?.(object.id)
 
@@ -49,18 +54,14 @@ export const StickyNote = memo(function StickyNote({
   const handleDblClick = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
     const stage = e.target.getStage()
     if (!stage) return
-    // Determine which Text node was clicked — title or body
     const target = e.target
-    if (target instanceof Konva.Text) {
-      const field = target.name() === 'title' ? 'title' : 'text'
-      onStartEdit(object.id, target, field)
+    const name = target.name?.() || ''
+    if (name === 'title') {
+      // Title hit area clicked — start title editing
+      onStartEdit(object.id, null, 'title')
     } else {
-      // Clicked on background — find body text node
-      const group = target.findAncestor('Group') || target
-      const textNodes = (group as Konva.Group).find('Text')
-      const bodyNode = textNodes.find((n: Konva.Node) => n.name() === 'body') as Konva.Text | undefined
-      // bodyNode may be absent when RICH_TEXT_ENABLED and rich_text is set (Konva node hidden)
-      onStartEdit(object.id, bodyNode ?? null, 'text')
+      // Body area — start text editing
+      onStartEdit(object.id, null, 'text')
     }
   }
 
@@ -118,24 +119,31 @@ export const StickyNote = memo(function StickyNote({
       />
       {/* Title text */}
       {!(isEditing && editingField === 'title') && (
-        <Text
-          name="title"
+        <RichTextBlocks
+          richText={object.title_rich_text ?? null}
+          plainText={titleText}
           x={TITLE_PAD_X}
           y={TITLE_PAD_Y}
           width={titleAvailW}
           height={TITLE_FONT_SIZE * TITLE_LINE_HEIGHT}
-          text={titleText}
-          fontSize={TITLE_FONT_SIZE}
-          fontFamily={object.font_family || 'sans-serif'}
-          fontStyle="bold"
-          fill={titleColor}
-          align={object.text_align ?? 'left'}
-          verticalAlign="top"
-          wrap="none"
-          ellipsis={true}
-          lineHeight={TITLE_LINE_HEIGHT}
+          baseFontSize={TITLE_FONT_SIZE}
+          baseFontFamily={object.font_family || 'sans-serif'}
+          baseColor={titleColor}
+          align={object.text_align as 'left' | 'center' | 'right' | undefined ?? 'left'}
+          verticalAlign="middle"
+          excludeBlockTypes={TITLE_EXCLUDE_TYPES}
         />
       )}
+      {/* Invisible hit area for title double-click (replaces old Text node) */}
+      <Rect
+        name="title"
+        x={TITLE_PAD_X}
+        y={TITLE_PAD_Y}
+        width={titleAvailW}
+        height={TITLE_FONT_SIZE * TITLE_LINE_HEIGHT}
+        fill="transparent"
+        listening={true}
+      />
       {/* Divider line */}
       <Line
         points={[TITLE_PAD_X, dividerY, object.width - TITLE_PAD_X, dividerY]}
@@ -143,23 +151,20 @@ export const StickyNote = memo(function StickyNote({
         strokeWidth={1}
       />
       {/* Body text */}
-      {!(isEditing && editingField === 'text') && !(RICH_TEXT_ENABLED && object.rich_text) && (
-        <Text
-          name="body"
+      {!(isEditing && editingField === 'text') && (
+        <RichTextBlocks
+          richText={object.rich_text ?? null}
+          plainText={object.text || ''}
           x={bodyPadding}
           y={bodyY}
           width={Math.max(1, object.width - bodyPadding * 2)}
           height={bodyHeight}
-          text={object.text || ''}
-          fontSize={object.font_size}
-          fontFamily={object.font_family || 'sans-serif'}
-          fontStyle={object.font_style || 'normal'}
-          fill={bodyColor}
-          align={object.text_align ?? 'left'}
-          verticalAlign={object.text_vertical_align ?? 'top'}
-          wrap="word"
-          ellipsis={true}
+          baseFontSize={object.font_size}
+          baseFontFamily={object.font_family || 'sans-serif'}
+          baseColor={bodyColor}
+          align={object.text_align as 'left' | 'center' | 'right' | undefined}
           lineHeight={1.4}
+          onToggleTask={onToggleTask}
         />
       )}
     </Group>

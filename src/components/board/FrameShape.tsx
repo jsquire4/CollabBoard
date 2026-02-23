@@ -2,9 +2,13 @@ import { memo } from 'react'
 import { Group, Rect, Text } from 'react-konva'
 import Konva from 'konva'
 import { ShapeProps, handleShapeTransformEnd, getShadowProps, areShapePropsEqual } from './shapeUtils'
+import { RichTextBlocks } from './RichTextBlocks'
+import type { Block } from '@/lib/richText/tipTapToBlocks'
+
+const TITLE_EXCLUDE_TYPES: Block['type'][] = ['bulletItem', 'orderedItem', 'taskItem']
 
 interface FrameShapeProps extends ShapeProps {
-  onStartEdit: (id: string, node: Konva.Text) => void
+  onStartEdit: (id: string, node: Konva.Text | null, field?: 'text' | 'title') => void
   isEditing?: boolean
 }
 
@@ -65,14 +69,8 @@ export const FrameShape = memo(function FrameShape({
     onSelect(object.id)
   }
 
-  const handleDblClick = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
-    const stage = e.target.getStage()
-    if (!stage) return
-    const group = e.target.findAncestor('Group') || e.target
-    const textNode = (group as Konva.Group).findOne('Text') as Konva.Text
-    if (textNode) {
-      onStartEdit(object.id, textNode)
-    }
+  const handleDblClick = () => {
+    onStartEdit(object.id, null, 'text')
   }
 
   const handleTransformEnd = (e: Konva.KonvaEventObject<Event>) => {
@@ -140,19 +138,19 @@ export const FrameShape = memo(function FrameShape({
       />
       {/* Title text — hidden during editing to avoid duplication with textarea overlay */}
       {!isEditing && (
-        <Text
+        <RichTextBlocks
+          richText={object.rich_text ?? null}
+          plainText={titleText}
           x={titlePadX}
           y={titlePadY}
           width={availableWidth}
           height={titleHeight - titlePadY}
-          text={titleText}
-          fontSize={titleFontSize}
-          fontFamily="sans-serif"
-          fontStyle="bold"
-          fill={object.text_color ?? 'rgba(28,28,30,0.55)'}
-          wrap="word"
-          ellipsis={true}
-          lineHeight={titleLineHeight}
+          baseFontSize={titleFontSize}
+          baseFontFamily="sans-serif"
+          baseColor={object.text_color ?? 'rgba(28,28,30,0.55)'}
+          align={object.text_align as 'left' | 'center' | 'right' | undefined ?? 'left'}
+          verticalAlign="middle"
+          excludeBlockTypes={TITLE_EXCLUDE_TYPES}
         />
       )}
       {/* Slide badge — shown when this frame is a slide */}

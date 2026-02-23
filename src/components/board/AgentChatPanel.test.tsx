@@ -119,7 +119,7 @@ describe('AgentChatPanel', () => {
     expect(screen.getByText('Thinking…')).toBeInTheDocument()
   })
 
-  it('renders user message with indigo background and assistant with slate', () => {
+  it('renders user message with navy background and assistant with parchment', () => {
     const userMsg = makeMessage({ id: 'u1', role: 'user', content: 'Hi' })
     const assistantMsg = makeMessage({ id: 'a1', role: 'assistant', content: 'Hello' })
     vi.mocked(useAgentChat).mockReturnValue(defaultHookReturn({ messages: [userMsg, assistantMsg] }))
@@ -128,8 +128,8 @@ describe('AgentChatPanel', () => {
 
     const userBubble = screen.getByText('Hi')
     const assistantBubble = screen.getByText('Hello')
-    expect(userBubble.className).toContain('bg-indigo-500')
-    expect(assistantBubble.className).toContain('bg-slate-100')
+    expect(userBubble.className).toContain('bg-navy')
+    expect(assistantBubble.className).toContain('bg-parchment-dark')
   })
 
   it('calls sendMessage on Enter with trimmed input and clears input', async () => {
@@ -159,13 +159,13 @@ describe('AgentChatPanel', () => {
     expect(sendMessage).not.toHaveBeenCalled()
   })
 
-  it('Send is disabled when isLoading', () => {
+  it('input stays enabled when isLoading for queueing', () => {
     vi.mocked(useAgentChat).mockReturnValue(defaultHookReturn({ isLoading: true }))
 
     render(<AgentChatPanel {...DEFAULTS} />)
 
     const textarea = screen.getByPlaceholderText(/ask this agent/i)
-    expect(textarea).toBeDisabled()
+    expect(textarea).not.toBeDisabled()
   })
 
   it('TOOL_LABELS has entries for all 16 registered tools', async () => {

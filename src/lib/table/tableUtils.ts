@@ -3,6 +3,7 @@ import {
   type TableColumn,
   type TableRow,
   type TableData,
+  TABLE_TITLE_HEIGHT,
   MIN_COL_WIDTH,
   MIN_ROW_HEIGHT,
   DEFAULT_COL_WIDTH,
@@ -15,7 +16,7 @@ import {
  * Factory: create a TableData with `cols` columns and `rows` rows, all with
  * default widths/heights and empty cells.
  */
-export function createDefaultTableData(cols: number, rows: number): TableData {
+export function createDefaultTableData(cols: number, rows: number, name?: string): TableData {
   const columns: TableColumn[] = Array.from({ length: cols }, (_, i) => ({
     id: crypto.randomUUID(),
     name: `Column ${i + 1}`,
@@ -34,7 +35,7 @@ export function createDefaultTableData(cols: number, rows: number): TableData {
     }
   })
 
-  return { columns, rows: tableRows }
+  return { columns, rows: tableRows, ...(name ? { name } : {}) }
 }
 
 /**
@@ -199,6 +200,13 @@ export function setCellStyle(
 }
 
 /**
+ * Set the table display name. Pass empty string to clear.
+ */
+export function setTableName(data: TableData, name: string): TableData {
+  return { ...data, name: name.trim() === '' ? null : name }
+}
+
+/**
  * Update the header name for the column at `colIndex`.
  */
 export function setHeaderName(
@@ -220,10 +228,12 @@ export function getTableWidth(data: TableData): number {
 }
 
 /**
- * DEFAULT_HEADER_HEIGHT plus sum of all row heights.
+ * Optional title bar height + DEFAULT_HEADER_HEIGHT + sum of all row heights.
  */
 export function getTableHeight(data: TableData): number {
+  const titleH = data.name ? TABLE_TITLE_HEIGHT : 0
   return (
+    titleH +
     DEFAULT_HEADER_HEIGHT +
     data.rows.reduce((sum, row) => sum + row.height, 0)
   )
@@ -245,11 +255,12 @@ export function getColumnXOffsets(data: TableData): number[] {
 
 /**
  * Returns an array of cumulative y positions for each row's top edge.
- * The first value is DEFAULT_HEADER_HEIGHT (rows start below the header).
+ * The first value is titleOffset + DEFAULT_HEADER_HEIGHT (rows start below the header + optional title).
  */
 export function getRowYOffsets(data: TableData): number[] {
+  const titleH = data.name ? TABLE_TITLE_HEIGHT : 0
   const offsets: number[] = []
-  let y = DEFAULT_HEADER_HEIGHT
+  let y = titleH + DEFAULT_HEADER_HEIGHT
   for (const row of data.rows) {
     offsets.push(y)
     y += row.height
@@ -305,6 +316,7 @@ export function parseTableData(json: unknown): TableData | null {
     return null
   }
 
+  // name is optional (stub for future table naming) — ignore if present, no validation
   // Validate columns
   for (const col of record.columns) {
     if (

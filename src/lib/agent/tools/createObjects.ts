@@ -8,6 +8,7 @@ import { getMaxZIndex, broadcastChanges, loadBoardState } from '@/lib/agent/boar
 import { findOpenArea } from './placement'
 import type { BoardObject } from '@/types/board'
 import { buildAndInsertObject, makeToolDef, getConnectedObjectIds } from './helpers'
+import { plainTextToTipTap } from '@/lib/richText'
 import {
   createStickyNoteSchema,
   createShapeSchema,
@@ -23,7 +24,7 @@ export const createObjectTools: ToolDef[] = [
 
   makeToolDef(
     'createStickyNote',
-    'Create a sticky note on the board with optional text and color.',
+    'Create a sticky note. Optional: text, color, x, y, title.',
     createStickyNoteSchema,
     async (ctx, { text, color, x, y, title }) => {
       const defaults = getShapeDefaults('sticky_note')
@@ -42,11 +43,12 @@ export const createObjectTools: ToolDef[] = [
         height: defaults.height,
         rotation: 0,
         text,
+        rich_text: JSON.stringify(plainTextToTipTap(text || '')),
         color: color ?? defaults.color,
         font_size: defaults.font_size ?? 14,
         z_index: getMaxZIndex(ctx.state) + 1,
         parent_id: null,
-        ...(title ? { title } : {}),
+        ...(title ? { title, title_rich_text: JSON.stringify(plainTextToTipTap(title)) } : {}),
       })
       if (!result.success) return { error: result.error }
       broadcastChanges(ctx.boardId, [{ action: 'create', object: result.obj as Partial<BoardObject> & { id: string } }])
@@ -56,7 +58,7 @@ export const createObjectTools: ToolDef[] = [
 
   makeToolDef(
     'createShape',
-    'Create a shape on the board (rectangle, circle, triangle, chevron, parallelogram, ngon).',
+    'Create shape: rectangle, circle, triangle, chevron, parallelogram, ngon.',
     createShapeSchema,
     async (ctx, { type, x, y, width, height, color, text, sides }) => {
       const defaults = getShapeDefaults(type)
@@ -70,13 +72,15 @@ export const createObjectTools: ToolDef[] = [
         px = pos.x
         py = pos.y
       }
+      const shapeText = text ?? defaults.text ?? ''
       const fields: Record<string, unknown> = {
         x: px,
         y: py,
         width: width ?? defaults.width,
         height: height ?? defaults.height,
         rotation: 0,
-        text: text ?? defaults.text ?? '',
+        text: shapeText,
+        rich_text: shapeText ? JSON.stringify(plainTextToTipTap(shapeText)) : null,
         color: color ?? defaults.color,
         font_size: defaults.font_size ?? 14,
         z_index: getMaxZIndex(ctx.state) + 1,
@@ -92,7 +96,7 @@ export const createObjectTools: ToolDef[] = [
 
   makeToolDef(
     'createFrame',
-    'Create a frame (container) on the board to group objects.',
+    'Create a frame (container) for grouping objects.',
     createFrameSchema,
     async (ctx, { title, x, y, width, height, color }) => {
       const defaults = getShapeDefaults('frame')
@@ -113,6 +117,7 @@ export const createObjectTools: ToolDef[] = [
         height: h,
         rotation: 0,
         text: title,
+        rich_text: title ? JSON.stringify(plainTextToTipTap(title)) : null,
         color: color ?? defaults.color,
         font_size: 14,
         z_index: getMaxZIndex(ctx.state) + 1,
@@ -127,7 +132,7 @@ export const createObjectTools: ToolDef[] = [
 
   makeToolDef(
     'createTable',
-    'Create a table on the board with specified columns and rows.',
+    'Create a table with columns×rows.',
     createTableSchema,
     async (ctx, { columns, rows, x, y, title }) => {
       const defaults = getShapeDefaults('table')
@@ -139,7 +144,7 @@ export const createObjectTools: ToolDef[] = [
         px = pos.x
         py = pos.y
       }
-      const tableData = createDefaultTableData(columns, rows)
+      const tableData = createDefaultTableData(columns, rows, title || undefined)
       const result = await buildAndInsertObject(ctx, 'table', {
         x: px,
         y: py,
@@ -152,6 +157,7 @@ export const createObjectTools: ToolDef[] = [
         z_index: getMaxZIndex(ctx.state) + 1,
         parent_id: null,
         table_data: serializeTableData(tableData),
+        rich_text: title ? JSON.stringify(plainTextToTipTap(title)) : null,
       })
       if (!result.success) return { error: result.error }
       broadcastChanges(ctx.boardId, [{ action: 'create', object: result.obj as Partial<BoardObject> & { id: string } }])
@@ -161,7 +167,7 @@ export const createObjectTools: ToolDef[] = [
 
   makeToolDef(
     'createConnector',
-    'Create a line or arrow connecting two objects on the board.',
+    'Create a line or arrow between two objects.',
     createConnectorSchema,
     async (ctx, { type, startObjectId, endObjectId, startAnchor, endAnchor, color }) => {
       // Scope guard: both endpoints must be connected to the agent
@@ -243,6 +249,7 @@ export const createObjectTools: ToolDef[] = [
         height: defaults.height,
         rotation: 0,
         text: summary,
+        rich_text: JSON.stringify(plainTextToTipTap(summary)),
         color: defaults.color,
         font_size: 12,
         z_index: getMaxZIndex(ctx.state) + 1,

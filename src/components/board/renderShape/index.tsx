@@ -25,7 +25,7 @@ export function renderShape(
   const {
     handleShapeDragEnd, handleShapeDragMove, handleShapeDragStart,
     handleShapeSelect, handleShapeRef, onTransformEnd, handleContextMenu,
-    handleShapeDoubleClick, handleStartEdit, shapeDragBoundFunc,
+    handleShapeDoubleClick, handleStartEdit, handleToggleTask, shapeDragBoundFunc,
     onEndpointDragMove, onEndpointDragEnd,
     onWaypointDragEnd, onWaypointInsert, onWaypointDelete,
     getAutoRoutePoints, autoRoutePointsRef,
@@ -56,6 +56,7 @@ export function renderShape(
         isEditing={editingId === obj.id}
         editable={shapeEditable}
         dragBoundFunc={shapeDragBoundFunc}
+        onToggleTask={handleToggleTask ? (blockIndex, checked) => handleToggleTask(obj.id, blockIndex, checked) : undefined}
       />
     )
   }
@@ -79,6 +80,7 @@ export function renderShape(
           dragBoundFunc={shapeDragBoundFunc}
           isEditing={editingId === obj.id}
           editingField={editingId === obj.id ? editingField : undefined}
+          onToggleTask={handleToggleTask ? (blockIndex, checked) => handleToggleTask(obj.id, blockIndex, checked) : undefined}
         />
       )
     case 'frame':
@@ -152,8 +154,10 @@ export function renderShape(
           editable={shapeEditable}
           dragBoundFunc={shapeDragBoundFunc}
           isEditing={editingId === obj.id}
+          editingField={editingId === obj.id ? editingField : undefined}
           editingCellCoords={editingId === obj.id ? editingCellCoords : null}
           onStartCellEdit={handleStartCellEdit}
+          onStartEdit={handleStartEdit}
           onTableDataChange={handleTableDataChange}
           onAddRowAt={handleAddRowAt}
           onDeleteRowAt={handleDeleteRowAt}

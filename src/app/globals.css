@@ -37,6 +37,32 @@
     from { opacity: 1; transform: scale(1); }
     to   { opacity: 0; transform: scale(0.5); }
   }
+  /* Board Assistant panel flair */
+  --animate-assistant-in: assistant-in 280ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  @keyframes assistant-in {
+    from { opacity: 0; transform: translateX(16px) scale(0.96); }
+    to   { opacity: 1; transform: translateX(0) scale(1); }
+  }
+  --animate-assistant-pulse: assistant-pulse 2.5s ease-in-out infinite;
+  @keyframes assistant-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(27, 58, 107, 0.2); }
+    50%  { box-shadow: 0 0 0 6px rgba(27, 58, 107, 0); }
+  }
+  --animate-chip-in: chip-in 200ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  @keyframes chip-in {
+    from { opacity: 0; transform: scale(0.8); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  --animate-bubble-in: bubble-in 220ms cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
+  @keyframes bubble-in {
+    from { opacity: 0; transform: translateY(4px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  --animate-typing-pulse: typing-pulse 0.6s ease-in-out infinite;
+  @keyframes typing-pulse {
+    0%, 100% { opacity: 0.35; transform: scaleY(0.7); }
+    50% { opacity: 0.9; transform: scaleY(1); }
+  }
 }
 
 body {

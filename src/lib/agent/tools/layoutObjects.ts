@@ -3,10 +3,11 @@
  */
 
 import { loadBoardState, broadcastChanges } from '@/lib/agent/boardState'
+import { precomputePlacements as precomputePlacementsFn } from '@/lib/agent/precomputePlacements'
 import { makeToolDef, advanceClock, updateFields } from './helpers'
 import { stampFields } from '@/lib/crdt/merge'
 import { findOpenArea } from './placement'
-import { layoutObjectsSchema, computePlacementSchema } from './schemas'
+import { layoutObjectsSchema, computePlacementSchema, precomputePlacementsSchema } from './schemas'
 import type { BoardObject } from '@/types/board'
 import type { ToolContext, ToolDef } from './types'
 
@@ -53,7 +54,7 @@ export const layoutObjectTools: ToolDef[] = [
 
   makeToolDef(
     'computePlacement',
-    'Compute an open area on the board and subdivide it into a grid of cells. Returns absolute coordinates for placing objects. Pure computation — no objects are created or moved.',
+    'Compute grid cells for placement. Returns origin + cells with x,y,w,h,centerX,centerY. No objects created.',
     computePlacementSchema,
     async (ctx, args) => {
       // Refresh state to get latest object positions
@@ -76,8 +77,24 @@ export const layoutObjectTools: ToolDef[] = [
   ),
 
   makeToolDef(
+    'precomputePlacements',
+    'Get placements for multiple quick actions at once. Call when the request was clarified (e.g. user said "just one SWOT") — returns fresh placements for the given quickActionIds. Uses current board state.',
+    precomputePlacementsSchema,
+    async (ctx, args) => {
+      const freshState = await loadBoardState(ctx.boardId)
+      ctx.state = freshState
+      const placements = precomputePlacementsFn(
+        freshState.objects,
+        args.quickActionIds,
+        ctx.viewportCenter,
+      )
+      return { placements }
+    },
+  ),
+
+  makeToolDef(
     'layoutObjects',
-    'Arrange objects on the board in a grid, horizontal row, or vertical column. If objectIds is omitted, arranges all moveable objects (sticky notes, shapes, frames, etc.).',
+    'Arrange objects in grid, horizontal, or vertical layout. Omit objectIds to arrange all moveable objects.',
     layoutObjectsSchema,
     async (ctx, args) => {
       // Refresh state
@@ -103,6 +120,7 @@ export const layoutObjectTools: ToolDef[] = [
       const startX = args.startX ?? 100
       const startY = args.startY ?? 100
       const padding = args.padding ?? 20
+      const radius = args.radius
 
       // Compute positions based on layout strategy
       const positions: Array<{ id: string; x: number; y: number }> = []
@@ -140,6 +158,18 @@ export const layoutObjectTools: ToolDef[] = [
           const w = obj!.width || 200
           positions.push({ id: obj!.id, x: currentX, y: startY })
           currentX += w + padding
+        }
+      } else if (layout === 'circle') {
+        const n = targets.length
+        const r = radius ?? Math.max(150, (Math.max(...targets.map(o => (o!.width || 200) + (o!.height || 200))) * n) / (2 * Math.PI))
+        const centerX = startX + r
+        const centerY = startY + r
+        for (let i = 0; i < n; i++) {
+          const obj = targets[i]!
+          const angle = (2 * Math.PI * i) / n - Math.PI / 2
+          const x = centerX + r * Math.cos(angle) - (obj.width || 200) / 2
+          const y = centerY + r * Math.sin(angle) - (obj.height || 200) / 2
+          positions.push({ id: obj.id, x, y })
         }
       } else {
         // vertical

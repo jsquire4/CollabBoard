@@ -31,7 +31,6 @@ vi.mock('@/lib/richtext/extensions', () => ({
 }))
 
 vi.mock('@/lib/richText', () => ({
-  RICH_TEXT_ENABLED: true,
   extractPlainText: vi.fn((doc) => {
     if (!doc?.content) return ''
     return doc.content.map((n: { content?: { text?: string }[] }) => n.content?.map(c => c.text ?? '').join('') ?? '').join('\n')
@@ -66,6 +65,8 @@ function getDefaultDeps() {
     onUpdateText: vi.fn(),
     onUpdateTitle: vi.fn(),
     onUpdateRichText: vi.fn(),
+    onUpdateTitleRichText: vi.fn(),
+    onUpdateTableTitle: vi.fn(),
     onEditingChange: vi.fn(),
     onActivity: vi.fn(),
     pendingEditId: null as string | null | undefined,
@@ -114,20 +115,22 @@ describe('useRichTextEditing', () => {
     expect(deps.tryEnterGroup).toHaveBeenCalledWith('r1')
   })
 
-  it('handleStartEdit with title field sets plain text mode', () => {
+  it('handleStartEdit with title field uses TipTap editor', () => {
     const stickyNote = makeStickyNote({ id: 'sn1', title: 'My Title' })
     const deps = createDefaultDeps({ objects: objectsMap(stickyNote) })
+    // Need shapeRefs for title positioning
+    const mockGroup = {
+      getClientRect: () => ({ x: 50, y: 60, width: 200, height: 200 }),
+    }
+    deps.shapeRefs = { current: new Map([['sn1', mockGroup as unknown as Konva.Node]]) }
     const { result } = renderHook(() => useRichTextEditing(deps))
-    const titleNode = {
-      getClientRect: () => ({ x: 50, y: 60, width: 130, height: 20 }),
-      name: () => 'title',
-    } as unknown as Konva.Text
 
     act(() => {
-      result.current.handleStartEdit('sn1', titleNode, 'title')
+      result.current.handleStartEdit('sn1', null, 'title')
     })
     expect(result.current.editingField).toBe('title')
-    expect(result.current.editText).toBe('My Title')
+    // Title now uses TipTap editor, so setContent is called
+    expect(mockEditor.commands.setContent).toHaveBeenCalled()
   })
 
   it('handleFinishEdit calls onUpdateRichText for text field', () => {
@@ -139,26 +142,26 @@ describe('useRichTextEditing', () => {
     act(() => {
       result.current.handleFinishEdit()
     })
-    expect(deps.onUpdateRichText).toHaveBeenCalledWith('r1', expect.any(String), { text: 'Hello', rich_text: null })
+    expect(deps.onUpdateRichText).toHaveBeenCalledWith('r1', expect.any(String), { text: 'Hello', rich_text: null, title: null, title_rich_text: null, table_data: null })
     expect(result.current.editingId).toBeNull()
   })
 
-  it('handleFinishEdit calls onUpdateTitle for title field', () => {
+  it('handleFinishEdit calls onUpdateTitleRichText for sticky note title', () => {
     const stickyNote = makeStickyNote({ id: 'sn1', title: 'My Title' })
     const deps = createDefaultDeps({ objects: objectsMap(stickyNote) })
+    const mockGroup = {
+      getClientRect: () => ({ x: 50, y: 60, width: 200, height: 200 }),
+    }
+    deps.shapeRefs = { current: new Map([['sn1', mockGroup as unknown as Konva.Node]]) }
     const { result } = renderHook(() => useRichTextEditing(deps))
-    const titleNode = {
-      getClientRect: () => ({ x: 50, y: 60, width: 130, height: 20 }),
-      name: () => 'title',
-    } as unknown as Konva.Text
 
     act(() => {
-      result.current.handleStartEdit('sn1', titleNode, 'title')
+      result.current.handleStartEdit('sn1', null, 'title')
     })
     act(() => {
       result.current.handleFinishEdit()
     })
-    expect(deps.onUpdateTitle).toHaveBeenCalledWith('sn1', 'My Title')
+    expect(deps.onUpdateTitleRichText).toHaveBeenCalledWith('sn1', expect.any(String), expect.any(String), expect.objectContaining({ title: 'My Title' }))
   })
 
   it('handleStartEdit loads existing rich_text into editor', () => {
@@ -264,7 +267,7 @@ describe('useRichTextEditing', () => {
     expect(deps.onUpdateRichText).toHaveBeenCalledWith(
       'r1',
       expect.any(String),
-      { text: 'Original', rich_text: null },
+      { text: 'Original', rich_text: null, title: null, title_rich_text: null, table_data: null },
     )
   })
 
@@ -302,7 +305,7 @@ describe('useRichTextEditing', () => {
     act(() => {
       result.current.handleStartEdit('r2', createMockTextNode())
     })
-    expect(deps.onUpdateRichText).toHaveBeenCalledWith('r1', expect.any(String), { text: 'First', rich_text: null })
+    expect(deps.onUpdateRichText).toHaveBeenCalledWith('r1', expect.any(String), { text: 'First', rich_text: null, title: null, title_rich_text: null, table_data: null })
     expect(result.current.editingId).toBe('r2')
   })
 

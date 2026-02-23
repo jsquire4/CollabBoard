@@ -101,7 +101,7 @@ export function useTextEditing({
     const isBold = fontStyle === 'bold' || fontStyle === 'bold italic'
     const isItalic = fontStyle === 'italic' || fontStyle === 'bold italic'
     const textColor = field === 'title' ? (obj.text_color ?? '#374151') : (obj.text_color ?? '#000000')
-    const textAlign = (obj.text_align ?? (obj.type === 'sticky_note' ? 'left' : 'center')) as React.CSSProperties['textAlign']
+    const textAlign = (obj.text_align ?? 'left') as React.CSSProperties['textAlign']
     setTextareaStyle({
       ...TEXTAREA_BASE_STYLE,
       top: `${textRect.y}px`,
@@ -279,7 +279,7 @@ export function useTextEditing({
       const isBold = fontStyle === 'bold' || fontStyle === 'bold italic'
       const isItalic = fontStyle === 'italic' || fontStyle === 'bold italic'
       const textColor = editingField === 'title' ? (obj.text_color ?? '#374151') : (obj.text_color ?? '#000000')
-      const textAlign = (obj.text_align ?? (obj.type === 'sticky_note' ? 'left' : 'center')) as React.CSSProperties['textAlign']
+      const textAlign = (obj.text_align ?? 'left') as React.CSSProperties['textAlign']
       const fontSize = editingField === 'title' ? 14 : obj.font_size
       setTextareaStyle(prev => ({
         ...prev,

@@ -16,7 +16,7 @@ const dmSerifDisplay = DM_Serif_Display({
 
 const rawUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://theoremai.app";
 const baseUrl = rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`;
-const ogImageUrl = `${baseUrl}/theorem_sm_vf-rs.png`;
+const ogImageUrl = `${baseUrl.replace(/\/$/, "")}/theorem_sm_vf-rs.png`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(baseUrl),
@@ -41,6 +41,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Theorem — Where hypotheses become theorems",
     description: "An intelligent strategy canvas for teams that think in frameworks. AI-powered synthesis, real-time collaboration, and a structured workspace.",
+    images: [ogImageUrl],
   },
 };
 
@@ -52,7 +53,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <meta name="image" property="og:image" content={ogImageUrl} />
+        <meta property="og:image" content={ogImageUrl} />
+        <meta property="og:image:secure_url" content={ogImageUrl} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
       </head>
       <body
         className={`${geistSans.variable} ${dmSerifDisplay.variable} antialiased`}

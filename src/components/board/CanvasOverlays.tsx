@@ -56,7 +56,7 @@ function TableCellTextarea({
   }, [onFinish])
 
   return (
-    <div ref={wrapperRef} role="group" onMouseDown={e => e.stopPropagation()}>
+    <div ref={wrapperRef} role="group" className="pointer-events-auto" onMouseDown={e => e.stopPropagation()}>
       <textarea
         ref={textareaRef}
         value={value}

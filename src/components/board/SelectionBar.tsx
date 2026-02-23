@@ -420,7 +420,7 @@ export function SelectionBar({
       aria-label="Selection properties"
       data-keeps-rich-text-alive="true"
       className={[
-        'fixed z-[150]',
+        'fixed z-[150] pointer-events-auto',
         justAppeared ? 'animate-[selection-bar-in]' : '',
       ].join(' ')}
       style={barPos ? { top: barPos.top, left: barPos.left } : { visibility: 'hidden' }}

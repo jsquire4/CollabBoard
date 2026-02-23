@@ -50,13 +50,14 @@ export function ConnectionBanner({ status, showDelay = 2000, onRetry }: Connecti
   const { bg, text } = config[status]
 
   return (
-    <div className={`${bg} flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-2 text-center text-sm font-medium text-white`}>
+    <div role="status" aria-live="polite" className={`${bg} flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-2 text-center text-sm font-medium text-white`}>
       <span>{text}</span>
       {status === 'disconnected' && onRetry && (
         <>
           <button
             type="button"
             onClick={onRetry}
+            aria-label="Retry connection"
             className="rounded border border-white/80 px-2 py-0.5 font-medium hover:bg-white/20"
           >
             Retry
@@ -64,6 +65,7 @@ export function ConnectionBanner({ status, showDelay = 2000, onRetry }: Connecti
           <button
             type="button"
             onClick={() => window.location.reload()}
+            aria-label="Refresh page"
             className="rounded border border-white/80 px-2 py-0.5 font-medium hover:bg-white/20"
           >
             Refresh

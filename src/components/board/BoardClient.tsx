@@ -26,7 +26,6 @@ import type { TipTapDoc } from '@/types/board'
 import type { Editor } from '@tiptap/react'
 import { BoardRole } from '@/types/sharing'
 import { BoardTopBar } from './BoardTopBar'
-import { LeftToolbar } from './LeftToolbar'
 import { EXPANDED_PALETTE } from './ColorPicker'
 import { ShareDialog } from './ShareDialog'
 import { CanvasErrorBoundary } from './CanvasErrorBoundary'
@@ -47,7 +46,7 @@ import { ConnectionBanner } from '@/components/ui/ConnectionBanner'
 import { AgentChatPanel } from './AgentChatPanel'
 import { GlobalAgentPanel } from './GlobalAgentPanel'
 // import { useFileUpload } from '@/hooks/useFileUpload'
-import { FileLibraryPanel, type FileRecord } from './FileLibraryPanel'
+import { FileLibraryPanel } from './FileLibraryPanel'
 import { FilmstripPanel } from './FilmstripPanel'
 import { CommentThread } from './CommentThread'
 // TODO: Re-enable when drag-and-drop file upload is further developed
@@ -837,22 +836,6 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
     }
   }, [addObject, canEdit])
 
-  const handleFilePick = useCallback((file: FileRecord) => {
-    const ct = canvasTransform
-    const centerX = (-ct.x + ct.width / 2) / ct.scale
-    const centerY = (-ct.y + ct.height / 2) / ct.scale
-    addObject('file', centerX, centerY, {
-      file_id: file.id,
-      storage_path: file.storage_path,
-      file_name: file.name,
-      mime_type: file.file_type,
-      file_size: file.size,
-      text: file.name,
-      width: 300,
-      height: 200,
-    })
-  }, [addObject])
-
   const mutationsValue: BoardMutationsContextValue = useMemo(() => ({
     onDrawShape: handleDrawShape,
     onCancelTool: handleCancelTool,
@@ -980,7 +963,7 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
     <BoardProvider value={boardContextValue}>
     <BoardMutationsProvider value={mutationsValue}>
     <BoardToolProvider value={toolValue}>
-    <div className={`relative flex h-screen flex-col ${uiDarkMode ? 'dark' : ''}`}>
+    <main id="main-content" className={`relative flex h-screen flex-col ${uiDarkMode ? 'dark' : ''}`}>
       <BoardTopBar
         boardId={boardId}
         boardName={boardName}
@@ -1009,14 +992,6 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
         </div>
       )}
       <div className="relative flex flex-1">
-        <LeftToolbar
-          userRole={userRole}
-          isEditingText={isEditingText}
-          activePreset={activePreset}
-          onPresetSelect={handlePresetSelect}
-          boardId={boardId}
-          onFilePick={handleFilePick}
-        />
         {/* TODO: Re-enable FileDropZone when drag-and-drop file upload is further developed */}
           <div
             className="relative flex-1 overflow-hidden"
@@ -1151,7 +1126,7 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
           onClose={() => setCommentThread(null)}
         />
       )}
-    </div>
+    </main>
     </BoardToolProvider>
     </BoardMutationsProvider>
     </BoardProvider>

@@ -1,9 +1,13 @@
 /**
  * POST /api/agent/[boardId]/global — global board agent using Chat Completions.
  *
- * Stateless per-request: board state is injected into the user message so the
- * model can act immediately without a getBoardState round-trip. No thread or
- * assistant management — each request is fully self-contained.
+ * Three-tier execution:
+ *   - direct:        Deterministic ops (layout, z-order, group, duplicate). No LLM call.
+ *   - simple-create: Deterministic creation with placement. No LLM call.
+ *   - llm:           Requires LLM reasoning (templates, recolor, summarize, etc.).
+ *
+ * When all actions are direct/simple-create, the response is a synthetic SSE stream
+ * with a canned confirmation — no OpenAI API call at all.
  */
 
 import type { NextRequest } from 'next/server'
@@ -13,8 +17,10 @@ import { loadBoardState } from '@/lib/agent/boardState'
 import { precomputePlacements, formatPrecomputedPlacements } from '@/lib/agent/precomputePlacements'
 import { createTools, createToolContext, getToolDefinitions } from '@/lib/agent/tools'
 import { getUserDisplayName } from '@/lib/userUtils'
-import { runAgentLoop, SSE_HEADERS, getOpenAI } from '@/lib/agent/sse'
+import { runAgentLoop, SSE_HEADERS, sseEvent, getOpenAI } from '@/lib/agent/sse'
 import { UUID_RE } from '@/lib/api/uuidRe'
+import { ACTION_MAP, QUICK_ACTION_TOOL_GROUPS } from '@/lib/agent/actionRegistry'
+import type { ActionDef } from '@/lib/agent/actionRegistry'
 import type { BoardObject } from '@/types/board'
 
 export const maxDuration = 60
@@ -22,34 +28,6 @@ export const maxDuration = 60
 const GLOBAL_MODEL = 'gpt-4o-mini'
 
 const GLOBAL_EXCLUDE = ['saveMemory', 'createDataConnector'] as const
-
-/** Maps quick action IDs to tool names. When set, only these tools are loaded to reduce context. */
-const QUICK_ACTION_TOOL_GROUPS: Record<string, string[]> = {
-  sticky: ['createStickyNote', 'precomputePlacements', 'moveObject'],
-  rectangle: ['createShape', 'precomputePlacements', 'moveObject'],
-  frame: ['createFrame', 'precomputePlacements', 'moveObject'],
-  table: ['createTable', 'precomputePlacements', 'moveObject'],
-  grid: ['layoutObjects', 'getBoardState'],
-  horizontal: ['layoutObjects', 'getBoardState'],
-  vertical: ['layoutObjects', 'getBoardState'],
-  circle: ['layoutObjects', 'getBoardState'],
-  swot: ['createFrame', 'createShape', 'createStickyNote', 'precomputePlacements', 'moveObject'],
-  journey: ['createFrame', 'createShape', 'createStickyNote', 'precomputePlacements', 'moveObject'],
-  retro: ['createFrame', 'createStickyNote', 'precomputePlacements', 'moveObject'],
-  'sticky-grid': ['createFrame', 'createStickyNote', 'precomputePlacements', 'moveObject'],
-  'color-all': ['getBoardState', 'changeColor'],
-  'delete-empty': ['getBoardState', 'deleteObject'],
-  duplicate: ['getBoardState', 'duplicateObject'],
-  group: ['getBoardState', 'groupObjects'],
-  ungroup: ['getBoardState', 'ungroupObjects'],
-  'bring-front': ['getBoardState', 'updateZIndex'],
-  'send-back': ['getBoardState', 'updateZIndex'],
-  'read-table': ['getBoardState', 'getTableData'],
-  'add-table-row': ['getBoardState', 'addTableRow'],
-  'update-table-cell': ['getBoardState', 'getTableData', 'updateTableCell'],
-  summarize: ['getBoardState'],
-  'describe-image': ['getBoardState', 'describeImage'],
-}
 
 /** Tools available when user has selection (no quickActionId). Includes table tools for table selection. */
 const SELECTION_TOOLS = [
@@ -88,8 +66,12 @@ You can read and modify the board using the available tools. Be helpful to all t
 ## Queue awareness
 When the user has multiple requests queued (you'll see [Note: The user has N more request(s) queued...]), you may briefly ask: "I see you have a few things queued — want me to tackle these as a structured plan, or run them one by one?" Or just proceed if the intent is clear (e.g. several quick actions). Keep it short.
 
-## Multi-action requests (2+ quick actions in one message)
-When the user sends multiple quick actions in a single message, STOP before executing. Assess whether the combination makes sense — random mixes (SWOT + Add Frame + Arrange Circle with no selection) often mean the user added things by accident. Ask a clarifying question if unsure. Only execute when confident.
+## Multi-action requests
+When the user sends multiple actions in a single message:
+1. Execute them in the order listed. Each action is numbered.
+2. If an action requires objects that don't exist yet, skip it and note why.
+3. If two actions contradict (e.g. arrange horizontally AND vertically), use the last one.
+4. Brief confirmation at the end listing what was done.
 
 ## Rules
 1. Use the provided board state for content questions. Call getBoardState only to refresh after edits.
@@ -177,8 +159,8 @@ function serializeBoardState(
       w: obj.width,
       h: obj.height,
     }
-    if (obj.text) base.txt = obj.text.length > TEXT_TRUNCATE_LEN ? obj.text.slice(0, TEXT_TRUNCATE_LEN) + '…' : obj.text
-    if (obj.title) base.ttl = obj.title.length > TEXT_TRUNCATE_LEN ? obj.title.slice(0, TEXT_TRUNCATE_LEN) + '…' : obj.title
+    if (obj.text) base.txt = obj.text.length > TEXT_TRUNCATE_LEN ? obj.text.slice(0, TEXT_TRUNCATE_LEN) + '...' : obj.text
+    if (obj.title) base.ttl = obj.title.length > TEXT_TRUNCATE_LEN ? obj.title.slice(0, TEXT_TRUNCATE_LEN) + '...' : obj.title
     if (obj.color && obj.color !== DEFAULT_COLOR) base.c = obj.color
     if (obj.parent_id) base.p = obj.parent_id
     return { obj, base } as { obj: BoardObject; base: Record<string, unknown> }
@@ -205,6 +187,172 @@ function serializeBoardState(
   return { json: JSON.stringify(bases.slice(0, lo)), truncated: true }
 }
 
+// ── Direct execution helpers ────────────────────────────────────────────────
+
+/** Layout action ID → layoutObjects layout arg */
+const LAYOUT_MAP: Record<string, string> = {
+  grid: 'grid',
+  horizontal: 'horizontal',
+  vertical: 'vertical',
+  circle: 'circle',
+}
+
+/** Simple-create action ID → tool name + args builder */
+const SIMPLE_CREATE_MAP: Record<string, { tool: string; args: (placement: { x: number; y: number }) => Record<string, unknown> }> = {
+  sticky: { tool: 'createStickyNote', args: (p) => ({ x: p.x, y: p.y }) },
+  rectangle: { tool: 'createShape', args: (p) => ({ type: 'rectangle', x: p.x, y: p.y }) },
+  frame: { tool: 'createFrame', args: (p) => ({ x: p.x, y: p.y }) },
+  table: { tool: 'createTable', args: (p) => ({ x: p.x, y: p.y, columns: 3, rows: 3 }) },
+}
+
+interface DirectResult {
+  results: string[]
+  failed: string[]
+}
+
+/**
+ * Execute direct-tier and simple-create-tier actions without an LLM call.
+ */
+async function handleDirectActions(
+  actions: ActionDef[],
+  selectedIds: string[],
+  executors: Map<string, (args: unknown) => Promise<unknown>>,
+  placements: Array<{ actionId: string; index: number; origin: { x: number; y: number } }>,
+): Promise<DirectResult> {
+  const results: string[] = []
+  const failed: string[] = []
+  // Track consumed placement indices to handle duplicate action IDs
+  const consumedPlacementIndices = new Set<number>()
+
+  for (const def of actions) {
+    try {
+      // ── Layout actions ──────────────────────────────────────
+      if (def.tier === 'direct' && def.id in LAYOUT_MAP) {
+        const executor = executors.get('layoutObjects')
+        if (!executor) { failed.push(`${def.label}: tool not available`); continue }
+        const result = await executor({ objectIds: selectedIds, layout: LAYOUT_MAP[def.id] }) as Record<string, unknown>
+        if (result.error) { failed.push(`${def.label}: ${result.error}`); continue }
+        const count = (result.movedCount as number) ?? selectedIds.length
+        results.push(`Arranged ${count} object${count !== 1 ? 's' : ''} in ${def.id === 'grid' ? 'a grid' : def.id === 'circle' ? 'a circle' : `a ${def.id} row`}.`)
+        continue
+      }
+
+      // ── Duplicate ──────────────────────────────────────────
+      if (def.id === 'duplicate') {
+        const executor = executors.get('duplicateObject')
+        if (!executor) { failed.push(`${def.label}: tool not available`); continue }
+        let count = 0
+        for (const id of selectedIds) {
+          const result = await executor({ id }) as Record<string, unknown>
+          if (!result.error) count++
+        }
+        results.push(`Duplicated ${count} object${count !== 1 ? 's' : ''}.`)
+        continue
+      }
+
+      // ── Group ──────────────────────────────────────────────
+      if (def.id === 'group') {
+        const executor = executors.get('groupObjects')
+        if (!executor) { failed.push(`${def.label}: tool not available`); continue }
+        const result = await executor({ objectIds: selectedIds }) as Record<string, unknown>
+        if (result.error) { failed.push(`${def.label}: ${result.error}`); continue }
+        results.push(`Grouped ${(result.childCount as number) ?? selectedIds.length} objects.`)
+        continue
+      }
+
+      // ── Ungroup ────────────────────────────────────────────
+      if (def.id === 'ungroup') {
+        const executor = executors.get('ungroupObjects')
+        if (!executor) { failed.push(`${def.label}: tool not available`); continue }
+        // Ungroup each selected group
+        let count = 0
+        for (const id of selectedIds) {
+          const result = await executor({ groupId: id }) as Record<string, unknown>
+          if (!result.error) count += (result.ungroupedCount as number) ?? 1
+        }
+        results.push(`Ungrouped ${count} object${count !== 1 ? 's' : ''}.`)
+        continue
+      }
+
+      // ── Bring to front / Send to back ─────────────────────
+      if (def.id === 'bring-front' || def.id === 'send-back') {
+        const executor = executors.get('updateZIndex')
+        if (!executor) { failed.push(`${def.label}: tool not available`); continue }
+        const action = def.id === 'bring-front' ? 'front' : 'back'
+        let count = 0
+        for (const id of selectedIds) {
+          const result = await executor({ id, action }) as Record<string, unknown>
+          if (!result.error) count++
+        }
+        results.push(def.id === 'bring-front'
+          ? `Brought ${count} object${count !== 1 ? 's' : ''} to front.`
+          : `Sent ${count} object${count !== 1 ? 's' : ''} to back.`)
+        continue
+      }
+
+      // ── Add table row ──────────────────────────────────────
+      if (def.id === 'add-table-row') {
+        const executor = executors.get('addTableRow')
+        if (!executor) { failed.push(`${def.label}: tool not available`); continue }
+        const result = await executor({ objectId: selectedIds[0] }) as Record<string, unknown>
+        if (result.error) { failed.push(`${def.label}: ${result.error}`); continue }
+        results.push('Added a row to the table.')
+        continue
+      }
+
+      // ── Simple-create actions ──────────────────────────────
+      if (def.tier === 'simple-create' && def.id in SIMPLE_CREATE_MAP) {
+        const spec = SIMPLE_CREATE_MAP[def.id]!
+        const executor = executors.get(spec.tool)
+        if (!executor) { failed.push(`${def.label}: tool not available`); continue }
+        // Find next unconsumed precomputed placement for this action
+        const placementIdx = placements.findIndex((p, i) => p.actionId === def.id && !consumedPlacementIndices.has(i))
+        const placement = placementIdx >= 0 ? placements[placementIdx] : undefined
+        if (placementIdx >= 0) consumedPlacementIndices.add(placementIdx)
+        const coords = placement ? placement.origin : { x: 100, y: 100 }
+        const result = await executor(spec.args(coords)) as Record<string, unknown>
+        if (result.error) { failed.push(`${def.label}: ${result.error}`); continue }
+        results.push(def.confirmMessage ?? `Created ${def.label.toLowerCase().replace('add ', '')}.`)
+        continue
+      }
+
+      // Fallback — shouldn't happen for properly classified actions
+      failed.push(`${def.label}: unhandled direct action`)
+    } catch (err) {
+      failed.push(`${def.label}: ${(err as Error).message}`)
+    }
+  }
+
+  return { results, failed }
+}
+
+/**
+ * Build a synthetic SSE response for direct-only requests (no LLM call).
+ */
+function buildDirectSSEResponse(results: string[], failed: string[]): ReadableStream {
+  const encoder = new TextEncoder()
+  const lines: string[] = []
+
+  if (results.length > 0) {
+    lines.push(results.join(' '))
+  }
+  if (failed.length > 0) {
+    lines.push(`Some actions had issues: ${failed.join('; ')}`)
+  }
+
+  const text = lines.join('\n\n') || 'Done.'
+
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(sseEvent({ type: 'text-delta', text })))
+      controller.enqueue(encoder.encode(sseEvent({ type: 'done' })))
+      controller.close()
+    },
+  })
+}
+
+// ── Main handler ────────────────────────────────────────────────────────────
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ boardId: string }> },
@@ -218,8 +366,6 @@ export async function POST(
   if (!process.env.OPENAI_API_KEY) {
     return Response.json({ error: 'OPENAI_API_KEY not configured' }, { status: 500 })
   }
-
-  const openai = getOpenAI()
 
   // ── Auth ──────────────────────────────────────────────────
   const supabase = await createClient()
@@ -268,7 +414,7 @@ export async function POST(
     return Response.json({ error: 'Failed to load board data' }, { status: 503 })
   }
 
-  // ── Build user message with injected board state ──────────
+  // ── Validate inputs ───────────────────────────────────────
   const validViewport = viewportCenter
     && typeof viewportCenter.x === 'number' && typeof viewportCenter.y === 'number'
     && Number.isFinite(viewportCenter.x) && Number.isFinite(viewportCenter.y)
@@ -299,6 +445,85 @@ export async function POST(
           }))
       : []
 
+  // ── Classify actions by tier ──────────────────────────────
+  const validQuickActionIds = Array.isArray(quickActionIds) && quickActionIds.length > 0
+    ? quickActionIds
+        .filter((id): id is string => typeof id === 'string' && id in QUICK_ACTION_TOOL_GROUPS)
+        .slice(0, MAX_QUICK_ACTION_IDS)
+    : quickActionId && typeof quickActionId === 'string' && quickActionId in QUICK_ACTION_TOOL_GROUPS
+      ? [quickActionId]
+      : []
+
+  const actionDefs = validQuickActionIds
+    .map(id => ACTION_MAP[id])
+    .filter((d): d is ActionDef => d !== undefined)
+
+  const directActions = actionDefs.filter(def => def.tier === 'direct' || def.tier === 'simple-create')
+  const llmActions = actionDefs.filter(def => def.tier === 'llm')
+  const allDirect = directActions.length === actionDefs.length && actionDefs.length > 0
+
+  // ── Precompute placements ─────────────────────────────────
+  const placements = precomputePlacements(
+    boardState.objects,
+    validQuickActionIds,
+    validViewport ? viewportCenter : undefined,
+  )
+
+  // ── Build tools + executors (needed for both direct and LLM paths) ────────
+  const quickActionTools =
+    validQuickActionIds.length > 0
+      ? [...new Set(validQuickActionIds.flatMap(id => QUICK_ACTION_TOOL_GROUPS[id] ?? []))]
+      : validConversationHistory.length > 0
+        ? [...new Set(['swot', 'journey', 'retro', 'sticky-grid', 'sticky', 'frame', 'rectangle', 'table'].flatMap(id => QUICK_ACTION_TOOL_GROUPS[id] ?? []))]
+        : undefined
+  const selectionTools =
+    validSelectedIds && validSelectedIds.length > 0 ? [...SELECTION_TOOLS] : undefined
+  const includeTools =
+    quickActionTools && selectionTools
+      ? [...new Set([...quickActionTools, ...selectionTools])]
+      : quickActionTools ?? selectionTools
+  const excludeTools = [...GLOBAL_EXCLUDE]
+  const toolCtx = createToolContext(
+    boardId,
+    user.id,
+    boardState,
+    undefined,
+    validViewport ? viewportCenter : undefined,
+  )
+  const { executors } = createTools(toolCtx, {
+    excludeTools,
+    ...(includeTools ? { includeTools } : {}),
+  })
+
+  // ── Direct-only path: no LLM call ────────────────────────
+  if (allDirect) {
+    const { results, failed } = await handleDirectActions(
+      directActions,
+      validSelectedIds ?? [],
+      executors,
+      placements,
+    )
+    return new Response(buildDirectSSEResponse(results, failed), { headers: SSE_HEADERS })
+  }
+
+  // ── Mixed path: execute direct actions first, then LLM ───
+  let directContext = ''
+  if (directActions.length > 0) {
+    const { results, failed } = await handleDirectActions(
+      directActions,
+      validSelectedIds ?? [],
+      executors,
+      placements,
+    )
+    const parts: string[] = []
+    if (results.length > 0) parts.push(...results)
+    if (failed.length > 0) parts.push(`Failed: ${failed.join('; ')}`)
+    if (parts.length > 0) {
+      directContext = `[Already executed: ${parts.join(' ')}]`
+    }
+  }
+
+  // ── Build user message with injected board state ──────────
   const { json: stateJson, truncated } = serializeBoardState(
     boardState.objects,
     validViewport ? viewportCenter : undefined,
@@ -321,61 +546,58 @@ export async function POST(
       ? `[Note: The user has ${validQueuedPreviews.length} more request(s) queued after this one: ${validQueuedPreviews.join('; ')}. You may briefly ask if they want a structured plan or to process sequentially — or just proceed if the intent is clear. Keep it short.]\n\n`
       : ''
 
-  // ── Build tools + executors ───────────────────────────────
-  const validQuickActionIds = Array.isArray(quickActionIds) && quickActionIds.length > 0
-    ? quickActionIds
-        .filter((id): id is string => typeof id === 'string' && id in QUICK_ACTION_TOOL_GROUPS)
-        .slice(0, MAX_QUICK_ACTION_IDS)
-    : quickActionId && typeof quickActionId === 'string' && quickActionId in QUICK_ACTION_TOOL_GROUPS
-      ? [quickActionId]
-      : []
-  const placements = precomputePlacements(
-    boardState.objects,
-    validQuickActionIds,
-    validViewport ? viewportCenter : undefined,
-  )
   const precomputedBlock = placements.length > 0 ? `\n\n${formatPrecomputedPlacements(placements)}` : ''
-  const userContent = stateJson !== '[]'
-    ? `[${safeDisplayName} (${roleName})]: ${selectionHint}${queueHint}${message}${precomputedBlock}\n\n<board_state${truncationNote}>${stateJson}</board_state>`
-    : `[${safeDisplayName} (${roleName})]: ${selectionHint}${queueHint}${message}${precomputedBlock}`
 
-  const quickActionTools =
-    validQuickActionIds.length > 0
-      ? [...new Set(validQuickActionIds.flatMap(id => QUICK_ACTION_TOOL_GROUPS[id] ?? []))]
-      : validConversationHistory.length > 0
-        ? [...new Set(['swot', 'journey', 'retro', 'sticky-grid', 'sticky', 'frame', 'rectangle', 'table'].flatMap(id => QUICK_ACTION_TOOL_GROUPS[id] ?? []))]
-        : undefined
-  const selectionTools =
-    validSelectedIds && validSelectedIds.length > 0 ? [...SELECTION_TOOLS] : undefined
-  const includeTools =
-    quickActionTools && selectionTools
-      ? [...new Set([...quickActionTools, ...selectionTools])]
-      : quickActionTools ?? selectionTools
-  const excludeTools = [...GLOBAL_EXCLUDE]
+  // For LLM-tier template actions, use the label in the user message (prompt goes to system)
+  const userMessageText = llmActions.length > 0
+    ? llmActions.map((a, i) => `${i + 1}. ${a.label}`).join('\n')
+    : message
+
+  const directPrefix = directContext ? `${directContext}\n\n` : ''
+  // The client sends "1. Label\n2. Label\n\nFree text" — extract free text after the double newline
+  const freeTextSeparator = message.indexOf('\n\n')
+  const freeText = llmActions.length > 0 && freeTextSeparator >= 0
+    ? message.slice(freeTextSeparator + 2).trim()
+    : ''
+  const userInput = llmActions.length > 0
+    ? userMessageText + (freeText ? `\n\n${freeText}` : '')
+    : message
+
+  const userContent = stateJson !== '[]'
+    ? `[${safeDisplayName} (${roleName})]: ${directPrefix}${selectionHint}${queueHint}${userInput}${precomputedBlock}\n\n<board_state${truncationNote}>${stateJson}</board_state>`
+    : `[${safeDisplayName} (${roleName})]: ${directPrefix}${selectionHint}${queueHint}${userInput}${precomputedBlock}`
+
+  // ── Build dynamic system prompt suffix for LLM action instructions ───
+  let systemPrompt = SYSTEM_PROMPT
+  const templateActions = llmActions.filter(a => a.category === 'template')
+  const nonTemplateActions = llmActions.filter(a => a.category !== 'template')
+  if (templateActions.length > 0) {
+    const templateInstructions = templateActions
+      .map(a => `### ${a.label}\n${a.prompt}`)
+      .join('\n\n')
+    systemPrompt += `\n\n## Template instructions\n${templateInstructions}`
+  }
+  if (nonTemplateActions.length > 0) {
+    const actionInstructions = nonTemplateActions
+      .map(a => `### ${a.label}\n${a.prompt}`)
+      .join('\n\n')
+    systemPrompt += `\n\n## Action instructions\n${actionInstructions}`
+  }
+
+  // ── Stream ────────────────────────────────────────────────
   const toolDefinitions = getToolDefinitions({
     excludeTools,
     ...(includeTools ? { includeTools } : {}),
   })
-  const toolCtx = createToolContext(
-    boardId,
-    user.id,
-    boardState,
-    undefined,
-    validViewport ? viewportCenter : undefined,
-  )
-  const { executors } = createTools(toolCtx, {
-    excludeTools,
-    ...(includeTools ? { includeTools } : {}),
-  })
-
-  // ── Stream ────────────────────────────────────────────────
   const historyMessages = validConversationHistory.map(m => ({
     role: m.role as 'user' | 'assistant',
     content: m.content,
   }))
+
+  const openai = getOpenAI()
   const stream = runAgentLoop(openai, {
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: systemPrompt },
       ...historyMessages,
       { role: 'user', content: userContent },
     ],

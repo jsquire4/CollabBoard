@@ -303,7 +303,7 @@ describe('GlobalAgentPanel', () => {
     expect(trigger).not.toBeDisabled()
   })
 
-  it('injects inference prompt when 2+ pills sent together', async () => {
+  it('sends numbered action list when 2+ pills sent together (no inference prompt)', async () => {
     const sendMessage = vi.fn()
     vi.mocked(useAgentChat).mockReturnValue(defaultHookReturn({ sendMessage }))
 
@@ -316,12 +316,14 @@ describe('GlobalAgentPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: /send message/i }))
 
     expect(sendMessage).toHaveBeenCalledOnce()
-    expect(sendMessage.mock.calls[0][0]).toContain('queued multiple requests')
-    expect(sendMessage.mock.calls[0][0]).toMatch(/does this combination make sense/i)
+    // New format: simple numbered list, no MULTI_ACTION_INFERENCE
+    expect(sendMessage.mock.calls[0][0]).toContain('1. Add Sticky Note')
+    expect(sendMessage.mock.calls[0][0]).toContain('2. Add Frame')
+    expect(sendMessage.mock.calls[0][0]).not.toContain('STOP')
     expect(sendMessage.mock.calls[0][2]).toEqual(['sticky', 'frame'])
   })
 
-  it('deduplicates repeated actions: same prompt once with (×N) when action added multiple times', async () => {
+  it('sends each repeated action separately (no dedup) when same action added multiple times', async () => {
     const sendMessage = vi.fn()
     vi.mocked(useAgentChat).mockReturnValue(defaultHookReturn({ sendMessage }))
 
@@ -335,7 +337,9 @@ describe('GlobalAgentPanel', () => {
 
     expect(sendMessage).toHaveBeenCalledOnce()
     const msg = sendMessage.mock.calls[0][0]
-    expect(msg).toContain('(×2)')
+    // Each action listed individually, not deduplicated
+    expect(msg).toContain('1. SWOT Analysis')
+    expect(msg).toContain('2. SWOT Analysis')
     expect(sendMessage.mock.calls[0][2]).toEqual(['swot', 'swot'])
   })
 
@@ -349,6 +353,68 @@ describe('GlobalAgentPanel', () => {
     expect(screen.getByText('Add Sticky Note')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /remove add sticky note/i }))
     expect(screen.queryByText('Add Sticky Note')).not.toBeInTheDocument()
+  })
+
+  it('shows combo warning when incompatible actions are added', async () => {
+    // sticky (create) + grid (layout) are incompatible
+    vi.mocked(useBoardContext).mockReturnValue({
+      selectedIds: new Set(['obj-1', 'obj-2']),
+      objects: new Map([['obj-1', { type: 'sticky_note' }], ['obj-2', { type: 'sticky_note' }]]),
+    } as ReturnType<typeof useBoardContext>)
+
+    render(<GlobalAgentPanel boardId={BOARD_ID} isOpen={true} onClose={noop} />)
+
+    await userEvent.click(screen.getByTestId('quick-actions-trigger'))
+    await userEvent.click(screen.getByText('Add Sticky Note'))
+    await userEvent.click(screen.getByText('Arrange in Grid'))
+    await userEvent.click(screen.getByTestId('quick-actions-close'))
+
+    expect(screen.getByTestId('combo-warning')).toBeInTheDocument()
+    expect(screen.getByTestId('combo-warning').textContent).toContain('Heads up')
+  })
+
+  it('clears combo warning when conflicting pill is removed', async () => {
+    vi.mocked(useBoardContext).mockReturnValue({
+      selectedIds: new Set(['obj-1', 'obj-2']),
+      objects: new Map([['obj-1', { type: 'sticky_note' }], ['obj-2', { type: 'sticky_note' }]]),
+    } as ReturnType<typeof useBoardContext>)
+
+    render(<GlobalAgentPanel boardId={BOARD_ID} isOpen={true} onClose={noop} />)
+
+    await userEvent.click(screen.getByTestId('quick-actions-trigger'))
+    await userEvent.click(screen.getByText('Add Sticky Note'))
+    await userEvent.click(screen.getByText('Arrange in Grid'))
+    await userEvent.click(screen.getByTestId('quick-actions-close'))
+
+    expect(screen.getByTestId('combo-warning')).toBeInTheDocument()
+
+    // Remove the grid pill
+    await userEvent.click(screen.getByRole('button', { name: /remove arrange in grid/i }))
+    expect(screen.queryByTestId('combo-warning')).not.toBeInTheDocument()
+  })
+
+  it('sends pills + free text combined in handleSend', async () => {
+    const sendMessage = vi.fn()
+    vi.mocked(useAgentChat).mockReturnValue(defaultHookReturn({ sendMessage }))
+
+    render(<GlobalAgentPanel boardId={BOARD_ID} isOpen={true} onClose={noop} />)
+
+    await userEvent.click(screen.getByTestId('quick-actions-trigger'))
+    await userEvent.click(screen.getByText('SWOT Analysis'))
+    await userEvent.click(screen.getByTestId('quick-actions-close'))
+
+    const textarea = screen.getByPlaceholderText(/ask the board assistant/i)
+    await userEvent.type(textarea, 'for our Q3 planning')
+    await userEvent.click(screen.getByRole('button', { name: /send message/i }))
+
+    expect(sendMessage).toHaveBeenCalledOnce()
+    const msg = sendMessage.mock.calls[0][0]
+    expect(msg).toContain('1. SWOT Analysis')
+    expect(msg).toContain('for our Q3 planning')
+    // Display text should include both
+    const displayText = sendMessage.mock.calls[0][1]
+    expect(displayText).toContain('SWOT Analysis')
+    expect(displayText).toContain('for our Q3 planning')
   })
 
   it('closes quick actions menu when X is clicked', async () => {

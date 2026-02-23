@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import { BoardRole } from '@/types/sharing'
+import type { BoardRole } from '@/types/sharing'
 import { useShareDialog } from '@/hooks/board/useShareDialog'
 
 interface ShareDialogProps {
@@ -54,6 +54,39 @@ export function ShareDialog({ boardId, userRole, channel, onClose }: ShareDialog
 
   const isOwner = userRole === 'owner'
   const canManage = userRole === 'owner' || userRole === 'manager'
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (transferTarget) setTransferTarget(null)
+        else onClose()
+        return
+      }
+      if (e.key !== 'Tab' || !dialogRef.current) return
+      const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last?.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first?.focus()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose, transferTarget, setTransferTarget])
+
+  useEffect(() => {
+    const firstFocusable = dialogRef.current?.querySelector<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    firstFocusable?.focus()
+  }, [])
 
   const tabClasses = (t: Tab) =>
     `rounded-lg px-4 py-2 text-sm font-medium transition ${
@@ -71,19 +104,29 @@ export function ShareDialog({ boardId, userRole, channel, onClose }: ShareDialog
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 dark:bg-black/60"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 dark:bg-black/60">
+      <button
+        type="button"
+        aria-label="Close dialog"
+        tabIndex={-1}
+        className="absolute inset-0 cursor-default bg-transparent"
+        onClick={onClose}
+      />
       <div
-        className="w-full max-w-[500px] max-h-[80vh] overflow-auto rounded-2xl bg-parchment p-6 shadow-xl dark:bg-[#1E293B] dark:ring-1 dark:ring-white/10"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="share-dialog-title"
+        className="relative z-10 w-full max-w-[500px] max-h-[80vh] overflow-auto rounded-2xl bg-parchment p-6 shadow-xl dark:bg-[#1E293B] dark:ring-1 dark:ring-white/10"
         onClick={e => e.stopPropagation()}
+        onKeyDown={() => {}}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-charcoal dark:text-parchment">Share Board</h2>
+          <h2 id="share-dialog-title" className="text-xl font-semibold text-charcoal dark:text-parchment">Share Board</h2>
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close share dialog"
             className="rounded p-1 text-charcoal/70 transition hover:bg-parchment-dark hover:text-charcoal dark:text-parchment/90 dark:hover:bg-white/15 dark:hover:text-parchment"
           >
             ×
@@ -153,6 +196,7 @@ export function ShareDialog({ boardId, userRole, channel, onClose }: ShareDialog
                           <button
                             type="button"
                             onClick={() => handleRemoveMember(member.id)}
+                            aria-label="Remove member"
                             className="rounded p-1 text-red-600 transition hover:bg-red-50 dark:hover:bg-red-900/20"
                             title="Remove member"
                           >
@@ -179,6 +223,7 @@ export function ShareDialog({ boardId, userRole, channel, onClose }: ShareDialog
                         <button
                           type="button"
                           onClick={() => handleDeleteInvite(invite.id)}
+                          aria-label="Cancel invite"
                           className="rounded p-1 text-red-600 transition hover:bg-red-50 dark:hover:bg-red-900/20"
                           title="Cancel invite"
                         >
@@ -201,6 +246,7 @@ export function ShareDialog({ boardId, userRole, channel, onClose }: ShareDialog
                     onChange={e => setInviteEmail(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') handleInvite() }}
                     placeholder="Email address"
+                    aria-label="Email address"
                     className="flex-1 rounded-lg border border-parchment-border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-navy dark:bg-[#111827] dark:border-white/10 dark:text-parchment dark:placeholder:text-parchment/40"
                   />
                   <select
@@ -222,8 +268,9 @@ export function ShareDialog({ boardId, userRole, channel, onClose }: ShareDialog
                   Send Invite
                 </button>
                 {inviteStatus && (
-                  <p
-                    className={`mt-3 text-sm ${
+                  <output
+                    aria-live="polite"
+                    className={`mt-3 block text-sm ${
                       inviteStatus.startsWith('Added') || inviteStatus.startsWith('Invite')
                         ? inviteStatus.includes('could not be sent') || inviteStatus.includes('not sent')
                           ? 'text-amber-600 dark:text-amber-500'
@@ -232,7 +279,7 @@ export function ShareDialog({ boardId, userRole, channel, onClose }: ShareDialog
                     }`}
                   >
                     {inviteStatus}
-                  </p>
+                  </output>
                 )}
               </div>
             )}

@@ -11,7 +11,8 @@ vi.mock('next/link', () => ({
 describe('Footer', () => {
   it('renders the Theorem brand name in the copyright line', () => {
     render(<Footer />)
-    expect(screen.getByText(/theorem\. the intelligent strategy canvas/i)).toBeInTheDocument()
+    const copyright = screen.getByText(/intelligent strategy canvas/)
+    expect(copyright).toHaveTextContent('Theorem')
   })
 
   it('renders the current year in the copyright line', () => {

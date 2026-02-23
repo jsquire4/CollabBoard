@@ -1,7 +1,7 @@
 /**
  * Tests for ShareDialog — sharing UI: tabs, members, invite form, link, ownership transfer.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
@@ -39,6 +39,10 @@ import { ShareDialog } from './ShareDialog'
 const BOARD_ID = '11111111-1111-1111-1111-111111111111'
 
 describe('ShareDialog', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     mockAuthGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } })
@@ -82,8 +86,8 @@ describe('ShareDialog', () => {
       expect(screen.getByText('Share Board')).toBeInTheDocument()
     })
 
-    const closeButtons = screen.getAllByRole('button', { name: /×/ })
-    await userEvent.click(closeButtons[0]) // header close button
+    const closeButton = screen.getByRole('button', { name: /close share dialog/i })
+    await userEvent.click(closeButton)
     expect(onClose).toHaveBeenCalled()
   })
 
@@ -127,13 +131,12 @@ describe('ShareDialog', () => {
 
   it('calls onClose when backdrop is clicked', async () => {
     const onClose = vi.fn()
-    const { container } = render(<ShareDialog boardId={BOARD_ID} userRole="owner" channel={null} onClose={onClose} />)
+    render(<ShareDialog boardId={BOARD_ID} userRole="owner" channel={null} onClose={onClose} />)
 
     await waitFor(() => expect(screen.getByText('Share Board')).toBeInTheDocument())
 
-    const backdrop = container.querySelector('.fixed.inset-0')
-    expect(backdrop).toBeInTheDocument()
-    await userEvent.click(backdrop as HTMLElement)
+    const backdrop = screen.getByRole('button', { name: 'Close dialog' })
+    await userEvent.click(backdrop)
     expect(onClose).toHaveBeenCalled()
   })
 
@@ -219,6 +222,61 @@ describe('ShareDialog', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/user-wit\.\.\./)).toBeInTheDocument()
+    })
+  })
+
+  it('copy link button copies to clipboard when share link exists', async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'board_invites') {
+        return { select: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ data: [], error: null })) })) }
+      }
+      if (table === 'board_share_links') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          limit: vi.fn(() => Promise.resolve({
+            data: [{ id: 'l1', board_id: BOARD_ID, token: 'abc123', role: 'viewer', can_use_agents: false, created_by: 'u1', created_at: '2026-01-01', is_active: true }],
+            error: null,
+          })),
+        }
+      }
+      return {}
+    })
+
+    render(<ShareDialog boardId={BOARD_ID} userRole="owner" channel={null} onClose={() => {}} />)
+
+    await waitFor(() => expect(screen.getByText('Share Board')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: 'Link' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copy Link' })).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Copy Link' }))
+
+    await waitFor(() => {
+      expect(mockClipboardWrite).toHaveBeenCalledWith(expect.stringContaining('/board/join/abc123'))
+    })
+  })
+
+  it('invite form shows error when invite fails', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: 'Invalid email' }),
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    render(<ShareDialog boardId={BOARD_ID} userRole="owner" channel={null} onClose={() => {}} />)
+
+    await waitFor(() => expect(screen.getByText('Share Board')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: 'Invite' }))
+
+    await userEvent.type(screen.getByPlaceholderText('Email address'), 'bad@email')
+    await userEvent.click(screen.getByRole('button', { name: 'Send Invite' }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/error|invalid/i)).toBeInTheDocument()
     })
   })
 })

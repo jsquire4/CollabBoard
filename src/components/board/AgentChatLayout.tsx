@@ -35,6 +35,9 @@ export interface AgentChatLayoutProps {
 
   /** Actions */
   onSend: () => void
+
+  /** Optional inline warning shown below pending pills (e.g. incompatible action combo). */
+  comboWarning?: string | null
 }
 
 /**
@@ -56,6 +59,7 @@ export function AgentChatLayout({
   pendingPills,
   onRemovePending,
   onSend,
+  comboWarning,
 }: AgentChatLayoutProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -123,6 +127,11 @@ export function AgentChatLayout({
               </span>
             ))}
           </div>
+        )}
+        {comboWarning && (
+          <p className="text-xs text-amber-600/80 leading-tight" data-testid="combo-warning">
+            {comboWarning}
+          </p>
         )}
         <div className="flex gap-2">
           <textarea

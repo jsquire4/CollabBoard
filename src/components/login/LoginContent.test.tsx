@@ -114,11 +114,6 @@ describe('LoginContent', () => {
     expect(screen.getByText(/sign in to start building/i)).toBeInTheDocument()
   })
 
-  it('renders the terms of service note', () => {
-    render(<LoginContent />)
-    expect(screen.getByText(/terms of service/i)).toBeInTheDocument()
-  })
-
   // ── Email/password form tests ──────────────────────────────────────────
 
   it('renders email and password inputs', () => {

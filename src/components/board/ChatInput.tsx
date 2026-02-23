@@ -36,6 +36,7 @@ export function ChatInput({ onSend, isLoading, onCancel }: ChatInputProps) {
           onChange={e => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Ask the AI to help with your board..."
+          aria-label="Message input"
           rows={1}
           className="flex-1 resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
         />

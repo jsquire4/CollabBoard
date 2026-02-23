@@ -47,7 +47,7 @@ export function GridSettingsPopover({
         }`}
         title="Grid settings"
       >
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16M6 4v16M12 4v16M18 4v16" />
         </svg>
         <span>Grid Options</span>
@@ -72,7 +72,7 @@ export function GridSettingsPopover({
                 gridVisible ? 'bg-navy/10 text-navy' : dark ? 'bg-white/10 text-parchment/60 hover:bg-white/20' : 'bg-parchment-dark text-charcoal/70 hover:bg-parchment-border'
               }`}
             >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <svg aria-hidden="true" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16M6 4v16M12 4v16M18 4v16" />
               </svg>
               {gridVisible ? 'Grid On' : 'Grid Off'}
@@ -84,7 +84,7 @@ export function GridSettingsPopover({
                 snapToGrid ? 'bg-navy/10 text-navy' : dark ? 'bg-white/10 text-parchment/60 hover:bg-white/20' : 'bg-parchment-dark text-charcoal/70 hover:bg-parchment-border'
               }`}
             >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <svg aria-hidden="true" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4m0 12v4M2 12h4m12 0h4" />
               </svg>
               {snapToGrid ? 'Snap On' : 'Snap Off'}
@@ -122,8 +122,9 @@ export function GridSettingsPopover({
           {/* Interval + Subdivisions row */}
           <div className="flex gap-3 mb-3">
             <div className="flex-1">
-              <div className={`mb-1 text-xs ${dark ? 'text-parchment/60' : 'text-charcoal/70'}`}>Interval</div>
+              <label htmlFor="grid-interval" className={`mb-1 block text-xs ${dark ? 'text-parchment/60' : 'text-charcoal/70'}`}>Interval</label>
               <select
+                id="grid-interval"
                 value={gridSize}
                 onChange={(e) => onUpdate({ grid_size: Number(e.target.value) })}
                 className={`w-full rounded-lg border px-2 py-1.5 text-xs font-medium outline-none focus:border-navy focus:ring-1 focus:ring-navy/20 ${
@@ -136,8 +137,9 @@ export function GridSettingsPopover({
               </select>
             </div>
             <div className="flex-1">
-              <div className={`mb-1 text-xs ${dark ? 'text-parchment/60' : 'text-charcoal/70'}`}>Subdivisions</div>
+              <label htmlFor="grid-subdivisions" className={`mb-1 block text-xs ${dark ? 'text-parchment/60' : 'text-charcoal/70'}`}>Subdivisions</label>
               <select
+                id="grid-subdivisions"
                 value={gridSubdivisions}
                 onChange={(e) => onUpdate({ grid_subdivisions: Number(e.target.value) })}
                 className={`w-full rounded-lg border px-2 py-1.5 text-xs font-medium outline-none focus:border-navy focus:ring-1 focus:ring-navy/20 ${

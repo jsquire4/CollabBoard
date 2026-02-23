@@ -26,7 +26,7 @@ export function BoardsHeader() {
   return (
     <header className="flex items-center justify-between gap-4 border-b border-parchment-border bg-parchment px-6 py-4 sm:px-8">
       <p className="text-base font-semibold text-navy sm:text-lg">
-        <span className="font-extrabold">Theorem</span> · {userName || '…'}
+        <span className="font-display font-extrabold">Theorem</span> · {userName || '…'}
       </p>
       <button
         type="button"

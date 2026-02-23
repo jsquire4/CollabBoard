@@ -91,10 +91,11 @@ export function BoardTopBar({
         <button
           type="button"
           onClick={() => router.push('/boards')}
+          aria-label="Back to boards"
           className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition text-charcoal/70 hover:bg-parchment-dark dark:text-parchment/60 dark:hover:bg-white/10"
           title="Back to boards"
         >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
           Boards
@@ -113,6 +114,7 @@ export function BoardTopBar({
                 setEditing(false)
               }
             }}
+            aria-label="Board name"
             className="w-48 rounded border border-navy px-2 py-1 text-sm font-semibold outline-none focus:ring-2 focus:ring-navy/20 bg-parchment text-charcoal dark:bg-[#111827] dark:text-parchment"
           />
         ) : (
@@ -136,7 +138,7 @@ export function BoardTopBar({
           </button>
         )}
         {renameError && (
-          <span className="text-xs text-red-600">{renameError}</span>
+          <span role="alert" className="text-xs text-red-600">{renameError}</span>
         )}
 
         <div className="h-5 w-px bg-parchment-border dark:bg-white/10" />
@@ -160,6 +162,7 @@ export function BoardTopBar({
         <button
           type="button"
           onClick={onToggleSnapToGrid}
+          aria-label={snapToGrid ? 'Snap to grid: ON' : 'Snap to grid: OFF'}
           className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
             snapToGrid
               ? 'bg-navy/10 text-navy dark:bg-navy/30 dark:text-parchment'
@@ -167,7 +170,7 @@ export function BoardTopBar({
           }`}
           title={snapToGrid ? 'Snap to grid: ON' : 'Snap to grid: OFF'}
         >
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <svg aria-hidden="true" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
           </svg>
           Snap
@@ -202,6 +205,7 @@ export function BoardTopBar({
                 className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white"
                 style={{ backgroundColor: user.color }}
                 title={`${user.display_name} (${user.role})`}
+                aria-label={`${user.display_name} (${user.role})`}
               >
                 {user.display_name.charAt(0).toUpperCase()}
               </div>
@@ -214,7 +218,7 @@ export function BoardTopBar({
             onClick={onShareClick}
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition text-charcoal/70 hover:bg-parchment-dark dark:text-parchment/60 dark:hover:bg-white/10"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
             </svg>
             Share

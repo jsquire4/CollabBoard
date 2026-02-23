@@ -8,7 +8,7 @@ export default async function Home() {
   const { data: { user } } = await supabase.auth.getUser()
 
   return (
-    <main className="relative min-h-screen overflow-hidden">
+    <main id="main-content" className="relative min-h-screen overflow-hidden">
       {/* Base parchment gradient */}
       <div className="fixed inset-0 -z-20 bg-gradient-to-b from-parchment via-parchment to-parchment-dark" />
       {/* Soft top highlight */}

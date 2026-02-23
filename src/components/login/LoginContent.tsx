@@ -90,7 +90,7 @@ export function LoginContent() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <main id="main-content" className="flex min-h-screen">
       {/* Left panel — navy, hidden on mobile */}
       <div className="hidden lg:flex lg:w-[45%] flex-col items-center justify-center bg-navy px-12 relative overflow-hidden">
         {/* Subtle grid texture overlay */}
@@ -300,12 +300,8 @@ export function LoginContent() {
             </>
           )}
 
-          {/* Footer note */}
-          <p className="mt-8 text-xs text-charcoal/40">
-            By signing in, you agree to our terms of service.
-          </p>
         </div>
       </div>
-    </div>
+    </main>
   )
 }

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { Editor } from '@tiptap/core'
 import { TIPTAP_EXTENSIONS } from './extensions'
 
 describe('TIPTAP_EXTENSIONS', () => {
@@ -37,5 +38,32 @@ describe('TIPTAP_EXTENSIONS', () => {
   it('includes Underline extension', () => {
     const names = TIPTAP_EXTENSIONS.map((ext: { name?: string }) => ext.name)
     expect(names).toContain('underline')
+  })
+
+  it('includes FontSize extension', () => {
+    const names = TIPTAP_EXTENSIONS.map((ext: { name?: string }) => ext.name)
+    expect(names).toContain('fontSize')
+  })
+
+  it('FontSize setFontSize and unsetFontSize commands work', () => {
+    const editor = new Editor({
+      extensions: TIPTAP_EXTENSIONS,
+      content: '<p>Hello</p>',
+      editorProps: { attributes: { 'data-testid': 'editor' } },
+    })
+    expect(editor.commands.setFontSize('16px')).toBe(true)
+    expect(editor.commands.unsetFontSize()).toBe(true)
+    editor.destroy()
+  })
+
+  it('FontSize renderHTML outputs font-size style when set', () => {
+    const editor = new Editor({
+      extensions: TIPTAP_EXTENSIONS,
+      content: '<p>Text</p>',
+    })
+    editor.chain().focus().selectAll().setFontSize('14px').run()
+    const html = editor.getHTML()
+    expect(html).toContain('font-size')
+    editor.destroy()
   })
 })

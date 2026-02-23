@@ -26,15 +26,6 @@ interface RadialGroup {
   presets: ShapePreset[]
 }
 
-const FILE_PRESET: ShapePreset = {
-  id: 'file',
-  label: 'File',
-  dbType: 'file',
-  defaultWidth: 300,
-  defaultHeight: 200,
-  iconPath: 'M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9l-7-7z M13 2v7h7',
-}
-
 // Keep only the right-facing block arrow — users can rotate to any direction
 const SYMBOL_PRESETS_FILTERED = SYMBOL_PRESETS.filter(
   p => !['block_arrow_left', 'block_arrow_up', 'block_arrow_down'].includes(p.id),
@@ -58,7 +49,6 @@ const RADIAL_GROUPS: RadialGroup[] = [
       STANDALONE_PRESETS.find(p => p.id === 'text_box')!,
       FRAME_PRESET,
       TABLE_PRESET,
-      FILE_PRESET,
     ],
   },
   {

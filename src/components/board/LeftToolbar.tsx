@@ -231,7 +231,7 @@ export function LeftToolbar({
 /** SVG icon rendered from a path string in a 24x24 viewBox */
 function PresetIcon({ iconPath, className = 'h-4.5 w-4.5' }: { iconPath: string; className?: string }) {
   return (
-    <svg className={`${className} text-charcoal dark:text-parchment`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+    <svg aria-hidden="true" className={`${className} text-charcoal dark:text-parchment`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
       <path d={iconPath} />
     </svg>
   )
@@ -330,7 +330,7 @@ function FlyoutPlaceholder({ label, iconPath }: { label: string; iconPath: strin
       className="flex flex-col items-center justify-center rounded-lg p-1.5 cursor-not-allowed text-charcoal/30 dark:text-parchment/30"
       title={`${label} (coming soon)`}
     >
-      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
         <path d={iconPath} />
       </svg>
       <span className="text-[8px] mt-0.5 leading-tight truncate w-full text-center">{label}</span>
@@ -429,6 +429,7 @@ function MergedShapesGroupButton({ isOpen, activePreset, isActive, sides, onSide
                 max={100}
                 value={sides}
                 onChange={e => onSidesChange(Math.min(100, Math.max(3, Number(e.target.value) || 3)))}
+                aria-label="Number of sides"
                 className="w-full accent-navy"
               />
               <div className="flex justify-between text-[10px] text-charcoal/50 dark:text-parchment/60 mt-1">

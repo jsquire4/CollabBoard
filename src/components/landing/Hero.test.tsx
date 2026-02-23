@@ -45,7 +45,6 @@ describe('Hero', () => {
       render(<Hero isAuthenticated={true} />)
       expect(screen.queryByRole('link', { name: /start thinking/i })).not.toBeInTheDocument()
     })
-
   })
 
   it('renders the badge with Theorem capability copy', () => {

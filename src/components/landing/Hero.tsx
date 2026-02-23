@@ -52,7 +52,7 @@ export function Hero({ isAuthenticated }: HeroProps) {
             href="/boards"
             className="inline-flex items-center gap-2 rounded-xl bg-navy px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-navy/30 transition-all hover:bg-navy/90 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-navy focus:ring-offset-2"
           >
-            Open Theorem
+            Open <span className="font-display">Theorem</span>
             <ArrowIcon />
           </Link>
         ) : (

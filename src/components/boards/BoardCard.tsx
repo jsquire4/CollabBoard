@@ -62,6 +62,7 @@ function StatusDot({ status }: { status: 'active' | 'idle' | 'offline' }) {
     <span
       className={`inline-block h-2 w-2 shrink-0 rounded-full ${colors[status]}`}
       title={STATUS_LABELS[status]}
+      aria-label={STATUS_LABELS[status]}
     />
   )
 }
@@ -232,7 +233,7 @@ export function BoardCard({
               className="rounded p-1.5 text-charcoal/40 transition hover:bg-parchment hover:text-charcoal"
               title="Duplicate board"
             >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h2m0 10a2 2 0 002 2h2a2 2 0 002-2v-2m0 10V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2" />
               </svg>
             </button>
@@ -245,7 +246,7 @@ export function BoardCard({
               className="rounded p-1.5 text-charcoal/40 transition hover:bg-red-50 hover:text-red-600"
               title="Delete board"
             >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
             </button>

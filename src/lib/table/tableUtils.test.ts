@@ -6,6 +6,7 @@ import {
   MIN_COL_WIDTH,
   MIN_ROW_HEIGHT,
   TABLE_CELL_CHAR_LIMIT,
+  TABLE_TITLE_HEIGHT,
 } from './tableTypes'
 import {
   addColumn,
@@ -304,11 +305,11 @@ describe('tableUtils', () => {
       expect(getTableWidth(d)).toBe(450)
     })
 
-    it('returns DEFAULT_HEADER_HEIGHT plus sum of row heights', () => {
+    it('returns TABLE_TITLE_HEIGHT + DEFAULT_HEADER_HEIGHT plus sum of row heights', () => {
       const data = createDefaultTableData(1, 2)
       let d = resizeRow(data, 0, 40)
       d = resizeRow(d, 1, 60)
-      expect(getTableHeight(d)).toBe(DEFAULT_HEADER_HEIGHT + 40 + 60)
+      expect(getTableHeight(d)).toBe(TABLE_TITLE_HEIGHT + DEFAULT_HEADER_HEIGHT + 40 + 60)
     })
   })
 
@@ -323,15 +324,15 @@ describe('tableUtils', () => {
       expect(getColumnXOffsets(d)).toEqual([0, 100, 250])
     })
 
-    it('returns cumulative y offsets starting at DEFAULT_HEADER_HEIGHT', () => {
+    it('returns cumulative y offsets starting at TABLE_TITLE_HEIGHT + DEFAULT_HEADER_HEIGHT', () => {
       const data = createDefaultTableData(1, 3)
       let d = resizeRow(data, 0, 40)
       d = resizeRow(d, 1, 60)
       d = resizeRow(d, 2, 80)
       expect(getRowYOffsets(d)).toEqual([
-        DEFAULT_HEADER_HEIGHT,
-        DEFAULT_HEADER_HEIGHT + 40,
-        DEFAULT_HEADER_HEIGHT + 40 + 60,
+        TABLE_TITLE_HEIGHT + DEFAULT_HEADER_HEIGHT,
+        TABLE_TITLE_HEIGHT + DEFAULT_HEADER_HEIGHT + 40,
+        TABLE_TITLE_HEIGHT + DEFAULT_HEADER_HEIGHT + 40 + 60,
       ])
     })
   })

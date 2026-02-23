@@ -26,6 +26,8 @@ const RICH_TEXT_TYPES = new Set([
   'chevron',
   'parallelogram',
   'ngon',
+  'sticky_note',
+  'table',
 ])
 
 // ── Vector types with no fill color ──────────────────────────────────

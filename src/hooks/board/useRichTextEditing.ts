@@ -224,36 +224,31 @@ export function useRichTextEditing({
         }, 0)
       }
 
-      // Compute overlay position for title
-      const konvaNode = shapeRefs.current.get(id)
-      if (konvaNode) {
-        const groupRect = (konvaNode as Konva.Group).getClientRect()
-        const titlePadX = 10
-        const titlePadY = obj.type === 'sticky_note' ? 8 : 6
-        const titleFontSize = obj.type === 'sticky_note' ? 14 : 13
-        // Table title: positioned at top of shape
-        const titleH = obj.type === 'table' ? TABLE_TITLE_HEIGHT : (titlePadY + titleFontSize * 1.3 + titlePadY)
+      // Compute overlay position for title (canvas-space — parent div applies translate + scale)
+      const titlePadX = 10
+      const titlePadY = obj.type === 'sticky_note' ? 8 : 6
+      const titleFontSize = obj.type === 'sticky_note' ? 14 : 13
+      const titleH = obj.type === 'table' ? TABLE_TITLE_HEIGHT : (titlePadY + titleFontSize * 1.3 + titlePadY)
 
-        setOverlayStyle({
-          position: 'absolute',
-          left: groupRect.x + titlePadX * stageScale,
-          top: groupRect.y + titlePadY * stageScale,
-          width: (obj.width - titlePadX * 2) * stageScale,
-          minHeight: (titleH - titlePadY * 2) * stageScale,
-          maxHeight: (titleH - titlePadY * 2) * stageScale,
-          overflowY: 'hidden',
-          fontSize: `${titleFontSize * stageScale}px`,
-          fontFamily: obj.font_family ?? 'sans-serif',
-          fontWeight: 'bold',
-          color: obj.text_color ?? (obj.type === 'sticky_note' ? '#374151' : 'rgba(28,28,30,0.55)'),
-          lineHeight: 1.3,
-          outline: 'none',
-          pointerEvents: 'auto',
-          wordBreak: 'break-word',
-          transform: obj.rotation ? `rotate(${obj.rotation}deg)` : undefined,
-          transformOrigin: obj.rotation ? `${-titlePadX * stageScale}px ${-titlePadY * stageScale}px` : undefined,
-        })
-      }
+      setOverlayStyle({
+        position: 'absolute',
+        left: obj.x + titlePadX,
+        top: obj.y + titlePadY,
+        width: obj.width - titlePadX * 2,
+        minHeight: titleH - titlePadY * 2,
+        maxHeight: titleH - titlePadY * 2,
+        overflowY: 'hidden',
+        fontSize: `${titleFontSize}px`,
+        fontFamily: obj.font_family ?? 'sans-serif',
+        fontWeight: 'bold',
+        color: obj.text_color ?? (obj.type === 'sticky_note' ? '#374151' : 'rgba(28,28,30,0.55)'),
+        lineHeight: 1.3,
+        outline: 'none',
+        pointerEvents: 'auto',
+        wordBreak: 'break-word',
+        transform: obj.rotation ? `rotate(${obj.rotation}deg)` : undefined,
+        transformOrigin: obj.rotation ? `${-titlePadX}px ${-titlePadY}px` : undefined,
+      })
     } else {
       // Rich text editing — initialize TipTap editor
       let doc: TipTapDoc
@@ -303,7 +298,7 @@ export function useRichTextEditing({
         transformOrigin: obj.rotation ? `${-padding}px ${-(topOffset + padding)}px` : undefined,
       })
     }
-  }, [objects, stageScale, canEdit, tryEnterGroup, onActivity, editor, commitCurrentEdit, shapeRefs])
+  }, [objects, canEdit, tryEnterGroup, onActivity, editor, commitCurrentEdit, shapeRefs])
 
   const handleFinishEdit = useCallback(() => {
     commitCurrentEdit()

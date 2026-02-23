@@ -228,12 +228,11 @@ export function getTableWidth(data: TableData): number {
 }
 
 /**
- * Optional title bar height + DEFAULT_HEADER_HEIGHT + sum of all row heights.
+ * Title bar height + DEFAULT_HEADER_HEIGHT + sum of all row heights.
  */
 export function getTableHeight(data: TableData): number {
-  const titleH = data.name ? TABLE_TITLE_HEIGHT : 0
   return (
-    titleH +
+    TABLE_TITLE_HEIGHT +
     DEFAULT_HEADER_HEIGHT +
     data.rows.reduce((sum, row) => sum + row.height, 0)
   )
@@ -255,12 +254,11 @@ export function getColumnXOffsets(data: TableData): number[] {
 
 /**
  * Returns an array of cumulative y positions for each row's top edge.
- * The first value is titleOffset + DEFAULT_HEADER_HEIGHT (rows start below the header + optional title).
+ * The first value is TABLE_TITLE_HEIGHT + DEFAULT_HEADER_HEIGHT (rows start below the header + title).
  */
 export function getRowYOffsets(data: TableData): number[] {
-  const titleH = data.name ? TABLE_TITLE_HEIGHT : 0
   const offsets: number[] = []
-  let y = titleH + DEFAULT_HEADER_HEIGHT
+  let y = TABLE_TITLE_HEIGHT + DEFAULT_HEADER_HEIGHT
   for (const row of data.rows) {
     offsets.push(y)
     y += row.height

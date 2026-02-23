@@ -430,7 +430,7 @@ export const TableShape = memo(function TableShape({
     }
 
     // Check col boundaries only when in/near header row and no row boundary found
-    const titleOff = currentData.name ? TABLE_TITLE_HEIGHT : 0
+    const titleOff = TABLE_TITLE_HEIGHT
     let newColBoundary: number | null = null
     if (newRowBoundary === null && y >= titleOff - BOUNDARY_ZONE && y < titleOff + DEFAULT_HEADER_HEIGHT + BOUNDARY_ZONE) {
       for (let k = 0; k < currentData.columns.length; k++) {
@@ -454,8 +454,8 @@ export const TableShape = memo(function TableShape({
     setHoveredBtn(null)
   }, [])
 
-  const titleOffset = data.name ? TABLE_TITLE_HEIGHT : 0
-  const headerCorners = data.name ? [0, 0, 0, 0] as const : [4, 4, 0, 0] as const
+  const titleOffset = TABLE_TITLE_HEIGHT
+  const headerCorners = [0, 0, 0, 0] as const
 
   return (
     <Group
@@ -475,8 +475,8 @@ export const TableShape = memo(function TableShape({
       <Rect width={tableWidth} height={tableHeight} fill={object.color || '#FFFFFF'} cornerRadius={4}
         {...shadow} stroke={outline.stroke} strokeWidth={outline.strokeWidth} dash={outline.dash} listening={false} />
 
-      {/* Title bar (when table has a name) */}
-      {data.name && (() => {
+      {/* Title bar (always shown — double-click to edit) */}
+      {(() => {
         const isEditingTitle = isEditing && editingField === 'title'
         return (
           <>
@@ -487,11 +487,12 @@ export const TableShape = memo(function TableShape({
             {!isEditingTitle && (
               <RichTextBlocks
                 richText={object.rich_text ?? null}
-                plainText={data.name}
+                plainText={data.name || 'Untitled'}
                 x={CELL_PAD} y={2}
                 width={tableWidth - CELL_PAD * 2} height={TABLE_TITLE_HEIGHT - 4}
                 baseFontSize={HEADER_FONT_SIZE} baseFontFamily="sans-serif"
-                baseColor={HEADER_TEXT_COLOR} align="left"
+                baseColor={data.name ? HEADER_TEXT_COLOR : 'rgba(28,28,30,0.35)'}
+                align="left"
                 verticalAlign="middle"
                 excludeBlockTypes={TITLE_EXCLUDE_TYPES}
               />

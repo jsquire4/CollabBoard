@@ -295,7 +295,7 @@ describe('SelectionBar', () => {
       mutationsValue: { anySelectedLocked: false },
     })
     render(<StickyWrapper><SelectionBar {...DEFAULT_PROPS} /></StickyWrapper>)
-    expect(screen.queryByRole('button', { name: /^text$/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^text$/i })).toBeInTheDocument()
   })
 
   it('shows text color via Text > Color sub-group', async () => {

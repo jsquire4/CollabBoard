@@ -3,7 +3,7 @@ import { renderHook, act } from '@testing-library/react'
 import { useTableActions } from './useTableActions'
 import { makeTable, objectsMap, resetFactory } from '@/test/boardObjectFactory'
 import { createDefaultTableData, serializeTableData, parseTableData } from '@/lib/table/tableUtils'
-import { DEFAULT_COL_WIDTH, DEFAULT_ROW_HEIGHT, DEFAULT_HEADER_HEIGHT } from '@/lib/table/tableTypes'
+import { DEFAULT_COL_WIDTH, DEFAULT_ROW_HEIGHT, DEFAULT_HEADER_HEIGHT, TABLE_TITLE_HEIGHT } from '@/lib/table/tableTypes'
 
 function makeDeps(overrides?: Record<string, unknown>) {
   return {
@@ -39,7 +39,7 @@ describe('useTableActions', () => {
       expect(newData?.rows).toHaveLength(4)
 
       const expectedWidth = 3 * DEFAULT_COL_WIDTH
-      const expectedHeight = DEFAULT_HEADER_HEIGHT + 4 * DEFAULT_ROW_HEIGHT
+      const expectedHeight = TABLE_TITLE_HEIGHT + DEFAULT_HEADER_HEIGHT + 4 * DEFAULT_ROW_HEIGHT
       expect(updates.width).toBe(expectedWidth)
       expect(updates.height).toBe(expectedHeight)
     })
@@ -107,7 +107,7 @@ describe('useTableActions', () => {
       const newData = parseTableData(updates.table_data)
       expect(newData?.rows).toHaveLength(2)
 
-      const expectedHeight = DEFAULT_HEADER_HEIGHT + 2 * DEFAULT_ROW_HEIGHT
+      const expectedHeight = TABLE_TITLE_HEIGHT + DEFAULT_HEADER_HEIGHT + 2 * DEFAULT_ROW_HEIGHT
       expect(updates.height).toBe(expectedHeight)
     })
 
@@ -279,7 +279,7 @@ describe('useTableActions', () => {
 
       const [, updates] = deps.updateObject.mock.calls[0]
       const expectedWidth = 3 * DEFAULT_COL_WIDTH
-      const expectedHeight = DEFAULT_HEADER_HEIGHT + 3 * DEFAULT_ROW_HEIGHT
+      const expectedHeight = TABLE_TITLE_HEIGHT + DEFAULT_HEADER_HEIGHT + 3 * DEFAULT_ROW_HEIGHT
       expect(updates.width).toBe(expectedWidth)
       expect(updates.height).toBe(expectedHeight)
     })
@@ -339,7 +339,7 @@ describe('useTableActions', () => {
       const newData = parseTableData(updates.table_data)
       expect(newData?.rows).toHaveLength(2)
       expect(newData?.rows.some(r => r.id === tableData.rows[2].id)).toBe(false)
-      expect(updates.height).toBe(DEFAULT_HEADER_HEIGHT + 2 * DEFAULT_ROW_HEIGHT)
+      expect(updates.height).toBe(TABLE_TITLE_HEIGHT + DEFAULT_HEADER_HEIGHT + 2 * DEFAULT_ROW_HEIGHT)
     })
 
     it('updates width and height in updateObject call', () => {
@@ -352,7 +352,7 @@ describe('useTableActions', () => {
 
       const [, updates] = deps.updateObject.mock.calls[0]
       expect(updates.width).toBe(3 * DEFAULT_COL_WIDTH)
-      expect(updates.height).toBe(DEFAULT_HEADER_HEIGHT + 2 * DEFAULT_ROW_HEIGHT)
+      expect(updates.height).toBe(TABLE_TITLE_HEIGHT + DEFAULT_HEADER_HEIGHT + 2 * DEFAULT_ROW_HEIGHT)
     })
 
     it('is a no-op when canEdit is false', () => {
@@ -443,7 +443,7 @@ describe('useTableActions', () => {
 
       const [, updates] = deps.updateObject.mock.calls[0]
       expect(updates.width).toBe(3 * DEFAULT_COL_WIDTH)
-      expect(updates.height).toBe(DEFAULT_HEADER_HEIGHT + 2 * DEFAULT_ROW_HEIGHT)
+      expect(updates.height).toBe(TABLE_TITLE_HEIGHT + DEFAULT_HEADER_HEIGHT + 2 * DEFAULT_ROW_HEIGHT)
     })
 
     it('is a no-op when canEdit is false', () => {
@@ -528,7 +528,7 @@ describe('useTableActions', () => {
 
       const [, updates] = deps.updateObject.mock.calls[0]
       expect(updates.width).toBe(2 * DEFAULT_COL_WIDTH)
-      expect(updates.height).toBe(DEFAULT_HEADER_HEIGHT + 3 * DEFAULT_ROW_HEIGHT)
+      expect(updates.height).toBe(TABLE_TITLE_HEIGHT + DEFAULT_HEADER_HEIGHT + 3 * DEFAULT_ROW_HEIGHT)
     })
 
     it('is a no-op when canEdit is false', () => {
@@ -586,7 +586,7 @@ describe('useTableActions', () => {
       expect(updates.table_data).toBe(newSerialized)
 
       const expectedWidth = 3 * DEFAULT_COL_WIDTH
-      const expectedHeight = DEFAULT_HEADER_HEIGHT + 4 * DEFAULT_ROW_HEIGHT
+      const expectedHeight = TABLE_TITLE_HEIGHT + DEFAULT_HEADER_HEIGHT + 4 * DEFAULT_ROW_HEIGHT
       expect(updates.width).toBe(expectedWidth)
       expect(updates.height).toBe(expectedHeight)
 

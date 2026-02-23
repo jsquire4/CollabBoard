@@ -38,7 +38,9 @@ cp .env.example .env.local
 
 See `.env.example` for all required and optional variables. The Supabase keys come from `npx supabase start` output (local) or your Supabase dashboard (hosted).
 
-Optionally configure Google OAuth in Supabase Studio (`http://127.0.0.1:54323`) under Authentication > Providers > Google, with redirect URL `http://localhost:3000/auth/callback`.
+Optionally configure Google OAuth in Supabase Studio (`http://127.0.0.1:54323`):
+- **Providers > Google**: Add your OAuth credentials
+- **URL Configuration > Redirect URLs**: Add `http://localhost:3000/auth/callback` (and your production callback URL, e.g. `https://your-domain.com/auth/callback`). Without this, OAuth may redirect to the Site URL (landing page) instead of /boards.
 
 ```bash
 npm run dev

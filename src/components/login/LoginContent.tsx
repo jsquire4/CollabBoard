@@ -90,7 +90,7 @@ export function LoginContent() {
   }
 
   return (
-    <main id="main-content" className="flex min-h-screen">
+    <main className="flex min-h-screen">
       {/* Left panel — navy, hidden on mobile */}
       <div className="hidden lg:flex lg:w-[45%] flex-col items-center justify-center bg-navy px-12 relative overflow-hidden">
         {/* Subtle grid texture overlay */}

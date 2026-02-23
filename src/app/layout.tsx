@@ -50,12 +50,6 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${dmSerifDisplay.variable} antialiased`}
       >
-        <a
-          href="#main-content"
-          className="fixed left-4 top-4 z-[9999] -translate-y-full rounded-md bg-navy px-4 py-2 text-white shadow-lg transition-transform focus:translate-y-0 focus:outline-none focus:ring-2 focus:ring-leather focus:ring-offset-2"
-        >
-          Skip to main content
-        </a>
         {children}
         <Toaster position="bottom-right" richColors closeButton />
       </body>

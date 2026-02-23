@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Hero } from '@/components/landing/Hero'
 import { Features } from '@/components/landing/Features'
@@ -7,8 +8,13 @@ export default async function Home() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
+  // Authenticated users go straight to boards (avoids landing-page detour after OAuth)
+  if (user && !user.is_anonymous) {
+    redirect('/boards')
+  }
+
   return (
-    <main id="main-content" className="relative min-h-screen overflow-hidden">
+    <main className="relative min-h-screen overflow-hidden">
       {/* Base parchment gradient */}
       <div className="fixed inset-0 -z-20 bg-gradient-to-b from-parchment via-parchment to-parchment-dark" />
       {/* Soft top highlight */}

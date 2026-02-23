@@ -963,7 +963,7 @@ export function BoardClient({ userId, isAnonymous, boardId, boardName, userRole,
     <BoardProvider value={boardContextValue}>
     <BoardMutationsProvider value={mutationsValue}>
     <BoardToolProvider value={toolValue}>
-    <main id="main-content" className={`relative flex h-screen flex-col ${uiDarkMode ? 'dark' : ''}`}>
+    <main className={`relative flex h-screen flex-col ${uiDarkMode ? 'dark' : ''}`}>
       <BoardTopBar
         boardId={boardId}
         boardName={boardName}

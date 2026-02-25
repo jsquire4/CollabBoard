@@ -1,4 +1,4 @@
-# Theorem (CollabBoard)
+# CollabBoard
 
 An intelligent strategy canvas for teams that think in frameworks. AI-powered synthesis, real-time collaboration, and a structured workspace — not just a whiteboard.
 
